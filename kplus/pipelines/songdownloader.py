@@ -86,6 +86,7 @@ class SongDownloader:
 
 
 def get_track_file(inputpath: str, without_lyrics: bool) -> SimpleNamespace:
+    inputpath = str(inputpath)
     info = None
     try:
         parsed = urlparse(inputpath)
