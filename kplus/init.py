@@ -1,7 +1,6 @@
 import kplus
 
 from .release import Release
-Release.print_banner()
 kplus.Release = Release
 
 from .environment import env
