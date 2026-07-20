@@ -227,7 +227,7 @@ REQUIRED_PKG = [
         "google-api-python-client", "google-auth-httplib2", "google-auth-oauthlib",
         "demucs", "diffq", "sequence_align", "stable-ts", "rich", "tqdm", "requests",
         "psutil", "librosa", "matplotlib", "numpy", "onnxruntime", "onnxruntime-gpu",
-        "torchcrepe"]
+        "torchcrepe", "scipy"]
 for pkg in REQUIRED_PKG:
     setattr(environment, pkg.replace("-", "_"), make_cached_pkg_wrap_methods(pkg.replace("-", "_"), environment))
 

@@ -94,8 +94,10 @@ class AAD:
             Returns:
                 List of audio segments
         """
-        env.librosa, env.torch, env.numpy
+        env.librosa, env.torch, env.numpy, env.scipy
         import librosa, torch, numpy as np
+        import matplotlib.pyplot as plt
+        from scipy.signal import find_peaks
         if isinstance(audio, torch.Tensor):
             audio = audio.detach().cpu().numpy().squeeze()
         elif not isinstance(audio, np.ndarray):
@@ -103,230 +105,107 @@ class AAD:
             sr = lsr
             logger.debug(f"Changing sr value from {sr} to {lsr}")
             # assert lsr == sr, f"Given samplerate and loaded sample rate is different: {lsr} | {sr}" 
-        with MainProgress(total=0, desc=f"Processing audio: {len(audio)} samples, {sr}Hz, {len(audio)/sr:.2f}") as main_bar:
+        with MainProgress(total=1, desc=f"Processing audio: {len(audio)} samples, {sr}Hz, {len(audio)/sr:.2f}") as main_bar:
             main_bar.pbar.set_description("Computing RMS")
+            precision_ms = 100 # 100ms
+            hop_length = int(sr / 1000) * precision_ms
+            frame_length = int(hop_length * 1.5)
+            distance = max(1, int((precision_ms * sr) / (1000 * hop_length)))
             rms = librosa.feature.rms(y=audio, frame_length=frame_length, hop_length=hop_length)[0]
-            rms_db = librosa.amplitude_to_db(rms, ref=np.max)
-            main_bar.update(1)
-            logger.debug(f"RMS computed: {len(rms_db)} frames")
-            logger.debug(f"RMS range: {rms_db.min():.1f}dB to {rms_db.max():.1f}dB")
-
-            #
-            active_frames = rms_db > rms_threshold_db
-            segments = []
-            in_segment = False
-            segment_start = 0
-            for i, is_active in enumerate(active_frames):
-                frame_time = i * hop_length / sr
-                
-                if is_active and not in_segment:
-                    # Start of new segment
-                    segment_start = frame_time
-                    in_segment = True
-                elif not is_active and in_segment:
-                    # End of segment
-                    segment_end = frame_time
-                    duration = segment_end - segment_start
-                    
-                    if duration >= min_segment_duration:
-                        segments.append(AudioSegment(
-                            start=segment_start,
-                            end=segment_end,
-                            confidence=1.0,
-                        ))
-                        logger.debug(f"Segment detected: {segment_start:.3f}s - {segment_end:.3f}s ({duration:.3f}s)")
-                    
-                    in_segment = False
-            if in_segment:
-                segment_end = len(audio) / sr
-                duration = segment_end - segment_start
-                if duration >= min_segment_duration:
-                    segments.append(AudioSegment(
-                        start=segment_start,
-                        end=segment_end,
-                        confidence=1.0,
-                    ))
-                    logger.debug(f"Final segment: {segment_start:.3f}s - {segment_end:.3f}s ({duration:.3f}s)")
+            inverted_rms = rms * -1
+            all_valleys, _ = find_peaks(inverted_rms, distance=distance, prominence=0.01)
             
-            logger.info(f"{len(segments)} segments found")
+            # precision_ms = 100
+            # frame_length=512
+            # hop_length = int(sr / 1000) * precision_ms
+            # distance = max(1, int((precision_ms * sr) / (1000 * hop_length)))
+            # frame_duration = hop_length / sr
+            # rms = librosa.feature.rms(y=audio, frame_length=frame_length, hop_length=hop_length)[0]
+            # inverted_rms = rms * -1
+
+            # all_valleys, _ = find_peaks(inverted_rms, distance=distance, prominence=0.01)
+            # candidate_frames = np.concatenate(([0], all_valleys, [len(rms)]))
+            # segment_mean_threshold = 0.05 
+
+            # valid_segments = []
+            # current_start_frame = None
+            # current_end_frame = None
+
+            # for i in range(len(candidate_frames) - 1):
+            #     start_frame = candidate_frames[i]
+            #     end_frame = candidate_frames[i+1]
+            #     segment_duration = (end_frame - start_frame) * frame_duration
+            #     # Calculate the average energy of this specific chunk
+            #     chunk_mean_energy = np.mean(rms[start_frame:end_frame])
+                
+            #     if chunk_mean_energy >= segment_mean_threshold:
+            #         if current_start_frame is None:
+            #             current_start_frame = start_frame
+            #         current_end_frame = end_frame 
+            #     else:
+            #         if current_start_frame is not None:
+            #             if segment_duration < 0.8: # if its less than 800ms gap we wanna use it?
+            #                 current_end_frame = end_frame
+            #             valid_segments.append((current_start_frame, current_end_frame))
+            #             current_start_frame = None # Reset for the next vocal phrase
+
+            # # Catch any active segment that touched the very end of the file
+            # if current_start_frame is not None:
+            #     valid_segments.append((current_start_frame, current_end_frame))
+
+
+            # # --- VISUALIZATION ---
+            # fig, axes = plt.subplots(2, 1, figsize=(20, 10), sharex=True)
+            # time_axis = np.arange(len(audio)) / sr
+
+            # # Draw the baseline in grey (this represents the rejected/silent chunks)
+            # axes[0].plot(time_axis, audio, linewidth=0.5, color='darkgray', alpha=0.5)
+            # librosa.display.waveshow(audio, sr=sr, ax=axes[1], color='darkgray', alpha=0.5)
+
+            # # Alternating color palette for the final merged segments
+            # segment_colors = ['steelblue', 'limegreen'] 
+
+            # for i, (start_frame, end_frame) in enumerate(valid_segments):
+            #     # Convert the validated frame boundaries back to raw samples and seconds
+            #     start_sample = start_frame * hop_length
+            #     end_sample = min(end_frame * hop_length, len(audio)) # Prevent index out of bounds
+                
+            #     start_t = start_sample / sr
+            #     end_t = end_sample / sr
+                
+            #     # Plot the kept segments over the grey baseline
+            #     axes[0].plot(
+            #         time_axis[start_sample:end_sample], 
+            #         audio[start_sample:end_sample], 
+            #         linewidth=0.5, 
+            #         color=segment_colors[i % 2], 
+            #         alpha=1.0
+            #     )
+                
+            #     # Shade the active blocks 
+            #     axes[0].axvspan(start_t, end_t, color='black', alpha=0.05)
+            #     axes[1].axvspan(start_t, end_t, color='black', alpha=0.05)
+                
+            #     # Draw red boundary lines strictly at the edges of the merged segments
+            #     axes[0].axvline(x=start_t, color='red', linestyle='--', linewidth=1.5, alpha=0.8)
+            #     axes[0].axvline(x=end_t, color='red', linestyle='--', linewidth=1.5, alpha=0.8)
+            #     axes[1].axvline(x=start_t, color='red', linestyle='--', linewidth=1.5, alpha=0.8)
+            #     axes[1].axvline(x=end_t, color='red', linestyle='--', linewidth=1.5, alpha=0.8)
+
+            # # Draw the visual threshold lines referencing your image
+            # axes[0].axhline(y=segment_mean_threshold, color='red', linestyle='-', linewidth=2, alpha=0.8)
+            # axes[0].axhline(y=-segment_mean_threshold, color='red', linestyle='-', linewidth=2, alpha=0.8)
+
+            # axes[0].set_title(f"Raw Waveform (Merged Segments | Mean Threshold: {segment_mean_threshold})")
+            # axes[0].set_ylabel("Amplitude")
+            # axes[1].set(title='Slower Version $X_1$')
+            # axes[1].label_outer()
+            # main_bar.update(1)
+            # logger.debug(f"RMS computed: {len(rms_db)} frames")
+            # logger.debug(f"RMS range: {rms_db.min():.1f}dB to {rms_db.max():.1f}dB")
+            plt.tight_layout()
             if self.visual:
-                self.visualize(audio, sr, segments, "testrms2.jpg", True)
-            
-            # CREPE PITCH
-            logger.info(f"Processing {len(segments)} segments with pitch tracking")
-            hop_length: int = 160
-            confidence_threshold: float = 0.5
-            min_segment_duration: float = 1.0
-            max_gap: float = 0.2
-            audio_ts = torch.from_numpy(audio).unsqueeze(0).to(env.device)
-            import torchcrepe
-            pitch, periodicity = torchcrepe.predict(
-                audio_ts,
-                sample_rate=sr,
-                hop_length=hop_length,
-                fmin=50,  # Minimum frequency (bass)
-                fmax=1000,  # Maximum frequency (soprano)
-                model='full',
-                batch_size=64,#2048,
-                device=env.device,
-                return_periodicity=True,
-                pad=True
-            )
-            pitch = pitch.squeeze().cpu().numpy()
-            periodicity = periodicity.squeeze().cpu().numpy()
-            
-            self.logger.debug(f"Pitch tracking complete: {len(pitch)} frames")
-
-            refined_segments = []
-            
-            for seg in segments:
-                # Get pitch frames within segment
-                start_frame = int(seg.start * sr / hop_length)
-                end_frame = int(seg.end * sr / hop_length)
-                
-                start_frame = max(0, start_frame)
-                end_frame = min(len(pitch), end_frame)
-                
-                seg_pitch = pitch[start_frame:end_frame]
-                seg_conf = periodicity[start_frame:end_frame]
-                
-                # Check if segment has pitch
-                has_pitch = np.mean(seg_conf > confidence_threshold) > 0.3
-                
-                if has_pitch:
-                    # Find voiced frames within segment
-                    voiced_mask = seg_conf > confidence_threshold
-                    
-                    # Find contiguous voiced regions
-                    voiced_regions = []
-                    in_voiced = False
-                    voiced_start = 0
-                    
-                    for i, is_voiced in enumerate(voiced_mask):
-                        frame_time = (start_frame + i) * hop_length / sr
-                        
-                        if is_voiced and not in_voiced:
-                            voiced_start = frame_time
-                            in_voiced = True
-                        elif not is_voiced and in_voiced:
-                            voiced_end = frame_time
-                            if voiced_end - voiced_start >= 0.05:  # 50ms minimum
-                                voiced_regions.append((voiced_start, voiced_end))
-                            in_voiced = False
-                    
-                    # Handle last voiced region
-                    if in_voiced:
-                        voiced_end = seg.end
-                        if voiced_end - voiced_start >= 0.05:
-                            voiced_regions.append((voiced_start, voiced_end))
-                    
-                    # Merge contiguous regions with small gaps
-                    merged_regions = self.merge_contiguous_regions(
-                        voiced_regions, 
-                        max_gap=max_gap
-                    )
-                    
-                    # Filter by minimum duration
-                    for v_start, v_end in merged_regions:
-                        duration = v_end - v_start
-                        if duration >= min_segment_duration:
-                            refined_segments.append(AudioSegment(
-                                start=v_start,
-                                end=v_end,
-                                pitch_present=True,
-                                confidence=float(np.mean(seg_conf[(seg_conf > confidence_threshold)])),
-                                is_refined=True
-                            ))
-                            self.logger.debug(f"Refined segment: {v_start:.3f}s - {v_end:.3f}s ({duration:.3f}s)")
-                        else:
-                            self.logger.debug(f"Discarded short segment: {v_start:.3f}s - {v_end:.3f}s ({duration:.3f}s)")
-                else:
-                    # Keep original segment if no clear pitch
-                    refined_segments.append(seg)
-                    self.logger.debug(f"Kept original segment: {seg.start:.3f}s - {seg.end:.3f}s")
-            
-            # Log statistics
-            orig_count = len(segments)
-            refined_count = len(refined_segments)
-            self.logger.info(f"{orig_count} → {refined_count} segments "
-                            f"({refined_count/orig_count:.1f}x)")
-            if self.visual:
-                self.visualize_refine(audio, sr, refined_segments,
-                                      pitch, periodicity, hop_length, "testrefine2.jpg", True)
-            
-           
-        return refined_segments
-
-    def visualize_refine(self, audio: np.ndarray, sr: int, segments: List[AudioSegment],
-                  pitch: np.ndarray, periodicity: np.ndarray, hop_length: int,
-                  output_path: Path, show: bool = False):
-        """Visualize pitch refinement results with duration control"""
-        import matplotlib.pyplot as plt
-        import matplotlib.patches as mpatches
-        fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(20, 12), sharex=True)
+                plt.show()
+            plt.close()
         
-        time_axis = np.arange(len(audio)) / sr
-        
-        # Plot waveform
-        ax1.plot(time_axis, audio, linewidth=0.5, color='steelblue', alpha=0.7)
-        ax1.set_ylabel('Amplitude')
-        ax1.set_title('Waveform with Pitch-Based Segments (Duration ≥1s)')
-        
-        # Highlight refined segments
-        for seg in segments:
-            if seg.is_refined:
-                color = 'green'
-                label = 'Refined segment (≥1s)'
-            else:
-                color = 'orange'
-                label = 'Original segment'
-            ax1.axvspan(seg.start, seg.end, alpha=0.3, color=color)
-        
-        # Add legend
-        green_patch = mpatches.Patch(color='green', alpha=0.3, label='Refined segment (≥1s)')
-        orange_patch = mpatches.Patch(color='orange', alpha=0.3, label='Original segment')
-        ax1.legend(handles=[green_patch, orange_patch], loc='upper right')
-        
-        # Plot pitch contour
-        pitch_time = np.arange(len(pitch)) * hop_length / sr
-        ax2.plot(pitch_time, pitch, linewidth=2, color='red', label='Pitch (Hz)')
-        ax2.set_ylabel('Frequency (Hz)')
-        ax2.set_title('Pitch Contour')
-        ax2.legend()
-        
-        # Plot periodicity/confidence
-        ax3.plot(pitch_time, periodicity, linewidth=2, color='purple', label='Confidence')
-        ax3.axhline(y=0.5, color='red', linestyle='--', label='Threshold')
-        ax3.set_xlabel('Time (s)')
-        ax3.set_ylabel('Confidence')
-        ax3.set_title('Pitch Confidence (Periodicity)')
-        ax3.legend()
-        
-        plt.tight_layout()
-        plt.savefig(output_path, dpi=150, bbox_inches='tight')
-        self.logger.info(f"Refine visualization saved: {output_path}")
-        
-        if show:
-            plt.show()
-        plt.close()
-
-    def merge_contiguous_regions(self, regions: List[Tuple[float, float]], 
-                                max_gap: float = 0.2) -> List[Tuple[float, float]]:
-        """Merge regions that are within max_gap of each other"""
-        if not regions:
             return []
-        
-        regions = sorted(regions, key=lambda x: x[0])
-        merged = []
-        current_start, current_end = regions[0]
-        
-        for i in range(1, len(regions)):
-            next_start, next_end = regions[i]
-            if next_start - current_end <= max_gap:
-                current_end = max(current_end, next_end)
-            else:
-                merged.append((current_start, current_end))
-                current_start, current_end = next_start, next_end
-        
-        merged.append((current_start, current_end))
-        return merged

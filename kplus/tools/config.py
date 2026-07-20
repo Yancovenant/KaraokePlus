@@ -87,6 +87,7 @@ class configmanager:
             option_name: option.my_default
             for option_name, option in self.options_index.items()})
         self._default_options['data_dir'] = (
+            "/content/" if kplus.env.is_colab else
             appdirs.user_data_dir(kplus.Release.product_name, kplus.Release.author)
             if os.path.isdir(os.path.expanduser('~')) else
             appdirs.site_data_dir(kplus.Release.product_name, kplus.Release.author)

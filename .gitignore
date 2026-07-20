@@ -4,6 +4,7 @@ cookies.txt
 # Test Images
 *.jpg
 *.png
+*.mp4
 
 # Python Cache
 __pycache__/
