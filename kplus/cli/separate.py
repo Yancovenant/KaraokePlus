@@ -36,8 +36,8 @@ class Separate(Command):
             self.parser.print_help()
             sys.exit()
         config.parse_config(unknown, setup_logging=True)
-        info = get_track_file(Path(opt.filepath), True)
-        filepath = info.filename
+        info = get_track_file(opt.filepath, True)
+        filepath = Path(info.filename)
         separation_model = SeparationDemucs(preset=opt.preset, overlap_ratio=opt.overlap,
                                             segment_size=opt.segment, shifts=opt.shifts)
         separation_info = separation_model.separate(filepath, opt.stems)

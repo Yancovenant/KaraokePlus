@@ -25,11 +25,11 @@ class Karaoke(Command):
             self.parser.print_help()
             sys.exit()
         config.parse_config(unknown, setup_logging=True)
-        info = get_track_file(Path(opt.filepath), opt.lyrics is not None)
+        info = get_track_file(opt.filepath, opt.lyrics is not None)
         if opt.lyricsfile is not None:
             with open(opt.lyricsfile, "rt", encoding="utf-8") as f:
                 info.lyrics = f.readlines()
-        filepath = info.filename
+        filepath = Path(info.filename)
         separation_model = SeparationDemucs(overlap_ratio=0.75,
                                             segment_size=200, shifts=1)
         separation_info = separation_model.separate(filepath, "all")
