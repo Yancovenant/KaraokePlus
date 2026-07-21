@@ -75,8 +75,8 @@ class Render:
             k_content = "".join(k_tokens)
 
             #k_content = " ".join([f"{{\\kf{max(1, int((w['end'] - w['start']) * 100))}}}{w['word']}" for w in words])
-            main_ev = f"Dialogue: 0,{s_str},{e_str},{style},,20,20,50,,{{\\fad({fade_in},200)}}{{\\kf{wait_cs}}}{{\\an2}}{k_content}"
-            #main_ev = f"Dialogue: 0,{s_str},{e_str},{style},,20,20,50,,{{\\fad({fade_in},200)}}{{\\an2}}{k_content}"
+            # main_ev = f"Dialogue: 0,{s_str},{e_str},{style},,20,20,50,,{{\\fad({fade_in},200)}}{{\\kf{wait_cs}}}{{\\an2}}{k_content}"
+            main_ev = f"Dialogue: 0,{s_str},{e_str},{style},,20,20,50,,{{\\fad({fade_in},200)}}{{\\an2}}{k_content}"
 
             events.append(main_ev)
 
