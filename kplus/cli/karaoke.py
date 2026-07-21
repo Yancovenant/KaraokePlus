@@ -25,7 +25,7 @@ class Karaoke(Command):
                                  help="The input file path or URL that needs to be make karaoke of, (mp4)")
         self.parser.add_argument("--lyricsfile", dest="lyricsfile",
                                  help="If input is not URL, and no lyrics path were given, default to multiplex only")
-        self.parser.add_argument("--max-threads", dest="max_threads", help="max thread for running whisper")
+        self.parser.add_argument("--max-threads", dest="max_threads", type=int, help="max thread for running whisper")
         opt, unknown = self.parser.parse_known_args(args)
         if not opt.filepath:
             self.parser.print_help()
