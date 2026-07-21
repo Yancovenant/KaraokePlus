@@ -87,6 +87,8 @@ class AAD:
         from scipy.signal import find_peaks
         from scipy.ndimage import uniform_filter1d, median_filter
         if isinstance(audio, torch.Tensor):
+            from .utils import convert_audio
+            audio = convert_audio(audio, sr, sr, 1)
             audio = audio.detach().cpu().numpy().squeeze()
             assert sr is not None, "Passing torch.Tensor must be accompanied by its sample rate"
         elif not isinstance(audio, np.ndarray):
