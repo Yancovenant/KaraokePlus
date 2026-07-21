@@ -97,15 +97,19 @@ class Transcriber:
             duration = len(audio) / self.sr
             audio_segments = [AudioSegment(start=0.0, end=duration)]
         with MainProgress(total = len(audio_segments), desc="Starting Transcriptions...", unit="chunk") as main_bar:
-            with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_threads) as executor:
-                future_to_seg = {executor.submit(self._process_chunk, audio, seg, lyrics): seg for seg in audio_segments}
-                for future in concurrent.futures.as_completed(future_to_seg):
-                    try:
-                        chunk_result = future.result()
-                        results.extend(chunk_result)
-                        main_bar.update(1)
-                    except Exception as e:
-                        logger.error(f"!!! Transcriber failed to process chunk: {e}", exc_info=True)
+            try:
+                with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_threads) as executor:
+                    future_to_seg = {executor.submit(self._process_chunk, audio, seg, lyrics): seg for seg in audio_segments}
+                    for future in concurrent.futures.as_completed(future_to_seg):
+                        try:
+                            chunk_result = future.result()
+                            results.extend(chunk_result)
+                            main_bar.update(1)
+                        except Exception as e:
+                            logger.error(f"!!! Transcriber failed to process chunk: {e}", exc_info=True)
+            except Exception as err:
+                logger.error(f"!!! Concurrent Error: {err}", exc_info=True)
+                raise
         results.sort(key=lambda x: x.words[0].start if x.words else 0.0)
         logger.debug(">> Whisper Transcription:")
         for res in results:
