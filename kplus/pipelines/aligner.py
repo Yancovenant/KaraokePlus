@@ -250,8 +250,8 @@ class Aligner:
         """ Uses pYIN to track when vocal pitch dies within a defined search window.
             Returns the adjusted end timestamp.
         """
-        env.librosa
-        import librosa
+        env.librosa, env.numpy
+        import librosa, numpy as np
         # Slice the gap zone
         start_sample = int(start_time * sr)
         end_sample = int(end_search * sr)
