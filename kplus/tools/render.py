@@ -25,7 +25,7 @@ class Render:
         "[V4+ Styles]\n"
         "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n"
         f"{chr(10).join(ASS_STYLE)}"
-        "\n[Events]\n"
+        "\n\n[Events]\n"
         "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text"
     )
     def __init__(self, with_ass: bool = True):
