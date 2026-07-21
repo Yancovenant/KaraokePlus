@@ -17,15 +17,15 @@ class Render:
         "Style: CJK_Duet,Noto Sans CJK SC,120,&H0000A5FF&,&H00FFFFFF&,&H00000000,&H80000000,0,0,0,0,100,100,0,0,1,3,1,2,10,10,60,1",
     ]
     ASS_HEADER: str = (
-        "[Script Info]"
-        "Title: Karaoke+ by iantirta"
-        "ScriptType: v4.00+"
-        "PlayResX: 1920"
-        "PlayResY: 1080"
-        "[V4+ Styles]"
-        "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding"
+        "[Script Info]\n"
+        "Title: Karaoke+ by iantirta\n"
+        "ScriptType: v4.00+\n"
+        "PlayResX: 1920\n"
+        "PlayResY: 1080\n"
+        "[V4+ Styles]\n"
+        "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n"
         f"{chr(10).join(ASS_STYLE)}"
-        "[Events]"
+        "\n[Events]\n"
         "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text"
     )
     def __init__(self, with_ass: bool = True):
