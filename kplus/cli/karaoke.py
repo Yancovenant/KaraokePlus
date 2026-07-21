@@ -25,6 +25,7 @@ class Karaoke(Command):
                                  help="The input file path or URL that needs to be make karaoke of, (mp4)")
         self.parser.add_argument("--lyricsfile", dest="lyricsfile",
                                  help="If input is not URL, and no lyrics path were given, default to multiplex only")
+        self.parser.add_argument("--max-threads", dest="max_threads", help="max thread for running whisper")
         opt, unknown = self.parser.parse_known_args(args)
         if not opt.filepath:
             self.parser.print_help()
@@ -44,7 +45,7 @@ class Karaoke(Command):
         audio_segments  : AudioSegment = AAD(False).get_audio_segments(separation_info.vocal_tensor,
                 sr=separation_info.sr)
         # At this point i think we wanna convert the sampling rate to be 16000 since both uses that?
-        transcribe_model = Transcriber()
+        transcribe_model = Transcriber(max_threads=opt.max_threads)
         transcriptions  : Result = transcribe_model.transcribe(separation_info.vocal_tensor, audio_segments=audio_segments, lyrics=info.lyrics)
         del transcribe_model.model, transcribe_model
         env.clean()
