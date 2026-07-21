@@ -85,7 +85,7 @@ class Transcriber:
     def transcribe(self, audio: AudioType, audio_segments, lyrics: str):
         env.numpy, env.torch
         import numpy as np, torch
-        if audio not in [np.ndarray, torch.Tensor]:
+        if not isinstance(audio, (np.ndarray, torch.Tensor)):
             from .utils import load_audio
             audio = load_audio(audio, self.sr, 1)
         if isinstance(audio, torch.Tensor):
