@@ -72,8 +72,7 @@ class Aligner:
                 continue
             else:
                 if fuzzy_score(a1, b1) > 0:
-                    if self.verbose:
-                        print(f"{'':<4}Matched: {lyrics_data[ai].word} to {transcript_data[bi].word}")
+                    logger.debug(f"{'':<4}Matched: {lyrics_data[ai].word} to {transcript_data[bi].word}")
                     lyrics_data[ai].score = transcript_data[bi].score
                     lyrics_data[ai].start = transcript_data[bi].start
                     lyrics_data[ai].end = transcript_data[bi].end
@@ -108,20 +107,17 @@ class Aligner:
             n = len(bucket)
             for i in range(n):
                 if bucket[i].start is None:
-                    if self.verbose:
-                        print(f"{'':<2} Dropped: {bucket[i].word}")
+                    logger.debug(f"{'':<2} Dropped: {bucket[i].word}")
                     prev_end = allowed_start
                     for left in range(i - 1, -1, -1):
                         if bucket[left].end is not None:
-                            if self.verbose:
-                                print(f"{'':<4} Found leading end: {bucket[left].end}")
+                            logger.debug(f"{'':<4} Found leading end: {bucket[left].end}")
                             prev_end = bucket[left].end
                             break
                     next_start = allowed_end
                     for right in range(i + 1, n):
                         if bucket[right].start is not None:
-                            if self.verbose:
-                                print(f"{'':<4} Found trailing start: {bucket[right].start}")
+                            logger.debug(f"{'':<4} Found trailing start: {bucket[right].start}")
                             next_start = bucket[right].start
                             break
                     missing_block = []
