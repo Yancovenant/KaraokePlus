@@ -1,17 +1,22 @@
 import sys
 import logging
-import os
 
 from pathlib import Path
-from urllib.parse import urlparse
+from typing import TYPE_CHECKING
 
 from .command import Command
 from kplus.tools.config import config
-from kplus.pipelines import SongDownloader, SeparationDemucs, VisualizeWaveform, get_track_file, \
-    Aligner, AAD
+from kplus.pipelines import SeparationDemucs, get_track_file, \
+    Aligner, AAD, Transcriber
 from kplus.environment import env
+from kplus.tools.render import Render
+
+if TYPE_CHECKING:
+    from kplus.pipelines.transcriber import Result
+    from kplus.pipelines.aad import AudioSegment
 
 logger = logging.getLogger(__name__)
+
 
 class Karaoke(Command):
     """ Separate either input URL or file path into 2 different stems (vocals, instrumentals) """
@@ -25,7 +30,7 @@ class Karaoke(Command):
             self.parser.print_help()
             sys.exit()
         config.parse_config(unknown, setup_logging=True)
-        info = get_track_file(opt.filepath, opt.lyrics is not None)
+        info = get_track_file(opt.filepath, opt.lyricsfile is not None)
         if opt.lyricsfile is not None:
             with open(opt.lyricsfile, "rt", encoding="utf-8") as f:
                 info.lyrics = f.readlines()
@@ -36,8 +41,20 @@ class Karaoke(Command):
         logger.info(f"Finished separating {filepath}")
         del separation_model.model, separation_model
         env.clean()
-        audio_segments = AAD(False).get_audio_segments(separation_info.vocal_tensor,
+        audio_segments  : AudioSegment = AAD(False).get_audio_segments(separation_info.vocal_tensor,
                 sr=separation_info.sr)
+        # At this point i think we wanna convert the sampling rate to be 16000 since both uses that?
+        transcribe_model = Transcriber()
+        transcriptions  : Result = transcribe_model.transcribe(separation_info.vocal_tensor, audio_segments=audio_segments, lyrics=info.lyrics)
+        del transcribe_model.model, transcribe_model
+        env.clean()
         aligner_model = Aligner()
         aligner_info = aligner_model.main(separation_info.vocal_tensor,
-                separation_info.sr, info.lyrics, audio_segments)
+                separation_info.sr, info.lyrics, audio_segments, transcriptions)
+        del aligner_model.model, aligner_model
+        env.clean()
+        karaoke_data = []
+        for seg in aligner_info.segments:
+                word_list = [{"word": w.word, "start": w.start, "end": w.end} for w in seg.words]
+                karaoke_data.append({"text": seg.text, "words": word_list})
+        Render().render(None, info.title, info.filename, separation_info.inst_path, info.duration, karaoke_data)

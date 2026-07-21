@@ -5,15 +5,13 @@ import os
 
 from pathlib import Path
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, List, Tuple, TypeAlias
+from typing import TYPE_CHECKING, List
 
 from kplus.tools.progress import MainProgress
 from kplus.environment import env
 
 if TYPE_CHECKING:
-    import numpy as np
-    import torch
-    AudioType : TypeAlias = "torch.Tensor | np.ndarray | str"
+    from .utils import AudioType
 
 
 logger = logging.getLogger(__name__)
@@ -42,6 +40,8 @@ class AAD:
         plt.rcParams['font.size'] = 10
     
     def plotvisual(self, audio, sr, start_times, end_times, valley_times, rms_times, rms_smoothed, valleys, silence_threshold):
+        env.matplotlib, env.librosa
+        import matplotlib.pyplot as plt, librosa
         fig, axes = plt.subplots(2, 1, figsize=(50, 10), sharex=True)
         librosa.display.waveshow(audio, sr=sr, ax=axes[0], color='darkgray', alpha=0.5)
         axes[0].set_title("Audio Waveform")

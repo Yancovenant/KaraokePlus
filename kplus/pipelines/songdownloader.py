@@ -98,4 +98,4 @@ def get_track_file(inputpath: str, without_lyrics: bool) -> SimpleNamespace:
         # is this a filepath?
         logger.warning("!!! Exception on parsing URL as an input: %s", str(err))
         pass
-    return SimpleNamespace(filename=inputpath)
+    return SimpleNamespace(filename=inputpath, lyrics=None)

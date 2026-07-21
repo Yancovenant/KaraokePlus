@@ -80,18 +80,22 @@ class environment:
         return self._run_py_cmd(self.uv + ["install", "-q", name])
         
     def _get_pkg(self, name: str):
+        if name == "stable_ts":
+            install_name, import_name = "stable-ts", "stable_whisper"
+        else:
+            install_name, import_name = name, name
         def attempt_import():
-            return importlib.import_module(name)
+            return importlib.import_module(import_name)
         def attempt_install_and_import():
-            if name == "tqdm" or not env:
-                self._run_cmd_install(name)
+            if install_name == "tqdm" or not env:
+                self._run_cmd_install(install_name)
             else:
-                cmd = [sys.executable, "-m", *self.uv, "install", name, "--progress-bar", "off"]
+                cmd = [sys.executable, "-m", *self.uv, "install", install_name, "--progress-bar", "off"]
                 process = subprocess.Popen(cmd,
                         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, # This ensures we capture sys log output.
                         text=True, bufsize=1)
                 full_output_log = []
-                with MainProgress(total=0, desc=f"Package '{name}' missing. Installing...", unit="pkg") as main_bar:
+                with MainProgress(total=0, desc=f"Package '{install_name}' missing. Installing...", unit="pkg") as main_bar:
                     downloaded_count = 0
                     pbar = main_bar.pbar
                     for line in iter(process.stdout.readline, ''):
@@ -101,7 +105,7 @@ class environment:
                         if clean_line.startswith("Collecting "):
                             downloaded_count += 1
                             pbar.total = downloaded_count
-                            pbar.set_description(f"Downloading {name} & deps")
+                            pbar.set_description(f"Downloading {install_name} & deps")
                             pbar.refresh()
                         elif clean_line.startswith("Installing collected packages:"):
                             packages_str = clean_line.split(":", 1)[1].strip()
@@ -112,7 +116,7 @@ class environment:
                             pbar.refresh()
                     if pbar.total > 0:
                         pbar.n = pbar.total
-                        pbar.set_description(f"Finished {name}")
+                        pbar.set_description(f"Finished {install_name}")
                         pbar.refresh()
                     main_bar.update(1)
                 process.stdout.close()
@@ -120,7 +124,7 @@ class environment:
                 if return_code != 0:
                     error_context = "\n".join(full_output_log[-15:])
                     logger.error("\n" + "="*50)
-                    logger.error(f" PIP INSTALLATION FAILED FOR: {name}")
+                    logger.error(f" PIP INSTALLATION FAILED FOR: {install_name}")
                     logger.error("="*50)
                     logger.error(error_context)
                     logger.error("="*50 + "\n")
@@ -128,7 +132,7 @@ class environment:
                         f"Subprocess failed with exit code {return_code}.\n"
                         f"Command: {' '.join(cmd)}\n"
                         f"Last output:\n{error_context}")
-            return importlib.import_module(name)
+            return importlib.import_module(import_name)
         for fn in [attempt_import, attempt_install_and_import]:
             try:
                 return fn()

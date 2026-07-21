@@ -3,7 +3,6 @@ from __future__ import annotations
 import logging
 import random
 import glob
-import os
 
 from types import SimpleNamespace
 from pathlib import Path
@@ -16,8 +15,7 @@ from kplus.tools.config import config
 if TYPE_CHECKING:
     import torch
     
-    from demucs.apply import BagOfModels, TensorChunk, tensor_chunk
-    from demucs.utils import center_trim, DummyPoolExecutor
+    from demucs.apply import BagOfModels, TensorChunk
     from demucs.htdemucs import HTDemucs
     from demucs.demucs import Demucs
     from demucs.hdemucs import HDemucs
@@ -216,12 +214,10 @@ class SeparationDemucs:
     
     def separate(self, input_path: Path, stems: str = "inst", external_id: Optional[int] = None):
         env.torch
-        from demucs.audio import AudioFile, save_audio
-        import torch
+        from demucs.audio import save_audio
+        from .utils import load_audio
         filename = str(Path(input_path).stem)
-        wav: torch.Tensor = AudioFile(str(input_path)).read(streams=0,
-                                              samplerate=self.sr,
-                                              channels=self.ac)
+        wav = load_audio(input_path, self.sr, self.ac)
         original_mix: torch.Tensor = wav.clone()
         ref: torch.Tensor = wav.mean(0)
         wav -= ref.mean()
