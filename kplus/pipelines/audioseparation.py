@@ -30,18 +30,13 @@ class SeparationDemucs:
                  segment_size: Optional[int] = None,
                  shifts: Optional[int] = None,
                  preset: Optional[str] = "high"):
-        env.diffq, env.demucs, env.torch # Diffq first then demucs
+        env.diffq, env.demucs # Diffq first then demucs
         from demucs.pretrained import get_model
-        import torch
+
         self.device = env.device
-        base_model = get_model("mdx_extra_q")
-        self.sr = base_model.samplerate
-        self.ac = base_model.audio_channels
-        if torch.cuda.is_available() and torch.cuda.device_count() > 1:
-            self.model = torch.nn.DataParallel(base_model)
-        else:
-            self.model = base_model
-        self.model = self.model.to(self.device).eval()
+        self.model = get_model("mdx_extra_q").to(self.device).eval()
+        self.sr = self.model.samplerate
+        self.ac = self.model.audio_channels
         self.shifts, self.overlap, self.segment = self._preprocess_preset(preset)
         if any(val is not None for val in [overlap_ratio, segment_size, shifts]):
             if preset:
