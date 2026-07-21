@@ -29,7 +29,7 @@ class Render:
         "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text"
     )
     def __init__(self, with_ass: bool = True):
-        env._ensure_fonts_installed(), env.ffmpeg
+        env._ensure_fonts_installed, env.ffmpeg
         self.RE_CJK = re.compile(r'[\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]+')
         self.with_ass = with_ass
         self.scale_filter = "fps=30,scale=if(gt(iw/ih\\,16/9)\\,-1\\,1280):if(gt(iw/ih\\,16/9)\\,720\\,-1):flags=fast_bilinear,crop=1280:720"
