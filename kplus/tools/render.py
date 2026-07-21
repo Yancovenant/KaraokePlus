@@ -111,6 +111,7 @@ class Render:
                    "-c:v", "copy",  # <--- THIS IS THE MAGIC SPEED BULLET
                    "-c:a", "aac", "-b:a", "192k", "-shortest", str(output_path)]
         logger.info(">> Rendering video...")
+        logger.debug(" ".join(c for c in cmd))
         stdout, stderr = subprocess.DEVNULL, subprocess.DEVNULL
         if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
             stdout = sys.stdout
