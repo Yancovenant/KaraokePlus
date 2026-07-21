@@ -27,6 +27,14 @@ class AudioSegment:
     confidence: float = 0.0
     is_refined: bool = False
 
+    def __hash__(self):
+        return hash((self.start, self.end))
+
+    def __eq__(self, other):
+        if not isinstance(other, AudioSegment):
+            return False
+        return self.start == other.start and self.end == other.end
+
 
 class AAD:
     """ Audio Activity Detection via RMS/DB 
@@ -127,7 +135,12 @@ class AAD:
                 # 1. If we hit a flat-line (silence), treat it as a silence breath gap
                 if rms_smoothed[i] < silence_threshold:
                     if current_start is not None:
-                        segments.append((current_start, i - 1))
+                        if ((end_frame := i - 1) - current_start) < min_segment_frames and segments:
+                            # merge it if this chunk is too tiny
+                            prev_start, _ = segments[-1]
+                            segments[-1] = (prev_start, end_frame)
+                        else:
+                            segments.append((current_start, end_frame))
                         current_start = None
                     continue
                 # 2. If we come out of a gap, start a new segment
