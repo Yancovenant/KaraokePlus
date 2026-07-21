@@ -112,16 +112,9 @@ class Transcriber:
                                 logger.error(f"!!! Transcriber failed to process chunk: {e}", exc_info=True)
                 else:
                     time_batches = [{"start": float(seg.start), "end": float(seg.end)} for seg in audio_segments]
-                    batch_result = self.model.transcribe_string_batches(
-                        audio,
-                        batches=time_batches,
-                        batch_size=16,          # <-- THE GPU ACCELERATOR
-                        language=None,          # Auto-detects language once
-                        initial_prompt=lyrics,
-                        beam_size=5,
-                        repetition_penalty=1.2,
-                        condition_on_previous_text=False
-                    )
+                    batch_result = self.model.transcribe(audio, language=None, clip_timestamp=time_batches,
+                                                         initial_prompt=lyrics, beam_size=5,
+                                                         repetition_penalty=1.2, condition_on_previous_text=False)
             except Exception as err:
                 logger.error(f"!!! Concurrent Error: {err}", exc_info=True)
                 raise
