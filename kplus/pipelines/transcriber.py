@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-@dataclass(slots=True)
+@dataclass
 class WordTiming:
     start: float
     end: float
