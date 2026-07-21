@@ -155,7 +155,12 @@ class AAD:
                         current_start = i  # Start next segment immediately (touching)
             # Catch the final segment at the end of the song
             if current_start is not None and current_start < len(rms_smoothed) - 1:
-                segments.append((current_start, len(rms_smoothed) - 1))
+                end_frame = len(rms_smoothed) - 1
+                if (end_frame - current_start) < min_segment_frames and segments:
+                    prev_start, _ = segments[-1]
+                    segments[-1] = (prev_start, end_frame)
+                else:
+                    segments.append((current_start, len(rms_smoothed) - 1))
             main_bar.update(1)
             main_bar.pbar.set_description("Unpacking segments...")
             start_frames = np.array([seg[0] for seg in segments])
