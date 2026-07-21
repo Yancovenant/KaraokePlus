@@ -246,18 +246,63 @@ class Aligner:
                     del token_spans, emission, audio_slice
         return results
 
+    def track_vocal_tail(self, audio: np.ndarray, sr: int, start_time: float, end_search: float, fmin=50, fmax=1000) -> float:
+        """ Uses pYIN to track when vocal pitch dies within a defined search window.
+            Returns the adjusted end timestamp.
+        """
+        env.librosa
+        import librosa
+        # Slice the gap zone
+        start_sample = int(start_time * sr)
+        end_sample = int(end_search * sr)
+        gap_audio = audio[start_sample:end_sample]
+
+        if len(gap_audio) < 2048: return start_time # Too short for pYIN
+
+        # Track pitch and voicing probability
+        f0, voiced_flag, voiced_probs = librosa.pyin(
+            gap_audio, sr=sr, fmin=fmin, fmax=fmax,
+            frame_length=2048, hop_length=512
+        )
+
+        # Find the last frame where the voice is actually present (voiced_flag is True)
+        # We look for the last index where voicing is detected
+        voiced_indices = np.where(voiced_flag)[0]
+
+        if len(voiced_indices) > 0:
+            # Get time of the last voiced frame
+            last_voiced_frame = voiced_indices[-1]
+            tail_offset = librosa.frames_to_time(last_voiced_frame, sr=sr, hop_length=512)
+            return start_time + tail_offset
+
+        return start_time
+
+    def refine_segments_with_dsp(self, results: Result, audio_np: np.ndarray, sr: int):
+        for seg in results.segments:
+            for i in range(len(seg.words) - 1):
+                curr_word = seg.words[i]
+                next_word = seg.words[i+1]
+                gap = next_word.start - curr_word.end
+
+                # If gap > 100ms, trigger DSP fallback
+                if 0.1 < gap < 1.5: # 1.5s cap to prevent tracking background noise
+                    new_end = self.track_vocal_tail(audio_np, sr, curr_word.end, next_word.start)
+                    curr_word.end = new_end
+        return results
+
     def main(self, audio: torch.Tensor, sr: float, lyrics: str, audio_segments: List[AudioSegment], transcriptions: Result):
         env.demucs
         from .utils import convert_audio
         audio = convert_audio(audio, sr, self.sr, channels=1)
-        # audio_np = audio.detach().cpu().numpy().squeeze().copy()
+        audio_np = audio.detach().cpu().numpy().squeeze().copy()
         # Needleman Wunchs
         results = self.get_lyrics_timestamp(transcriptions, lyrics, audio_segments, 0.0)
         # Forced Align (FA)
         results = self.ctc_align(audio.to(env.device), results, audio_segments)
         
         # This uses pyin maybe find another method if not already best
-        # refine_results = self.refine_segments_with_dsp(results, audio_np, self.sr)
+        results = self.refine_segments_with_dsp(results, audio_np, self.sr)
+        
         logger.debug(f">> Final Timestamp {len(results.segments)}")
         for res in results.segments:
             logger.debug(f"{'':<2}[{res.start:.2f}s - {res.end:.2f}s] {res.text}")
