@@ -41,45 +41,75 @@ class Render:
         return f"{h}:{m:02}:{s:05.2f}"
 
     def build_ass(self, karaoke_data):
-        events, prev_end = [], 0.0
+        max_allowable_gap = 0.8
+        events = []
+        line_bounds = []
         for line in karaoke_data:
             words = line.get("words", [])
-            if not words: continue
-
-            b_start = words[0]["start"]
-            display_start = max(0.0, b_start - 0.8, prev_end)
-            display_end = words[-1]["end"] + 0.1
-            prev_end = display_end
-
+            if not words: 
+                continue
+            line_bounds.append({
+                "line": line,
+                "words": words,
+                "b_start": words[0]["start"],
+                "b_end": words[-1]["end"]
+            })
+        n_lines = len(line_bounds)
+        for i, item in enumerate(line_bounds):
+            line = item["line"]
+            words = item["words"]
+            b_start = item["b_start"]
+            b_end = item["b_end"]
+            if i == 0:
+                display_start = max(0.0, b_start - max_allowable_gap)
+            else:
+                prev_b_end = line_bounds[i - 1]["b_end"]
+                gap_prev = b_start - prev_b_end
+                if gap_prev > 0:
+                    # Share gap: previous line takes 70% extension, current line takes 30% lead-in
+                    effective_gap = min(gap_prev, max_allowable_gap)
+                    display_start = b_start - (effective_gap * 0.3)
+                    display_start = max(display_start, prev_b_end)  # Don't overlap backwards
+                else:
+                    display_start = max(0.0, b_start - 0.1)  # Touching/overlapping fallback
+            if i == n_lines - 1:
+                display_end = b_end + 0.1  # Last line default padding
+            else:
+                next_b_start = line_bounds[i + 1]["b_start"]
+                gap_next = next_b_start - b_end
+                if gap_next > 0:
+                    # Share gap: current line takes 70% extension, next line takes 30% lead-in
+                    effective_gap = min(gap_next, max_allowable_gap)
+                    display_end = b_end + (effective_gap * 0.7)
+                    display_end = min(display_end, next_b_start)  # Don't overshoot into next line
+                else:
+                    display_end = b_end + 0.1  # Touching/overlapping fallback
             s_str, e_str = self._convert_ssa_time(display_start), self._convert_ssa_time(display_end)
             is_cjk = bool(self.RE_CJK.search(line["text"]))
             style = "CJK_Duet" if is_cjk else "Lat_Duet"
-
             wait_cs = int(max(0, b_start - display_start) * 100)
             fade_in = max(0, min(300, int((b_start - display_start) * 1000)))
+            
             k_tokens = []
-            current_time = display_start
-            for i, w in enumerate(words):
+            current_time = b_start  # Locked to b_start to avoid double-counting the initial wait
+            for w in words:
                 gap_before = w['start'] - current_time
-                if gap_before > 0.01: # placeholder to handle tiny floating point gap
-                    if (gap_cs := int(round(gap_before * 100))) > 0: #ms
+                if gap_before > 0.01:
+                    if (gap_cs := int(round(gap_before * 100))) > 0:
                         k_tokens.append(f"{{\\kf{gap_cs}}} ")
+                
                 word_cs = max(1, int(round((w['end'] - max(w['start'], current_time)) * 100)))
                 k_tokens.append(f"{{\\kf{word_cs}}}{w['word']} ")
                 current_time = w["end"]
+                
             gap_after = display_end - current_time
             if gap_after > 0.01:
-                gap_cs = int(round(gap_after * 100))
-                if gap_cs > 0:
+                if (gap_cs := int(round(gap_after * 100))) > 0:
                     k_tokens.append(f"{{\\kf{gap_cs}}}")
             k_content = "".join(k_tokens)
-
-            #k_content = " ".join([f"{{\\kf{max(1, int((w['end'] - w['start']) * 100))}}}{w['word']}" for w in words])
-            # main_ev = f"Dialogue: 0,{s_str},{e_str},{style},,20,20,50,,{{\\fad({fade_in},200)}}{{\\kf{wait_cs}}}{{\\an2}}{k_content}"
-            main_ev = f"Dialogue: 0,{s_str},{e_str},{style},,20,20,50,,{{\\fad({fade_in},200)}}{{\\an2}}{k_content}"
-
+            main_ev = f"Dialogue: 0,{s_str},{e_str},{style},,20,20,50,,{{\\fad({fade_in},200)}}{{\\kf{wait_cs}}}{{\\an2}}{k_content}"
             events.append(main_ev)
-
+        
         return self.ASS_HEADER + "\n".join(events) + "\n"
     
     def render(self, output_path: Optional[str], title: str, video_path: str, inst_path: str, duration: float, karaoke_data):
