@@ -3,7 +3,7 @@ import concurrent.futures
 import logging
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, List
+from typing import TYPE_CHECKING, List, Optional
 from itertools import groupby
 
 from kplus.environment import env
@@ -82,7 +82,7 @@ class Transcriber:
         del chunk, lang, result
         return chunk_segments
     
-    def transcribe(self, audio: AudioType, audio_segments, lyrics: str):
+    def transcribe(self, audio: AudioType, audio_segments, lyrics: str, sr: Optional[float]):
         env.numpy, env.torch
         import numpy as np, torch
         if not isinstance(audio, (np.ndarray, torch.Tensor)):
@@ -90,6 +90,7 @@ class Transcriber:
             audio = load_audio(audio, self.sr, 1)
         if isinstance(audio, torch.Tensor):
             from .utils import convert_audio
+            audio = convert_audio(audio, sr, self.sr, 1)
             audio = audio.detach().cpu().numpy()
         audio = audio.squeeze()
         results = []
