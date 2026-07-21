@@ -1,11 +1,13 @@
 import re
 import logging
 import subprocess
+import sys
 
 from typing import Optional
 from pathlib import Path
 
 from kplus.tools.config import config
+from kplus.environment import env
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +29,7 @@ class Render:
         "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text"
     )
     def __init__(self, with_ass: bool = True):
+        env._ensure_fonts_installed(), env.ffmpeg
         self.RE_CJK = re.compile(r'[\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]+')
         self.with_ass = with_ass
         self.scale_filter = "fps=30,scale=if(gt(iw/ih\\,16/9)\\,-1\\,1280):if(gt(iw/ih\\,16/9)\\,720\\,-1):flags=fast_bilinear,crop=1280:720"
@@ -108,6 +111,10 @@ class Render:
                    "-c:v", "copy",  # <--- THIS IS THE MAGIC SPEED BULLET
                    "-c:a", "aac", "-b:a", "192k", "-shortest", str(output_path)]
         logger.info(">> Rendering video...")
-        subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        stdout, stderr = subprocess.DEVNULL, subprocess.DEVNULL
+        if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
+            stdout = sys.stdout
+            stderr = sys.stderr
+        subprocess.run(cmd, check=True, stdout=stdout, stderr=stderr)
         logger.info(f">> Successfully rendered: {output_path}")
         return output_path
