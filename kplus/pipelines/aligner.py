@@ -258,8 +258,8 @@ class Aligner:
         
         # This uses pyin maybe find another method if not already best
         # refine_results = self.refine_segments_with_dsp(results, audio_np, self.sr)
-        logger.debug(f">> Final Timestamp {len(results)}")
-        for res in results:
+        logger.debug(f">> Final Timestamp {len(results.segments)}")
+        for res in results.segments:
             logger.debug(f"{'':<2}[{res.start:.2f}s - {res.end:.2f}s] {res.text}")
             for w in res.words:
                 logger.debug(f"{'':<4}WordTiming: ({w.score:.2f}) {w.start:.2f}s to {w.end:.2f}s {w.word}")

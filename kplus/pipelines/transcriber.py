@@ -55,7 +55,7 @@ class Result:
 
 
 class Transcriber:
-    def __init__(self, max_threads: int = 2, model_name: str = "large-v3"):
+    def __init__(self, max_threads: int = 2, model_name: str = "large-v3", use_cliptimestamp: bool = False):
         self.max_threads = max(1, max_threads) # min 1
         # We expect the samplerate to be 16000
         env.stable_ts, env.faster_whisper
@@ -63,6 +63,7 @@ class Transcriber:
         compute_type = "float16" if env.device.type == "cuda" else "float32"
         self.model = stable_whisper.load_faster_whisper(model_name, device=env.device.type, compute_type=compute_type, num_workers=max_threads)
         self.sr = self.model.feature_extractor.sampling_rate
+        self.use_cliptimestamp = use_cliptimestamp
 
     def _process_chunk(self, audio: np.ndarray, segment, lyrics):
         start_sample =int(segment.start * self.sr)
@@ -99,15 +100,28 @@ class Transcriber:
             audio_segments = [AudioSegment(start=0.0, end=duration)]
         with MainProgress(total = len(audio_segments), desc="Starting Transcriptions...", unit="chunk") as main_bar:
             try:
-                with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_threads) as executor:
-                    future_to_seg = {executor.submit(self._process_chunk, audio, seg, lyrics): seg for seg in audio_segments}
-                    for future in concurrent.futures.as_completed(future_to_seg):
-                        try:
-                            chunk_result = future.result()
-                            results.extend(chunk_result)
-                            main_bar.update(1)
-                        except Exception as e:
-                            logger.error(f"!!! Transcriber failed to process chunk: {e}", exc_info=True)
+                if not self.use_cliptimestamp:
+                    with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_threads) as executor:
+                        future_to_seg = {executor.submit(self._process_chunk, audio, seg, lyrics): seg for seg in audio_segments}
+                        for future in concurrent.futures.as_completed(future_to_seg):
+                            try:
+                                chunk_result = future.result()
+                                results.extend(chunk_result)
+                                main_bar.update(1)
+                            except Exception as e:
+                                logger.error(f"!!! Transcriber failed to process chunk: {e}", exc_info=True)
+                else:
+                    time_batches = [{"start": float(seg.start), "end": float(seg.end)} for seg in audio_segments]
+                    batch_result = self.model.transcribe_string_batches(
+                        audio,
+                        batches=time_batches,
+                        batch_size=16,          # <-- THE GPU ACCELERATOR
+                        language=None,          # Auto-detects language once
+                        initial_prompt=lyrics,
+                        beam_size=5,
+                        repetition_penalty=1.2,
+                        condition_on_previous_text=False
+                    )
             except Exception as err:
                 logger.error(f"!!! Concurrent Error: {err}", exc_info=True)
                 raise

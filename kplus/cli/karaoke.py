@@ -47,7 +47,7 @@ class Karaoke(Command):
         audio_segments  : AudioSegment = AAD(False).get_audio_segments(separation_info.vocal_tensor,
                 sr=separation_info.sr)
         # At this point i think we wanna convert the sampling rate to be 16000 since both uses that?
-        transcribe_model = Transcriber(max_threads=opt.max_threads)
+        transcribe_model = Transcriber(max_threads=opt.max_threads, use_cliptimestamp=opt.use_cliptimestamp)
         transcriptions  : Result = transcribe_model.transcribe(separation_info.vocal_tensor, sr=separation_info.sr,
                                                                 audio_segments=audio_segments, lyrics=info.lyrics)
         del transcribe_model.model, transcribe_model
