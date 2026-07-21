@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 
 from pathlib import Path
 from dataclasses import dataclass
@@ -34,178 +35,128 @@ class AAD:
     """
     def __init__(self, visualize: bool = False):
         self.visual = visualize
-        env.matplotlib, env.torchcrepe
+        env.matplotlib
         import matplotlib.pyplot as plt
         plt.style.use('seaborn-v0_8-darkgrid')
         plt.rcParams['figure.figsize'] = (20, 12)
         plt.rcParams['font.size'] = 10
     
-    def visualize(self, audio: np.ndarray, sr: int, segments: List[AudioSegment],
-                  output_path: Path, show: bool = False):
-        env.librosa, env.numpy
-        import matplotlib.pyplot as plt
-        import librosa, numpy as np
-        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(20, 10), sharex=True)
-        
-        # Plot waveform
-        time_axis = np.arange(len(audio)) / sr
-        ax1.plot(time_axis, audio, linewidth=0.5, color='steelblue', alpha=0.7)
-        ax1.set_ylabel('Amplitude')
-        ax1.set_title('Waveform with Detected Segments')
-        
-        # Highlight segments
-        for seg in segments:
-            ax1.axvspan(seg.start, seg.end, alpha=0.3, color='green', label='Detected segment')
-        
-        # Plot RMS energy
-        rms = librosa.feature.rms(y=audio, frame_length=2048, hop_length=512)[0]
-        rms_db = librosa.amplitude_to_db(rms, ref=np.max)
-        rms_time = np.arange(len(rms_db)) * 512 / sr
-        
-        ax2.plot(rms_time, rms_db, linewidth=1.5, color='coral')
-        ax2.axhline(y=-40, color='red', linestyle='--', label='Threshold (-40dB)')
-        ax2.set_xlabel('Time (s)')
-        ax2.set_ylabel('RMS (dB)')
-        ax2.set_title('RMS Energy')
-        ax2.legend()
-        
+    def plotvisual(self, audio, sr, start_times, end_times, valley_times, rms_times, rms_smoothed, valleys, silence_threshold):
+        fig, axes = plt.subplots(2, 1, figsize=(50, 10), sharex=True)
+        librosa.display.waveshow(audio, sr=sr, ax=axes[0], color='darkgray', alpha=0.5)
+        axes[0].set_title("Audio Waveform")
+        axes[0].set_ylabel("Amplitude")
+        for start, end in zip(start_times, end_times):
+            axes[0].axvspan(start, end, color='green', alpha=0.2) 
+            axes[0].axvline(x=start, color='green', linestyle='-', linewidth=1.5, alpha=0.8)
+            axes[0].axvline(x=end, color='red', linestyle='--', linewidth=1.5, alpha=0.8)
+        axes[1].plot(rms_times, rms_smoothed, label="Smoothed RMS", color='blue', linewidth=1.5)
+        axes[1].axhline(y=silence_threshold, color='black', linestyle='--', label="Silence Threshold")
+        axes[1].plot(valley_times, rms_smoothed[valleys], "mo", markersize=8, label="Detected Deepest Peak")
+        for start, end in zip(start_times, end_times):
+            axes[1].axvspan(start, end, color='green', alpha=0.2)
+        axes[1].set_title("RMS")
+        axes[1].set_ylabel("RMS Amplitude")
+        axes[1].set_xlabel("Time (s)")
+        axes[1].legend(loc="upper right")
+        axes[1].label_outer()
         plt.tight_layout()
-        plt.savefig(output_path, dpi=150, bbox_inches='tight')
-        logger.info(f"visualization saved: {output_path}")
-        
-        if show:
-            plt.show()
+        plt.show()
+        plt.savefig("valleycuts.png", bbox_inches='tight')
         plt.close()
-
-    def detect(self, audio: AudioType, sr: int, 
-               frame_length: int = 2048, hop_length: int = 512,
-               rms_threshold_db: float = -40,
-               min_segment_duration: float = 0.5) -> List[AudioSegment]:
-        """ Detect audio activity using RMS energy
         
+    def get_audio_segments(self, audio: AudioType,
+                sr: int, precision_ms: int = 1, silence_threshold: int = 0.01,
+                min_segment_sec: float = 2.0, peak_prob_sec: float = 8.0,
+                depth_ratio: float = 0.6) -> List[AudioSegment]:
+        """ Detect audio activity RMS, Peak, Voice 300fq - 3000fq
             Args:
-                audio: Audio signal
+                audio: AudioType
                 sr: Sample rate
-                frame_length: FFT window size
-                hop_length: Hop length between frames
-                rms_threshold_db: RMS threshold in dB
-                min_segment_duration: Minimum segment duration in seconds
-                
-            Returns:
-                List of audio segments
+                precision_ms: in milisecond >= 1ms
+                silence_treshold: anything below this value means silence
+                min_segment_sec: segment needs to be minimal this value if it detect
+                    a drop in the middle.
+                peak_prob_sec: the peak will be compared by average mean value
+                    of peak_prob_sec.
+                depth_ratio: control how deep a peak should be to survive the average
+                    of peak_prob_sec. 0.6 means a peak must be at least 40% quieter
         """
-        env.librosa, env.torch, env.numpy, env.scipy
-        import librosa, torch, numpy as np
-        import matplotlib.pyplot as plt
+        env.scipy, env.librosa
+        import librosa, scipy, numpy as np, torch
         from scipy.signal import find_peaks
+        from scipy.ndimage import uniform_filter1d, median_filter
         if isinstance(audio, torch.Tensor):
             audio = audio.detach().cpu().numpy().squeeze()
+            assert sr is not None, "Passing torch.Tensor must be accompanied by its sample rate"
         elif not isinstance(audio, np.ndarray):
             audio, lsr = librosa.load(audio, sr=None)
             sr = lsr
             logger.debug(f"Changing sr value from {sr} to {lsr}")
-            # assert lsr == sr, f"Given samplerate and loaded sample rate is different: {lsr} | {sr}" 
-        with MainProgress(total=1, desc=f"Processing audio: {len(audio)} samples, {sr}Hz, {len(audio)/sr:.2f}") as main_bar:
+        with MainProgress(total=5, desc=f"Processing audio: {len(audio)} samples, {sr}Hz, {len(audio)/sr:.2f}") as main_bar:
             main_bar.pbar.set_description("Computing RMS")
-            precision_ms = 100 # 100ms
             hop_length = int(sr / 1000) * precision_ms
-            frame_length = int(hop_length * 1.5)
-            distance = max(1, int((precision_ms * sr) / (1000 * hop_length)))
+            frame_length = int(hop_length * 1.5) # 150% 
+            sos = scipy.signal.butter(10, [300, 3000], btype='bandpass', fs=sr, output='sos')
+            audio = scipy.signal.sosfilt(sos, audio)
             rms = librosa.feature.rms(y=audio, frame_length=frame_length, hop_length=hop_length)[0]
-            inverted_rms = rms * -1
-            all_valleys, _ = find_peaks(inverted_rms, distance=distance, prominence=0.01)
+            main_bar.update(1)
+            main_bar.pbar.set_description("Smoothing out RMS")
+            frames_per_half_sec = max(1, int(0.5 / (precision_ms / 1000)))
+            rms_smoothed = uniform_filter1d(rms, size=frames_per_half_sec)
+            main_bar.update(1)
             
-            # precision_ms = 100
-            # frame_length=512
-            # hop_length = int(sr / 1000) * precision_ms
-            # distance = max(1, int((precision_ms * sr) / (1000 * hop_length)))
-            # frame_duration = hop_length / sr
-            # rms = librosa.feature.rms(y=audio, frame_length=frame_length, hop_length=hop_length)[0]
-            # inverted_rms = rms * -1
-
-            # all_valleys, _ = find_peaks(inverted_rms, distance=distance, prominence=0.01)
-            # candidate_frames = np.concatenate(([0], all_valleys, [len(rms)]))
-            # segment_mean_threshold = 0.05 
-
-            # valid_segments = []
-            # current_start_frame = None
-            # current_end_frame = None
-
-            # for i in range(len(candidate_frames) - 1):
-            #     start_frame = candidate_frames[i]
-            #     end_frame = candidate_frames[i+1]
-            #     segment_duration = (end_frame - start_frame) * frame_duration
-            #     # Calculate the average energy of this specific chunk
-            #     chunk_mean_energy = np.mean(rms[start_frame:end_frame])
-                
-            #     if chunk_mean_energy >= segment_mean_threshold:
-            #         if current_start_frame is None:
-            #             current_start_frame = start_frame
-            #         current_end_frame = end_frame 
-            #     else:
-            #         if current_start_frame is not None:
-            #             if segment_duration < 0.8: # if its less than 800ms gap we wanna use it?
-            #                 current_end_frame = end_frame
-            #             valid_segments.append((current_start_frame, current_end_frame))
-            #             current_start_frame = None # Reset for the next vocal phrase
-
-            # # Catch any active segment that touched the very end of the file
-            # if current_start_frame is not None:
-            #     valid_segments.append((current_start_frame, current_end_frame))
-
-
-            # # --- VISUALIZATION ---
-            # fig, axes = plt.subplots(2, 1, figsize=(20, 10), sharex=True)
-            # time_axis = np.arange(len(audio)) / sr
-
-            # # Draw the baseline in grey (this represents the rejected/silent chunks)
-            # axes[0].plot(time_axis, audio, linewidth=0.5, color='darkgray', alpha=0.5)
-            # librosa.display.waveshow(audio, sr=sr, ax=axes[1], color='darkgray', alpha=0.5)
-
-            # # Alternating color palette for the final merged segments
-            # segment_colors = ['steelblue', 'limegreen'] 
-
-            # for i, (start_frame, end_frame) in enumerate(valid_segments):
-            #     # Convert the validated frame boundaries back to raw samples and seconds
-            #     start_sample = start_frame * hop_length
-            #     end_sample = min(end_frame * hop_length, len(audio)) # Prevent index out of bounds
-                
-            #     start_t = start_sample / sr
-            #     end_t = end_sample / sr
-                
-            #     # Plot the kept segments over the grey baseline
-            #     axes[0].plot(
-            #         time_axis[start_sample:end_sample], 
-            #         audio[start_sample:end_sample], 
-            #         linewidth=0.5, 
-            #         color=segment_colors[i % 2], 
-            #         alpha=1.0
-            #     )
-                
-            #     # Shade the active blocks 
-            #     axes[0].axvspan(start_t, end_t, color='black', alpha=0.05)
-            #     axes[1].axvspan(start_t, end_t, color='black', alpha=0.05)
-                
-            #     # Draw red boundary lines strictly at the edges of the merged segments
-            #     axes[0].axvline(x=start_t, color='red', linestyle='--', linewidth=1.5, alpha=0.8)
-            #     axes[0].axvline(x=end_t, color='red', linestyle='--', linewidth=1.5, alpha=0.8)
-            #     axes[1].axvline(x=start_t, color='red', linestyle='--', linewidth=1.5, alpha=0.8)
-            #     axes[1].axvline(x=end_t, color='red', linestyle='--', linewidth=1.5, alpha=0.8)
-
-            # # Draw the visual threshold lines referencing your image
-            # axes[0].axhline(y=segment_mean_threshold, color='red', linestyle='-', linewidth=2, alpha=0.8)
-            # axes[0].axhline(y=-segment_mean_threshold, color='red', linestyle='-', linewidth=2, alpha=0.8)
-
-            # axes[0].set_title(f"Raw Waveform (Merged Segments | Mean Threshold: {segment_mean_threshold})")
-            # axes[0].set_ylabel("Amplitude")
-            # axes[1].set(title='Slower Version $X_1$')
-            # axes[1].label_outer()
-            # main_bar.update(1)
-            # logger.debug(f"RMS computed: {len(rms_db)} frames")
-            # logger.debug(f"RMS range: {rms_db.min():.1f}dB to {rms_db.max():.1f}dB")
-            plt.tight_layout()
+            inverted_rms = -rms_smoothed
+            min_segment_frames = int(min_segment_sec / (precision_ms / 1000))
+            main_bar.pbar.set_description("Finding out peak on an invertes RMS")
+            raw_valleys, _ = find_peaks(inverted_rms, prominence=0.01)
+            peak_prob_frames = max(1, int(peak_prob_sec / (precision_ms / 1000)))
+            local_mean = uniform_filter1d(rms_smoothed, size=peak_prob_frames)
+            valleys = []
+            for v in raw_valleys:
+                if rms_smoothed[v] < (local_mean[v] * depth_ratio):
+                    valleys.append(v)
+            valleys = np.array(valleys)
+            main_bar.update(1)
+            main_bar.pbar.set_description("Building up segments last")
+            segments = []
+            current_start = None
+            for i in range(len(rms_smoothed)):
+                # 1. If we hit a flat-line (silence), treat it as a silence breath gap
+                if rms_smoothed[i] < silence_threshold:
+                    if current_start is not None:
+                        segments.append((current_start, i - 1))
+                        current_start = None
+                    continue
+                # 2. If we come out of a gap, start a new segment
+                if current_start is None:
+                    current_start = i
+                    continue
+                # 3. If we hit a peak, cut exactly at the lowest point!
+                if i in valleys:
+                    # Only cut if the segment is long enough
+                    if (i - current_start) > min_segment_frames:
+                        segments.append((current_start, i))
+                        current_start = i  # Start next segment immediately (touching)
+            # Catch the final segment at the end of the song
+            if current_start is not None and current_start < len(rms_smoothed) - 1:
+                segments.append((current_start, len(rms_smoothed) - 1))
+            main_bar.update(1)
+            main_bar.pbar.set_description("Unpacking segments...")
+            start_frames = np.array([seg[0] for seg in segments])
+            end_frames = np.array([seg[1] for seg in segments])
+            start_times = librosa.frames_to_time(start_frames, sr=sr, hop_length=hop_length)
+            end_times = librosa.frames_to_time(end_frames, sr=sr, hop_length=hop_length)
+            rms_times = librosa.frames_to_time(np.arange(len(rms)), sr=sr, hop_length=hop_length)
+            valley_times = librosa.frames_to_time(valleys, sr=sr, hop_length=hop_length)
             if self.visual:
-                plt.show()
-            plt.close()
-        
-            return []
+                self.plotvisual(audio, sr, start_times, end_times, valley_times, rms_times, rms_smoothed, valleys, silence_threshold)
+            logger.debug(f">> Total Audio Segment: {len(start_times)}")
+            results = []
+            for i, (start_t, end_t) in enumerate(zip(start_times, end_times)):
+                logger.debug(f"{'':<2}{i+1}/{len(start_times)}: {start_t:.2f}s - {end_t:.2f}")
+                results.append(AudioSegment(
+                start=start_t, end=end_t))
+            main_bar.update(1)
+            return results
+            

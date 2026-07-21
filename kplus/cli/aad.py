@@ -25,4 +25,4 @@ class AAD(Command):
             sys.exit()
         config.parse_config(unknown, setup_logging=True)
 
-        _AAD(opt.visualize).detect(opt.filepath, sr=None)
+        _AAD(opt.visualize).get_audio_segments(opt.filepath, sr=None)

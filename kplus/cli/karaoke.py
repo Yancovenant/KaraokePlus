@@ -8,7 +8,7 @@ from urllib.parse import urlparse
 from .command import Command
 from kplus.tools.config import config
 from kplus.pipelines import SongDownloader, SeparationDemucs, VisualizeWaveform, get_track_file, \
-    Aligner
+    Aligner, AAD
 from kplus.environment import env
 
 logger = logging.getLogger(__name__)
@@ -36,5 +36,8 @@ class Karaoke(Command):
         logger.info(f"Finished separating {filepath}")
         del separation_model.model, separation_model
         env.clean()
+        audio_segments = AAD(False).get_audio_segments(separation_info.vocal_tensor,
+                sr=separation_info.sr)
         aligner_model = Aligner()
-        aligner_info = aligner_model.main(separation_info.vocal_tensor, info.sr, info.lyrics)
+        aligner_info = aligner_model.main(separation_info.vocal_tensor,
+                separation_info.sr, info.lyrics, audio_segments)

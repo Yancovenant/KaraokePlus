@@ -13,15 +13,11 @@ class Aligner:
     def __init__(self):
         pass
     
-    def get_audio_segments(self, y: np.ndarray) -> List[AudioSegment]:
-        pass
-
-    def main(self, audio: torch.Tensor, sr: float, lyrics: str):
+    def main(self, audio: torch.Tensor, sr: float, lyrics: str, audio_segments: List[AudioSegment]):
         env.demucs
         from demucs.audio import convert_audio
         audio = convert_audio(audio, sr, self.sr, channels=1)
         audio_np = audio.detach().cpu().numpy().squeeze().copy()
-        audio_segments = self.get_audio_segments(audio_np)
         transcripts = self.get_transcript(audio_np, audio_segments, lyrics)
         results = self.adjust_by_lyrics(transcripts, lyrics, audio_segments, 0.0)
         refine_results = self.ctc_align(audio, results, audio_segments)
