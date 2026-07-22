@@ -75,11 +75,14 @@ class Transcriber:
         chunk_segments = []
         for res in result:
             chunk_segments.append(
-                (obj := Segment(words=list(WordTiming(
-                    start=float(w.start + segment.start),
-                    end=float(w.end + segment.start),
-                    score=float(w.probability), word=str(w.word)) for w in res.words)),
-                setattr(obj, "seg_idx", audio_seg_idx))[0]
+                (obj := Segment(words=list(
+                    (word_obj := WordTiming(
+                        start=float(w.start + segment.start),
+                        end=float(w.end + segment.start),
+                        score=float(w.probability), word=str(w.word)
+                    ), setattr(word_obj, "seg_idx", audio_seg_idx)
+                    )[0]
+                for w in res.words)))[0]
             )
         del chunk, lang, result
         return chunk_segments

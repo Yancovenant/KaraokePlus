@@ -115,7 +115,7 @@ class Aligner:
         transcript_data = list(
             (obj := WordTiming(word=w.word, start=w.start, end=w.end, score=w.score),
                 setattr(obj, "clean", clean_word(w.word)),
-                setattr(obj, "seg_idx", segs.seg_idx))[0]
+                setattr(obj, "seg_idx", w.seg_idx))[0]
             for segs in transcripts.segments
             for w in segs.words if w.score > 0.35)
         lyrics_data_clean = [w.clean for w in lyrics_data]
