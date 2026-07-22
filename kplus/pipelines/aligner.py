@@ -42,15 +42,14 @@ class Aligner:
         def clean_word(w): return w.translate(str.maketrans('', '', string.punctuation)).lower().strip()
         lines_list = [l.strip() for l in lyrics.split("\n") if l.strip() and not l.startswith('[')]
         lyrics_data = list(
-            (obj := WordTiming(word=w, start=None, end=None, score=None,),
-                setattr(obj, "clean", clean_word(w)),
-                setattr(obj, "line_idx", i))[0]
-            for i, line in enumerate(lines_list)
-            for w in line.split())
+        (obj := WordTiming(word=w, start=None, end=None, score=None,),
+            setattr(obj, "clean", clean_word(w)),
+            setattr(obj, "line_idx", i))[0]
+        for i, line in enumerate(lines_list)
+        for w in line.split())
         transcript_data = list(
             (obj := WordTiming(word=w.word, start=w.start, end=w.end, score=w.score),
-                setattr(obj, "clean", clean_word(w.word)),
-                setattr(obj, "seg_idx", w.seg_idx))[0]
+                setattr(obj, "clean", clean_word(w.word)))[0]
             for segs in transcripts.segments
             for w in segs.words if w.score > 0.35)
         lyrics_data_clean = [w.clean for w in lyrics_data]
@@ -101,92 +100,60 @@ class Aligner:
                 observed = sorted(set(all_line_segs), key=lambda s: s.start)
                 min_i = seg_index[observed[0]]
                 max_i = seg_index[observed[-1]]
+                # If the very first word of the line is missing its timestamp
+                # Use the previous segment and merged it later
+                if line_words[0].start is None:
+                    prev = line_to_seg.get(idx - 1)
+                    prev_max_i = seg_index[prev[-1]] if prev else -1
+                    if min_i - 1 > prev_max_i:
+                        min_i -= 1
                 line_to_seg[idx] = audio_segments[min_i:max_i + 1]
             else:
                 prev = line_to_seg.get(idx - 1)
                 line_to_seg[idx] = [prev[-1] if prev else audio_segments[0]]
         # if segment is overlapping between lines. we wanna and merge the segment?
-        # HOW TO SOLVE THIS??????
+        # REMAKE THE AUDIO SEGMENT
         super_lines: list[tuple[list[WordTiming], AudioSegment]] = []
-        new_audio_segments: List[AudioSegment] = [] # RE MAKE THE AUDIO SEGMENT
         sorted_indices = sorted(line_to_seg.keys())
         if sorted_indices:
-            current_group_lines = [w for w in lyrics_data if w.line_idx in sorted_indices[0]]
+            current_group_words = [w for w in lyrics_data if w.line_idx == sorted_indices[0]]
             current_group_segs = set(line_to_seg[sorted_indices[0]])
-        final_segments = []
-        for seg in audio_segments:
-            bucket = [w for w in lyrics_data if line_to_seg[w.line_idx] == seg]
-            if not bucket: continue
-            # Dropped word
-            allowed_start = seg.start - max_bleed_sec
-            allowed_end = seg.end + max_bleed_sec
-            n = len(bucket)
-            for i in range(n):
-                if bucket[i].start is None:
-                    logger.debug(f"{'':<2} Dropped: {bucket[i].word}")
-                    prev_end = allowed_start
-                    for left in range(i - 1, -1, -1):
-                        if bucket[left].end is not None:
-                            logger.debug(f"{'':<4} Found leading end: {bucket[left].end}")
-                            prev_end = bucket[left].end
-                            break
-                    next_start = allowed_end
-                    for right in range(i + 1, n):
-                        if bucket[right].start is not None:
-                            logger.debug(f"{'':<4} Found trailing start: {bucket[right].start}")
-                            next_start = bucket[right].start
-                            break
-                    missing_block = []
-                    for j in range(i, n):
-                        if bucket[j].start is None:
-                            missing_block.append(j)
-                        else:
-                            break
-                    logger.debug(f"{'':<6} total dropped in between: {len(missing_block)}")
-                    gap = next_start - prev_end
-                    time_per_word = gap / (len(missing_block) + 1)
+            for idx in sorted_indices[1:]:
+                next_segs = set(line_to_seg[idx])
+                next_words = [w for w in lyrics_data if w.line_idx == idx]
+                if current_group_segs & next_segs:
+                    # OVERLAP: Merge words and segments
+                    logger.debug("overlap!", current_group_segs & next_segs)
+                    current_group_words.extend(next_words)
+                    current_group_segs.update(next_segs)
+                else:
+                    logger.debug("Chain broken. Starting a new group...")
+                    min_start = min(s.start for s in current_group_segs)
+                    max_end = max(s.end for s in current_group_segs)
+                    super_lines.append((current_group_words, AudioSegment(start=min_start, end=max_end)))
 
-                    curr_time = prev_end
-                    for idx in missing_block:
-                        logger.debug(f"{'':<8} Interpolate: [None - None] to [{curr_time:.2f}s - {curr_time + time_per_word:.2f}s]")
-                        bucket[idx].start = curr_time
-                        bucket[idx].end = curr_time + time_per_word
-                        curr_time += time_per_word
-
-            # Rubber banding
-            bucket_start = bucket[0].start
-            bucket_end = bucket[-1].end
-            target_start, target_end = bucket_start, bucket_end
-            needs_correction = False
-            if bucket_start < allowed_start:
-                target_start = allowed_start
-                needs_correction = True
-                logger.debug(f"{'':<4} Word Early: {bucket_start:.2f}s --> {target_start:.2f}s")
-            if bucket_end > allowed_end:
-                target_end = allowed_end
-                needs_correction = True
-                logger.debug(f"{'':<4} Word Bleed: {bucket_end:.2f}s --> {target_end:.2f}s")
-            if needs_correction:
-                dur_orig = bucket_end - bucket_start
-                dur_new = target_end - target_start
-                scale = dur_new / dur_orig if dur_orig > 0 else 1.0
-
-                for w in bucket:
-                    old_start = w.start
-                    old_end = w.end
-                    w.start = target_start + (w.start - bucket_start) * scale
-                    w.end = target_start + (w.end - bucket_start) * scale
-                    logger.debug(f"{'':<6} {w.word} shifted [{old_start:.2f}s - {old_end:.2f}] --> [{w.start:.2f} - {w.end:.2f}]")
-
-            final_segments.append(Segment(words=list(
-                (obj := WordTiming(word=w.word, start=w.start, end=w.end, score=w.score if w.score is not None else 0.0),
-                    setattr(obj, "line_idx", w.line_idx))[0]
-                for w in bucket)))
-        final_segments.sort(key=lambda x: x.words[0].start)
-        logger.debug(f">> Lyric Timestamp {len(final_segments)}")
-        for seg in final_segments:
-            logger.debug(f"{'':<2}[{seg.start:.2f}s - {seg.end:.2f}s] {seg.text}")
-        return Result(segments=final_segments)
+                    current_group_words = next_words
+                    current_group_segs = next_segs
+            # Finalize the very last group after loop ends
+            if current_group_words:
+                min_start = min(s.start for s in current_group_segs)
+                max_end = max(s.end for s in current_group_segs)
+                super_lines.append((current_group_words, AudioSegment(start=min_start, end=max_end)))
+        new_transcribe_segments = []
+        new_audio_segments = []
+        for words, segment in super_lines:
+            valid_starts = [w.start for w in words if w.start is not None]
+            valid_ends = [w.end for w in words if w.end is not None]
+            min_time = f"{min(valid_starts):.2f}" if valid_starts else "None"
+            max_time = f"{max(valid_ends):.2f}" if valid_ends else "None"
+            text_content = " ".join(w.word for w in words)
+            logger.debug(f"word     >> [{min_time} - {max_time}] {text_content}")
+            logger.debug(f"duration >> [{segment.start:.2f} - {segment.end:.2f}]")
+            logger.debug("-" * 40)
+            new_transcribe_segments.append(Segment(words=words))
+            new_audio_segments.append(segment)
+        
+        return Result(segments=new_transcribe_segments), new_audio_segments
 
     def tokenize_line(self, text) -> List[SimpleNamespace]:
         tokens = []
@@ -312,12 +279,12 @@ class Aligner:
         audio = convert_audio(audio, sr, self.sr, channels=1)
         audio_np = audio.detach().cpu().numpy().squeeze().copy()
         # Needleman Wunchs
-        results = self.get_lyrics_timestamp(transcriptions, lyrics, audio_segments, 0.0)
+        results, new_audio_segments = self.get_lyrics_timestamp(transcriptions, lyrics, audio_segments, 0.0)
         # Forced Align (FA)
-        results = self.ctc_align(audio.to(env.device), results, audio_segments)
+        results = self.ctc_align(audio.to(env.device), results, new_audio_segments)
         
         # This uses pyin maybe find another method if not already best
-        results = self.refine_segments_with_dsp(results, audio_np, self.sr)
+        # results = self.refine_segments_with_dsp(results, audio_np, self.sr)
         
         logger.debug(f">> Final Timestamp {len(results.segments)}")
         for res in results.segments:
