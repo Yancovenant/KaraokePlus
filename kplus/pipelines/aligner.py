@@ -15,7 +15,6 @@ from .aad import AudioSegment
 if TYPE_CHECKING:
     import torch
     import numpy as np
-    
     from .transcriber import Result
 
 
@@ -143,6 +142,43 @@ class Aligner:
         new_transcribe_segments = []
         new_audio_segments = []
         for words, segment in super_lines:
+            # Dropped word
+            allowed_start = segment.start - max_bleed_sec
+        allowed_end = segment.end + max_bleed_sec
+        n = len(words)
+        for i in range(n):
+            if words[i].start is None:
+                logger.debug(f"{'':<2} Dropped: {words[i].word}")
+                prev_end = allowed_start
+                for left in range(i - 1, -1, -1):
+                    if words[left].end is not None:
+                        logger.debug(f"{'':<4} Found leading end: {words[left].end}")
+                        prev_end = words[left].end
+                        break
+                next_start = allowed_end
+                for right in range(i + 1, n):
+                    if words[right].start is not None:
+                        logger.debug(f"{'':<4} Found trailing start: {words[right].start}")
+                        next_start = words[right].start
+                        break
+                missing_block = []
+                for j in range(i, n):
+                    if words[j].start is None:
+                        missing_block.append(j)
+                    else:
+                        break
+                logger.debug(f"{'':<6} total dropped in between: {len(missing_block)}")
+                gap = next_start - prev_end
+                time_per_word = gap / (len(missing_block) + 1)
+                curr_time = prev_end
+                for idx in missing_block:
+                    logger.debug(f"{'':<8} Interpolate: [None - None] to [{curr_time:.2f}s - {curr_time + time_per_word:.2f}s]")
+                    words[idx].start = curr_time
+                    words[idx].end = curr_time + time_per_word
+                    curr_time += time_per_word
+            dropped_words = [w for w in words if w.start is None or w.end is None]
+            if dropped_words:
+                logger.warning(f"!!! THERE IS A DROP WORD STILL, possibly end time is missing, {dropped_words}")
             valid_starts = [w.start for w in words if w.start is not None]
             valid_ends = [w.end for w in words if w.end is not None]
             min_time = f"{min(valid_starts):.2f}" if valid_starts else "None"
