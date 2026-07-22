@@ -36,6 +36,71 @@ class Aligner:
         self.RE_LATIN = re.compile(r'[^a-z]')
 
     def get_lyrics_timestamp(self, transcripts: Result, lyrics: str, audio_segments: List[AudioSegment], max_bleed_sec: float = 0.5) -> Result:
+        def seg_index_for_time(start, end):
+            if start is None or end is None:
+                return None
+
+            best_i = 0
+            best_overlap = -1.0
+            best_dist = float("inf")
+
+            for i, s in enumerate(audio_segments):
+                overlap = min(end, s.end) - max(start, s.start)
+                if overlap < 0:
+                    overlap = 0.0
+
+                if overlap > 0:
+                    dist = 0.0
+                elif end < s.start:
+                    dist = s.start - end
+                elif start > s.end:
+                    dist = start - s.end
+                else:
+                    dist = 0.0
+
+                if overlap > best_overlap or (overlap == best_overlap and dist < best_dist):
+                    best_overlap = overlap
+                    best_dist = dist
+                    best_i = i
+
+            return best_i
+        def interpolate_words(words, allowed_start, allowed_end):
+            n = len(words)
+            i = 0
+
+            while i < n:
+                if words[i].start is not None:
+                    i += 1
+                    continue
+
+                prev_end = allowed_start
+                for left in range(i - 1, -1, -1):
+                    if words[left].end is not None:
+                        prev_end = words[left].end
+                        break
+
+                next_start = allowed_end
+                for right in range(i + 1, n):
+                    if words[right].start is not None:
+                        next_start = words[right].start
+                        break
+
+                missing = []
+                j = i
+                while j < n and words[j].start is None:
+                    missing.append(j)
+                    j += 1
+
+                gap = max(0.0, next_start - prev_end)
+                step = gap / (len(missing) + 1)
+
+                curr = prev_end
+                for k in missing:
+                    words[k].start = curr
+                    words[k].end = curr + step
+                    curr += step
+
+                i = j
         env.sequence_align
         from sequence_align.pairwise import needleman_wunsch_with_scores
         def clean_word(w): return w.translate(str.maketrans('', '', string.punctuation)).lower().strip()
@@ -43,12 +108,14 @@ class Aligner:
         lyrics_data = list(
             (obj := WordTiming(word=w, start=None, end=None, score=None,),
                 setattr(obj, "clean", clean_word(w)),
-                setattr(obj, "line_idx", i))[0]
+                setattr(obj, "line_idx", i),
+                setattr(obj, "seg_idx", None))[0]
             for i, line in enumerate(lines_list)
             for w in line.split())
         transcript_data = list(
             (obj := WordTiming(word=w.word, start=w.start, end=w.end, score=w.score),
-                setattr(obj, "clean", clean_word(w.word)))[0]
+                setattr(obj, "clean", clean_word(w.word)),
+                setattr(obj, "seg_idx", segs.seg_idx))[0]
             for segs in transcripts.segments
             for w in segs.words if w.score > 0.35)
         lyrics_data_clean = [w.clean for w in lyrics_data]
@@ -76,6 +143,7 @@ class Aligner:
                     lyrics_data[ai].score = transcript_data[bi].score
                     lyrics_data[ai].start = transcript_data[bi].start
                     lyrics_data[ai].end = transcript_data[bi].end
+                    lyrics_data[ai].seg_idx = transcript_data[bi].seg_idx
                 else:
                     logger.debug(f"{'':<4}!!! Not Matched?: {lyrics_data[ai].word} to {transcript_data[bi].word}")
                 bi += 1
@@ -83,85 +151,123 @@ class Aligner:
         # Lines To Segment Calc
         # REVIEW: This would be perfectly fine for segments that hold multiple or merged the lines
         # But not entirely sure if its a splitted lines between smaller segments.
+        # ! REVIEW IN PROGRESS
         line_to_seg = {}
         for idx in range(len(lines_list)):
             line_words = [w for w in lyrics_data if w.line_idx == idx]
-            anchors = [w for w in line_words if w.start is not None]
+            anchors = [w for w in line_words if w.start is not None and w.seg_idx is not None]
             if anchors:
-                seg_votes = []
+                # Anchor is words that already have a segment in it. but there is also a dropped word
+                seg_idxs = []
+                last_si = None
                 for w in anchors:
-                    mid = (w.start + w.end ) / 2
-                    closest_seg = min(audio_segments,
-                        key=lambda s: abs(mid - (s.start + s.end) / 2) if not (s.start<=mid<=s.end) else 0)
-                    seg_votes.append(closest_seg)
-                line_to_seg[idx] = max(set(seg_votes), key=seg_votes.count)
+                    si = w.seg_idx
+                    if last_si is not None and si < last_si:
+                        # If the previous segment index is not none
+                        # and current segment index is less than last_si ? how can this be
+                        # so in a word timing it have, 4,4,5,5,4 ??
+                        si = last_si
+                        w.seg_idx = si
+                    seg_idxs.append(si)
+                    last_si = si
+                min_i = min(seg_idxs)
+                max_i = max(seg_idxs)
+                line_to_seg[idx] = list(range(min_i, max_i + 1))
             else:
-                line_to_seg[idx] = line_to_seg.get(idx - 1, audio_segments[0])
+                prev = line_to_seg.get(idx - 1)
+                # Previous line segment last segment
+                line_to_seg[idx] = [prev[-1]] if prev else [0]
+        for idx in range(len(lines_list)):
+            line_words = [w for w in lyrics_data if w.line_idx == idx]
+            span = line_to_seg[idx]
+            if len(span) == 1:
+                for w in line_words:
+                    w.seg_idx = span[0]
+                continue
+            for w in line_words:
+                si = getattr(w, "seg_idx", None)
+                if si is None:
+                    continue
+                if si < span[0]:
+                    w.seg_idx = span[0]
+                elif si > span[-1]:
+                    w.seg_idx = span[-1]
+            
+            allowed_start = audio_segments[span[0]].start - max_bleed_sec
+            allowed_end = audio_segments[span[-1]].end + max_bleed_sec
+            interpolate_words(line_words, allowed_start, allowed_end)
+            for w in line_words:
+                if getattr(w, "seg_idx", None) is None:
+                    si = seg_index_for_time(w.start, w.end)
+
+                    if si is None or si < span[0]:
+                        si = span[0]
+                    elif si > span[-1]:
+                        si = span[-1]
+
+                    w.seg_idx = si
+            last_si = span[0]
+            for w in line_words:
+                if getattr(w, "seg_idx", None) is None or w.seg_idx < last_si:
+                    w.seg_idx = last_si
+                else:
+                    last_si = w.seg_idx
+        
+        seg_buckets = [[] for _ in audio_segments]
+        for w in lyrics_data:
+            si = getattr(w, "seg_idx", None)
+
+            if si is None:
+                si = 0
+                w.seg_idx = 0
+
+            si = max(0, min(si, len(audio_segments) - 1))
+            w.seg_idx = si
+            seg_buckets[si].append(w)
+                
         final_segments = []
-        for seg in audio_segments:
-            bucket = [w for w in lyrics_data if line_to_seg[w.line_idx] == seg]
+        for seg_i, seg in enumerate(audio_segments):
+            bucket = seg_buckets[seg_i]
             if not bucket: continue
-            # Dropped word
             allowed_start = seg.start - max_bleed_sec
             allowed_end = seg.end + max_bleed_sec
-            n = len(bucket)
-            for i in range(n):
-                if bucket[i].start is None:
-                    logger.debug(f"{'':<2} Dropped: {bucket[i].word}")
-                    prev_end = allowed_start
-                    for left in range(i - 1, -1, -1):
-                        if bucket[left].end is not None:
-                            logger.debug(f"{'':<4} Found leading end: {bucket[left].end}")
-                            prev_end = bucket[left].end
-                            break
-                    next_start = allowed_end
-                    for right in range(i + 1, n):
-                        if bucket[right].start is not None:
-                            logger.debug(f"{'':<4} Found trailing start: {bucket[right].start}")
-                            next_start = bucket[right].start
-                            break
-                    missing_block = []
-                    for j in range(i, n):
-                        if bucket[j].start is None:
-                            missing_block.append(j)
-                        else:
-                            break
-                    logger.debug(f"{'':<6} total dropped in between: {len(missing_block)}")
-                    gap = next_start - prev_end
-                    time_per_word = gap / (len(missing_block) + 1)
-
-                    curr_time = prev_end
-                    for idx in missing_block:
-                        logger.debug(f"{'':<8} Interpolate: [None - None] to [{curr_time:.2f}s - {curr_time + time_per_word:.2f}s]")
-                        bucket[idx].start = curr_time
-                        bucket[idx].end = curr_time + time_per_word
-                        curr_time += time_per_word
-
+            interpolate_words(bucket, allowed_start, allowed_end)
             # Rubber banding
             bucket_start = bucket[0].start
             bucket_end = bucket[-1].end
-            target_start, target_end = bucket_start, bucket_end
-            needs_correction = False
-            if bucket_start < allowed_start:
-                target_start = allowed_start
-                needs_correction = True
-                logger.debug(f"{'':<4} Word Early: {bucket_start:.2f}s --> {target_start:.2f}s")
-            if bucket_end > allowed_end:
-                target_end = allowed_end
-                needs_correction = True
-                logger.debug(f"{'':<4} Word Bleed: {bucket_end:.2f}s --> {target_end:.2f}s")
-            if needs_correction:
-                dur_orig = bucket_end - bucket_start
-                dur_new = target_end - target_start
-                scale = dur_new / dur_orig if dur_orig > 0 else 1.0
+
+            target_start = seg.start
+            target_end = seg.end
+
+            dur_orig = bucket_end - bucket_start
+            dur_new = target_end - target_start
+
+            if dur_orig <= 0 or dur_new <= 0:
+                step = max(0.0, dur_new) / max(1, len(bucket))
+                curr = target_start
+
+                for w in bucket:
+                    w.start = curr
+                    w.end = curr + step
+                    curr += step
+            else:
+                scale = dur_new / dur_orig
 
                 for w in bucket:
                     old_start = w.start
                     old_end = w.end
+
                     w.start = target_start + (w.start - bucket_start) * scale
                     w.end = target_start + (w.end - bucket_start) * scale
-                    logger.debug(f"{'':<6} {w.word} shifted [{old_start:.2f}s - {old_end:.2f}] --> [{w.start:.2f} - {w.end:.2f}]")
 
+                    w.start = max(target_start, min(w.start, target_end))
+                    w.end = max(target_start, min(w.end, target_end))
+
+                    logger.debug(
+                        f"{'':<6} {w.word} shifted "
+                        f"[{old_start:.2f}s - {old_end:.2f}s] --> [{w.start:.2f}s - {w.end:.2f}s]"
+                    )
+            
             final_segments.append(Segment(words=list(
                 (obj := WordTiming(word=w.word, start=w.start, end=w.end, score=w.score if w.score is not None else 0.0),
                     setattr(obj, "line_idx", w.line_idx))[0]

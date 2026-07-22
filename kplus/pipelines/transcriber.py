@@ -65,7 +65,7 @@ class Transcriber:
         self.sr = self.model.feature_extractor.sampling_rate
         self.use_cliptimestamp = use_cliptimestamp
 
-    def _process_chunk(self, audio: np.ndarray, segment, lyrics):
+    def _process_chunk(self, audio: np.ndarray, segment, lyrics, audio_seg_idx):
         start_sample =int(segment.start * self.sr)
         end_sample = int(segment.end * self.sr)
         chunk = audio[start_sample:end_sample].squeeze()
@@ -75,10 +75,11 @@ class Transcriber:
         chunk_segments = []
         for res in result:
             chunk_segments.append(
-                Segment(words=list(WordTiming(
+                (obj := Segment(words=list(WordTiming(
                     start=float(w.start + segment.start),
                     end=float(w.end + segment.start),
-                    score=float(w.probability), word=str(w.word)) for w in res.words))
+                    score=float(w.probability), word=str(w.word)) for w in res.words)),
+                setattr(obj, "seg_idx", audio_seg_idx))[0]
             )
         del chunk, lang, result
         return chunk_segments
@@ -102,7 +103,7 @@ class Transcriber:
             try:
                 if not self.use_cliptimestamp:
                     with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_threads) as executor:
-                        future_to_seg = {executor.submit(self._process_chunk, audio, seg, lyrics): seg for seg in audio_segments}
+                        future_to_seg = {executor.submit(self._process_chunk, audio, seg, lyrics, idx): seg for idx, seg in enumerate(audio_segments)}
                         for future in concurrent.futures.as_completed(future_to_seg):
                             try:
                                 chunk_result = future.result()
