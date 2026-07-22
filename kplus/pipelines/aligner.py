@@ -123,7 +123,7 @@ class Aligner:
                 next_words = [w for w in lyrics_data if w.line_idx == idx]
                 if current_group_segs & next_segs:
                     # OVERLAP: Merge words and segments
-                    logger.debug("overlap!", current_group_segs & next_segs)
+                    logger.debug(f"overlap! {current_group_segs & next_segs}")
                     current_group_words.extend(next_words)
                     current_group_segs.update(next_segs)
                 else:
