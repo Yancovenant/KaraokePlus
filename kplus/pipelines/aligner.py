@@ -10,11 +10,12 @@ from itertools import pairwise
 
 from kplus.environment import env
 from .transcriber import WordTiming, Result, Segment
+from .aad import AudioSegment
 
 if TYPE_CHECKING:
     import torch
     import numpy as np
-    from .aad import AudioSegment
+    
     from .transcriber import Result
 
 
