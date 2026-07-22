@@ -327,7 +327,7 @@ class Aligner:
         for res in results.segments:
             logger.debug(f"{'':<2}[{res.start:.2f}s - {res.end:.2f}s] {res.text}")
             for w in res.words:
-                logger.debug(f"{'':<4}WordTiming: ({w.score:.2f}) {w.start:.2f}s to {w.end:.2f}s {w.word}")
+                logger.debug(f"{'':<4}WordTiming: {w.start:.2f}s to {w.end:.2f}s {w.word}")
         del audio, #audio_np
         env.clean()
         return results.to_lyrics_segment()
