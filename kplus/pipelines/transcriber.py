@@ -65,7 +65,7 @@ class Transcriber:
         self.sr = self.model.feature_extractor.sampling_rate
         self.use_cliptimestamp = use_cliptimestamp
 
-    def _process_chunk(self, audio: np.ndarray, segment, lyrics, audio_seg_idx):
+    def _process_chunk(self, audio: np.ndarray, segment, lyrics):
         start_sample =int(segment.start * self.sr)
         end_sample = int(segment.end * self.sr)
         chunk = audio[start_sample:end_sample].squeeze()
@@ -75,27 +75,26 @@ class Transcriber:
         chunk_segments = []
         for res in result:
             chunk_segments.append(
-                Segment(words=list(
-                    (obj := WordTiming(
+                Segment(words=list(WordTiming(
                         start=float(w.start + segment.start),
                         end=float(w.end + segment.start),
                         score=float(w.probability), word=str(w.word)
-                    ), setattr(obj, "seg_idx", audio_seg_idx))[0]
-                    for w in res.words
-                ))
-            )
+                    ) for w in res.words)))
         del chunk, lang, result
         return chunk_segments
     
-    def transcribe(self, audio: AudioType, audio_segments, lyrics: str, sr: Optional[float]):
+    def transcribe(self, audio: AudioType, audio_segments, lyrics: str, sr: Optional[float] = None):
         env.numpy, env.torch
         import numpy as np, torch
-        if not isinstance(audio, (np.ndarray, torch.Tensor)):
-            from .utils import load_audio
-            audio = load_audio(audio, self.sr, 1)
+        # Avoid double resampling
         if isinstance(audio, torch.Tensor):
             from .utils import convert_audio
+            assert sr is not None
             audio = convert_audio(audio, sr, self.sr, 1)
+            audio = audio.detach().cpu().numpy()
+        elif not isinstance(audio, np.ndarray):
+            from .utils import load_audio
+            audio: torch.Tensor = load_audio(audio, self.sr, 1)
             audio = audio.detach().cpu().numpy()
         audio = audio.squeeze()
         results = []
@@ -106,7 +105,7 @@ class Transcriber:
             try:
                 if not self.use_cliptimestamp:
                     with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_threads) as executor:
-                        future_to_seg = {executor.submit(self._process_chunk, audio, seg, lyrics, idx): seg for idx, seg in enumerate(audio_segments)}
+                        future_to_seg = {executor.submit(self._process_chunk, audio, seg, lyrics): seg for seg in audio_segments}
                         for future in concurrent.futures.as_completed(future_to_seg):
                             try:
                                 chunk_result = future.result()
@@ -119,6 +118,8 @@ class Transcriber:
                     batch_result = self.model.transcribe(audio, language=None, clip_timestamp=time_batches,
                                                          initial_prompt=lyrics, beam_size=5,
                                                          repetition_penalty=1.2, condition_on_previous_text=False)
+                    for res in batch_result:
+                        pass
             except Exception as err:
                 logger.error(f"!!! Concurrent Error: {err}", exc_info=True)
                 raise

@@ -21,11 +21,6 @@ logger = logging.getLogger(__name__)
 class AudioSegment:
     start: float
     end: float
-    text: str = ""
-    language: str = ""
-    pitch_present: bool = False
-    confidence: float = 0.0
-    is_refined: bool = False
 
     def __hash__(self):
         return hash((self.start, self.end))
@@ -103,6 +98,7 @@ class AAD:
             audio, lsr = librosa.load(audio, sr=None)
             sr = lsr
             logger.debug(f"Changing sr value from {sr} to {lsr}")
+        # If time manually given
         with MainProgress(total=5, desc=f"Processing audio: {len(audio)} samples, {sr}Hz, {len(audio)/sr:.2f}") as main_bar:
             main_bar.pbar.set_description("Computing RMS")
             hop_length = int(sr / 1000) * precision_ms
