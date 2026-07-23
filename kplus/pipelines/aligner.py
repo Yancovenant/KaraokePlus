@@ -297,17 +297,46 @@ class Aligner:
 
         return start_time
 
-    def refine_segments_with_dsp(self, results: Result, audio_np: np.ndarray, sr: int):
-        for seg in results.segments:
-            for i in range(len(seg.words) - 1):
-                curr_word = seg.words[i]
-                next_word = seg.words[i+1]
-                gap = next_word.start - curr_word.end
-
-                # If gap > 100ms, trigger DSP fallback
-                if 0.1 < gap < 1.5: # 1.5s cap to prevent tracking background noise
-                    new_end = self.track_vocal_tail(audio_np, sr, curr_word.end, next_word.start)
-                    curr_word.end = new_end
+    def refine_segments_with_peaks(self, results: Result, audio_np: np.ndarray, precision_ms: int = 1):
+        env.matplotlib, env.librosa
+        import matplotlib.pyplot as plt, librosa
+        for i, seg in enumerate(results.segments):
+            safe_start = seg.start
+            safe_end = seg.end
+            start = int(safe_start * self.sr)
+            end = int(safe_end * self.sr)
+            audio_chunk = audio[start:end]
+            # Will frame length actually be bigger then segment duration?
+            # as long as its longer than 1ms * 1.5 its correct right
+            hop_length = int(sr / 1000) * precision_ms
+            frame_length = int(hop_length * 1.5) # 150% 
+            sos = scipy.signal.butter(10, [300, 3000], btype='bandpass', fs=sr, output='sos')
+            audio = scipy.signal.sosfilt(sos, audio)
+            rms = librosa.feature.rms(y=audio_chunk, frame_length=frame_length, hop_length=hop_length)[0]
+            # lower this more probably for more precision?
+            frames_per_half_sec = max(1, int(0.5 / (precision_ms / 1000)))
+            rms_smoothed = uniform_filter1d(rms, size=frames_per_half_sec)
+            inverted_rms = -rms_smoothed
+            valleys, _ = find_peaks(inverted_rms, prominence=0.01)
+            peak_prob_sec = 0.9 # 10% quieter ? to handle more verbose
+            rms_times = librosa.frames_to_time(np.arange(len(rms)), sr=sr, hop_length=hop_length)
+            valley_times = librosa.frames_to_time(valleys, sr=sr, hop_length=hop_length)
+            if True:
+                fig, axes = plt.subplots(2, 1, figsize=(50, 10), sharex=True)
+                librosa.display.waveshow(audio_chunk, sr=self.sr, ax=axes[0], color='darkgray', alpha=0.5)
+                axes[0].set_title("Audio Waveform")
+                axes[0].set_ylabel("Amplitude")
+                axes[1].plot(rms_times, rms_smoothed, label="Smoothed RMS", color='blue', linewidth=1.5)
+                axes[1].plot(valley_times, rms_smoothed[valleys], "mo", markersize=8, label="Detected Deepest Peak")
+                axes[1].set_title("RMS")
+                axes[1].set_ylabel("RMS Amplitude")
+                axes[1].set_xlabel("Time (s)")
+                axes[1].legend(loc="upper right")
+                axes[1].label_outer()
+                plt.tight_layout()
+                plt.show()
+                plt.savefig(f"{i}_refinement.png", bbox_inches='tight')
+                plt.close()
         return results
 
     def main(self, audio: torch.Tensor, sr: float, lyrics: str, audio_segments: List[AudioSegment], transcriptions: Result):
@@ -320,8 +349,8 @@ class Aligner:
         # Forced Align (FA)
         results = self.ctc_align(audio.to(env.device), results, new_audio_segments)
         
-        # This uses pyin maybe find another method if not already best
-        # results = self.refine_segments_with_dsp(results, audio_np, self.sr)
+        # This uses rms peaks converted and normalized with filter
+        results = self.refine_segments_with_peaks(results, audio_np, 1)
         
         logger.debug(f">> Final Timestamp {len(results.segments)}")
         for res in results.segments:

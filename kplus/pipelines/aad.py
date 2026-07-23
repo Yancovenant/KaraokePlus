@@ -42,7 +42,7 @@ class AAD:
         plt.rcParams['figure.figsize'] = (20, 12)
         plt.rcParams['font.size'] = 10
     
-    def plotvisual(self, audio, sr, start_times, end_times, valley_times, rms_times, rms_smoothed, valleys, silence_threshold):
+    def plotvisual(self, audio, sr, start_times, end_times, valley_times, rms_times, rms_smoothed, valleys, raw_valleys, raw_valleys_times, silence_threshold):
         env.matplotlib, env.librosa
         import matplotlib.pyplot as plt, librosa
         fig, axes = plt.subplots(2, 1, figsize=(50, 10), sharex=True)
@@ -56,6 +56,7 @@ class AAD:
         axes[1].plot(rms_times, rms_smoothed, label="Smoothed RMS", color='blue', linewidth=1.5)
         axes[1].axhline(y=silence_threshold, color='black', linestyle='--', label="Silence Threshold")
         axes[1].plot(valley_times, rms_smoothed[valleys], "mo", markersize=8, label="Detected Deepest Peak")
+        axes[1].plot(raw_valleys_times, rms_smoothed[raw_valleys], "mo", markersize=4, label="All Valleys")
         for start, end in zip(start_times, end_times):
             axes[1].axvspan(start, end, color='green', alpha=0.2)
         axes[1].set_title("RMS")
@@ -165,8 +166,9 @@ class AAD:
             end_times = librosa.frames_to_time(end_frames, sr=sr, hop_length=hop_length)
             rms_times = librosa.frames_to_time(np.arange(len(rms)), sr=sr, hop_length=hop_length)
             valley_times = librosa.frames_to_time(valleys, sr=sr, hop_length=hop_length)
+            raw_valleys_times = librosa.frames_to_time(raw_valleys, sr=sr, hop_length=hop_length)
             if self.visual:
-                self.plotvisual(audio, sr, start_times, end_times, valley_times, rms_times, rms_smoothed, valleys, silence_threshold)
+                self.plotvisual(audio, sr, start_times, end_times, valley_times, rms_times, rms_smoothed, valleys, raw_valleys, raw_valleys_times, silence_threshold)
             logger.debug(f">> Total Audio Segment: {len(start_times)}")
             results = []
             for i, (start_t, end_t) in enumerate(zip(start_times, end_times)):
