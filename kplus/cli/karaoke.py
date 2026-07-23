@@ -44,7 +44,7 @@ class Karaoke(Command):
         logger.info(f"Finished separating {filepath}")
         del separation_model.model, separation_model
         env.clean()
-        audio_segments  : AudioSegment = AAD(False).get_audio_segments(separation_info.vocal_tensor,
+        filtered_audio_np, audio_segments = AAD(False).get_audio_segments(separation_info.vocal_tensor,
                 sr=separation_info.sr)
         # At this point i think we wanna convert the sampling rate to be 16000 since both uses that?
         transcribe_model = Transcriber(max_threads=opt.max_threads, use_cliptimestamp=opt.use_cliptimestamp)
@@ -59,6 +59,6 @@ class Karaoke(Command):
         env.clean()
         karaoke_data = []
         for seg in aligner_info.segments:
-                word_list = [{"word": w.word, "start": w.start, "end": w.end} for w in seg.words]
-                karaoke_data.append({"text": seg.text, "words": word_list})
+            word_list = [{"word": w.word, "start": w.start, "end": w.end} for w in seg.words]
+            karaoke_data.append({"text": seg.text, "words": word_list})
         Render().render(None, info.title, info.filename, separation_info.inst_path, info.duration, karaoke_data)

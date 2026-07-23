@@ -3,11 +3,10 @@ import logging
 import os
 
 from pathlib import Path
-from urllib.parse import urlparse
 
 from .command import Command
 from kplus.tools.config import config
-from kplus.pipelines import SongDownloader, SeparationDemucs, VisualizeWaveform, get_track_file
+from kplus.pipelines import SeparationDemucs, VisualizeWaveform, get_track_file
 from kplus.environment import env
 
 logger = logging.getLogger(__name__)

@@ -5,9 +5,7 @@ from pathlib import Path
 
 from .command import Command
 from kplus.tools.config import config
-from kplus.pipelines import SeparationDemucs, get_track_file, \
-    Aligner, AAD, Transcriber
-from kplus.environment import env
+from kplus.pipelines import get_track_file, Transcriber
 
 logger = logging.getLogger(__name__)
 

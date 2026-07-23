@@ -114,12 +114,23 @@ class Transcriber:
                             except Exception as e:
                                 logger.error(f"!!! Transcriber failed to process chunk: {e}", exc_info=True)
                 else:
-                    time_batches = [{"start": float(seg.start), "end": float(seg.end)} for seg in audio_segments]
-                    batch_result = self.model.transcribe(audio, language=None, clip_timestamp=time_batches,
-                                                         initial_prompt=lyrics, beam_size=5,
+                    # normal transcribe expect str, float() timestamp
+                    # time_batches = ",".join(f"{seg.start},{seg.end}" for seg in audio_segments)
+                    # batch transcribe expect a dict?
+                    time_batches = [{"start": seg.start, "end": seg.end} for seg in audio_segments]
+                    batch_result = self.model.transcribe(audio, language=None, clip_timestamps=time_batches,
+                                                         initial_prompt=lyrics, beam_size=5, batch_size=16,
                                                          repetition_penalty=1.2, condition_on_previous_text=False)
                     for res in batch_result:
-                        pass
+                        main_bar.update(1)
+                        seg_words = []
+                        for w in res.words:
+                            seg_words.append(WordTiming(
+                                start=float(w.start),
+                                end=float(w.end),
+                                score=float(w.probability),
+                                word=str(w.word)))
+                        results.append(Segment(words=seg_words))
             except Exception as err:
                 logger.error(f"!!! Concurrent Error: {err}", exc_info=True)
                 raise

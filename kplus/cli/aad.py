@@ -1,9 +1,5 @@
 import sys
 import logging
-import os
-
-from pathlib import Path
-from urllib.parse import urlparse
 
 from .command import Command
 from kplus.tools.config import config
@@ -25,4 +21,4 @@ class AAD(Command):
             sys.exit()
         config.parse_config(unknown, setup_logging=True)
 
-        _AAD(opt.visualize).get_audio_segments(opt.filepath, sr=None)
+        filtered_audio_np, audio_segments = _AAD(opt.visualize).get_audio_segments(opt.filepath, sr=None)

@@ -2,15 +2,15 @@ from __future__ import annotations
 
 import logging
 
-from pathlib import Path
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, List
+from typing import TYPE_CHECKING, List, Tuple
 
 from kplus.tools.progress import MainProgress
 from kplus.environment import env
 
 if TYPE_CHECKING:
     from .utils import AudioType
+    import numpy as np
 
 
 logger = logging.getLogger(__name__)
@@ -71,7 +71,7 @@ class AAD:
     def get_audio_segments(self, audio: AudioType,
                 sr: int, precision_ms: int = 1, silence_threshold: int = 0.01,
                 min_segment_sec: float = 2.0, peak_prob_sec: float = 8.0,
-                depth_ratio: float = 0.6) -> List[AudioSegment]:
+                depth_ratio: float = 0.6) -> Tuple[np.ndarray, List[AudioSegment]]:
         """ Detect audio activity RMS, Peak, Voice 300fq - 3000fq
             Args:
                 audio: AudioType
@@ -88,7 +88,7 @@ class AAD:
         env.scipy, env.librosa
         import librosa, scipy, numpy as np, torch
         from scipy.signal import find_peaks
-        from scipy.ndimage import uniform_filter1d, median_filter
+        from scipy.ndimage import uniform_filter1d
         if isinstance(audio, torch.Tensor):
             from .utils import convert_audio
             audio = convert_audio(audio, sr, sr, 1)
@@ -175,5 +175,5 @@ class AAD:
                 results.append(AudioSegment(
                 start=start_t, end=end_t))
             main_bar.update(1)
-            return results
+            return audio, results
             
