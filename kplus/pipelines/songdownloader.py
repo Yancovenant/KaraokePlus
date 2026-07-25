@@ -1,16 +1,13 @@
 import logging
-import tempfile
 import os
 import re
-
+import tempfile
 from pathlib import Path
-from typing import Dict, Optional
 from types import SimpleNamespace
 from urllib.parse import urlparse
 
 from kplus.environment import env
 from kplus.tools.progress import MainProgress, SubProgress
-
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +27,7 @@ class SongDownloader:
             'progress_hooks': [SubProgress()]}
         self.without_lyrics = without_lyrics
 
-    def _fetch_lyrics_api(self, endpoint: str, params: Dict) -> Optional[str]:
+    def _fetch_lyrics_api(self, endpoint: str, params: dict) -> str | None:
         try:
             res = self.session.get(f"https://lrclib.net/api/{endpoint}", params=params, timeout=10)
             if res.status_code == 200:
@@ -39,9 +36,10 @@ class SongDownloader:
                 else: return data.get("plainLyrics")
         except Exception as e:
             logger.warning(f"Lyrics API error ({endpoint}): {e}")
+            raise
         return None
 
-    def fetch_lyrics(self, title: str, artist: str, duration: int) -> Optional[str]:
+    def fetch_lyrics(self, title: str, artist: str, duration: int) -> str | None:
         if ' - ' in title:
             parts = title.split(' - ', 1)
             if parts[0].strip(): artist = parts[0].strip()
@@ -55,21 +53,21 @@ class SongDownloader:
         if l := self._fetch_lyrics_api("search", {"q": query}): return l
         return None
 
-    def download(self, url: str, output_path: Optional[str] = None, external_id: Optional[int] = None) -> Optional[tuple[str, str, str, Optional[str], Path]]:
+    def download(self, url: str, output_path: str | None = None, external_id: int | None = None) -> tuple[str, str, str, str | None, Path] | None:
         filepath = f"{external_id:04d}_%(title)s.%(ext)s" if external_id is not None else "%(title)s.%(ext)s"
         if not output_path: output_path = tempfile.gettempdir() + filepath
         if os.path.exists(output_path): logger.debug(f"File already exist..., {output_path}"); return output_path
         self.opts.update({'outtmpl': filepath,})
         task_total = 2 if self.without_lyrics else 3
         with env.yt_dlp.YoutubeDL(self.opts) as ydl:
-            with MainProgress(total=task_total, desc="Downloading %s" % url, unit="step") as main_bar:
+            with MainProgress(total=task_total, desc=f"Downloading {url}", unit="step") as main_bar:
                 main_bar.pbar.set_description("Extracting Info")
                 info = ydl.extract_info(url, download=False)
                 main_bar.update(1)
                 title = info.get("title", "unknown")
                 artist = info.get("artist") or info.get("uploader", "Unknown")
                 duration = info.get("duration", 0.0)
-                logger.debug("Information: title: `%s`, artist: `%s`, duration: `%ds`" % (title, artist, duration))
+                logger.debug("Information: title: `%s`, artist: `%s`, duration: `%ds`" % (title, artist, duration))  # noqa: UP031
                 lyrics = None
                 if not self.without_lyrics:
                     main_bar.pbar.set_description("Fetching Lyrics")
@@ -81,7 +79,7 @@ class SongDownloader:
                 if not filename.exists():
                     ydl.download([url])
                 main_bar.update(1)
-                logger.debug("Information: lyrics: `%s...`, filename: `%s`" % (lyrics[:25] if lyrics else "-No Lyrics-", filename))
+                logger.debug("Information: lyrics: `{}...`, filename: `{}`".format(lyrics[:25] if lyrics else "-No Lyrics-", filename))
             return SimpleNamespace(title=title, artist=artist, duration=duration, lyrics=lyrics, filename=filename)
 
 

@@ -1,16 +1,16 @@
 from __future__ import annotations
 
 import logging
-
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, List, Tuple
+from typing import TYPE_CHECKING
 
-from kplus.tools.progress import MainProgress
 from kplus.environment import env
+from kplus.tools.progress import MainProgress
 
 if TYPE_CHECKING:
+    import numpy as np  # type: ignore
+
     from .utils import AudioType
-    import numpy as np
 
 
 logger = logging.getLogger(__name__)
@@ -35,8 +35,8 @@ class AAD:
     """
     def __init__(self, visualize: bool = False):
         self.visual = visualize
-        env.matplotlib
-        import matplotlib.pyplot as plt
+        env.matplotlib  # noqa: B018
+        import matplotlib.pyplot as plt # type: ignore  # noqa: I001
         plt.style.use('seaborn-v0_8-darkgrid')
         plt.rcParams['figure.figsize'] = (20, 12)
         plt.rcParams['font.size'] = 10
@@ -71,7 +71,7 @@ class AAD:
     def get_audio_segments(self, audio: AudioType,
                 sr: int, precision_ms: int = 1, silence_threshold: int = 0.01,
                 min_segment_sec: float = 2.0, peak_prob_sec: float = 8.0,
-                depth_ratio: float = 0.6) -> Tuple[np.ndarray, List[AudioSegment]]:
+                depth_ratio: float = 0.6) -> tuple[np.ndarray, list[AudioSegment]]:
         """ Detect audio activity RMS, Peak, Voice 300fq - 3000fq
             Args:
                 audio: AudioType
@@ -85,10 +85,10 @@ class AAD:
                 depth_ratio: control how deep a peak should be to survive the average
                     of peak_prob_sec. 0.6 means a peak must be at least 40% quieter
         """
-        env.scipy, env.librosa
-        import librosa, scipy, numpy as np, torch
-        from scipy.signal import find_peaks
-        from scipy.ndimage import uniform_filter1d
+        env.scipy, env.librosa  # noqa: B018
+        import librosa, scipy, numpy as np, torch  # type: ignore # noqa: I001
+        from scipy.signal import find_peaks # type: ignore
+        from scipy.ndimage import uniform_filter1d # type: ignore
         if isinstance(audio, torch.Tensor):
             from .utils import convert_audio
             audio = convert_audio(audio, sr, sr, 1)
