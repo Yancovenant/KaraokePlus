@@ -288,7 +288,7 @@ class QwenTranscribe(TranscriberMixin):
                                    "device_map": env.device.type,
                                    "attn_implementation": "sdpa",},)
 
-    def _apply_model(self, audio_segments: list[AudioSegment], audio: list[tuple[np.ndarray, int]], context: list[str] | None):
+    def _apply_model(self, audio_segments: list[AudioSegment], audio: list[tuple[np.ndarray, int]], context: list[str] | None = None):
         results = []
         with MainProgress(total = len(audio), desc="Qwen Starting Transcriptions...", unit="chunk") as main_bar:
             try:
@@ -339,7 +339,7 @@ class QwenTranscribe(TranscriberMixin):
                 safe_end = max(res.end, seg.end)
                 start_sample = int(safe_start * self.sr)
                 end_sample = int(safe_end * self.sr)
-                audio_slice = audio[:, start_sample:end_sample]
+                audio_slice = audio[start_sample:end_sample]
                 assert audio_slice.shape[0] > 0
                 audio_chunk_list.append((audio_slice, self.sr))
                 text_chunk_list.append(res.text)
@@ -393,3 +393,25 @@ class WhisperTranscribe(TranscriberMixin):
         env.clean()
         return Result(segments=results)
      
+    def align(self, audio: AudioType, sr: int, result: Result, audio_segments: list[AudioSegment]) -> Result:
+        audio = self._process_audio(audio, sr)
+        results = []
+        with MainProgress(total = len(audio_segments), desc="Whisper Starting align + refine...", unit="chunk") as main_bar:
+            for res, seg in zip(result.segments, audio_segments):
+                if seg.start <= (res.end - res.start) <= seg.end:
+                    safe_start = min(res.start, seg.start)
+                    safe_end = max(res.end, seg.end)
+                    start_sample = int(safe_start * self.sr)
+                    end_sample = int(safe_end * self.sr)
+                    audio_slice = audio[start_sample:end_sample]
+                    assert audio_slice.shape[0] > 0
+                    try:
+                        result = self.model.align(audio_slice, res.text, verbose=None, languange='en') # Auto lang later on.
+                        result = self.model.refine(audio_slice, result, steps="e", precision=0.5, verbose=None)
+                        for new_res in result.segments:
+                            for word in new_res.words:
+                                global_start = safe_start + word.start
+                                global_end = safe_start + word.end
+                    except Exception:
+                        logger.exception("!!! Whisper align + refine Error:")
+                        raise
