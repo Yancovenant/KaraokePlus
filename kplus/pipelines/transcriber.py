@@ -73,7 +73,7 @@ class TranscriberMixin:
             return WhisperTranscribe(options)
 
     def _process_audio(self, audio: AudioType, sr: int | None):
-        env.numpy, env.torch  # noqa: B018
+        env.numpy, env.torch, env.ffmpeg  # noqa: B018
         import numpy as np, torch  # type: ignore  # noqa: I001
         if isinstance(audio, torch.Tensor):
             from .utils import convert_audio
@@ -121,6 +121,8 @@ class TranscriberMixin:
                 logger.info(f"{key}: {value:.2%}")
             else:
                 logger.info(f"{key}: {value}")
+        from pprint import pprint
+        pprint(out)
         
 
     def get_lyrics_timestamp(self, transcripts: Result, lyrics: str, audio_segments: list[AudioSegment], max_bleed_seconds: float = 0.5) -> tuple[Result, list[AudioSegment]]:
@@ -150,9 +152,9 @@ class TranscriberMixin:
         lyric_clean = [t.clean for t in lyric_tokens]
         transcript_clean = [t.clean for t in transcript_tokens]
         def fuzzy_score(a, b):
-            if a == b: return 2.0  # Perfect match
-            if difflib.SequenceMatcher(None, a, b).ratio() > 0.6: return 1.0  # High similarity (slight mishearings)
-            return -3.0
+            if a == b: return 1.0  # Perfect match
+            #if difflib.SequenceMatcher(None, a, b).ratio() > 0.6: return 1.0  # High similarity (slight mishearings)
+            return -1.0
         aligned_lyric, aligned_transcript = needleman_wunsch_with_scores(
             lyric_clean, transcript_clean,
             gap="-", score_fn=fuzzy_score, indel_score=-1.0
@@ -161,13 +163,13 @@ class TranscriberMixin:
         for lyric_word, transcript_word in zip(aligned_lyric, aligned_transcript):
             if lyric_word == "-": transcript_idx += 1; continue
             if transcript_word == "-": lyric_idx += 1; continue
-            if fuzzy_score(lyric_word, transcript_word) > 0:
-                lyric_token = lyric_tokens[lyric_idx]
-                transcript_token = transcript_tokens[transcript_idx]
-                lyric_token.start = transcript_token.start
-                lyric_token.end = transcript_token.end
-                lyric_token.score = transcript_token.score
-                logger.debug(f"{'':<4}Matched: {lyric_token.word} to {transcript_token.word}")
+            #if fuzzy_score(lyric_word, transcript_word) > 0:
+            lyric_token = lyric_tokens[lyric_idx]
+            transcript_token = transcript_tokens[transcript_idx]
+            lyric_token.start = transcript_token.start
+            lyric_token.end = transcript_token.end
+            lyric_token.score = transcript_token.score
+            logger.debug(f"{'':<4}Matched: {lyric_token.word} to {transcript_token.word}")
             lyric_idx += 1
             transcript_idx += 1
         lines_map: dict[int, list[WordTiming]] = defaultdict(list)
@@ -257,10 +259,10 @@ class TranscriberMixin:
                         curr_time += time_per_word
                 else:
                     i += 1
-            if self.verbose:
-                self._plot_jiwer(lyrics, transcripts)
             final_segments.append(Segment(words=words))
             final_audio_segments.append(segment)
+        if self.verbose:
+            self._plot_jiwer(lyrics, transcripts)
         return Result(segments=final_segments), final_audio_segments
 
     def transcribe(self, audio: AudioType, audio_segments: list[AudioSegment] | None = None, lyrics: str | None = None, sr: int | None = None) -> Result:
@@ -353,6 +355,7 @@ class WhisperTranscribe(TranscriberMixin):
         env.stable_ts, env.faster_whisper  # noqa: B018
         import stable_whisper  # type: ignore
         self.max_threads = max(1, options.max_threads)
+        self.beamsize = options.beamsize
         compute_type = "float16" if env.device.type == "cuda" else "float32"
         self.model = stable_whisper.load_faster_whisper(options.modelname, device=env.device.type, compute_type=compute_type, num_workers=options.max_threads)
 
@@ -369,7 +372,7 @@ class WhisperTranscribe(TranscriberMixin):
                 # batch transcribe expect a dict?
                 time_batches = [{"start": seg.start, "end": seg.end} for seg in audio_segments]
                 batch_result = self.model.transcribe(audio, language=None, clip_timestamps=time_batches,
-                                                    initial_prompt=lyrics, beam_size=5, batch_size=16,
+                                                    initial_prompt=lyrics, beam_size=self.beamsize, batch_size=16,
                                                     repetition_penalty=1.2, condition_on_previous_text=False)
                 for res in batch_result:
                     main_bar.update(1)
