@@ -7,6 +7,8 @@ from typing import TYPE_CHECKING
 from kplus.environment import env
 from kplus.tools.progress import MainProgress
 
+from .utils import AudioSegment
+
 if TYPE_CHECKING:
     import numpy as np  # type: ignore
 
@@ -14,20 +16,6 @@ if TYPE_CHECKING:
 
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass(slots=True)
-class AudioSegment:
-    start: float
-    end: float
-
-    def __hash__(self):
-        return hash((self.start, self.end))
-
-    def __eq__(self, other):
-        if not isinstance(other, AudioSegment):
-            return False
-        return self.start == other.start and self.end == other.end
 
 
 class AAD:
