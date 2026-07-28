@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import re
+import sys
 import string
 from collections import defaultdict
 from pathlib import Path
@@ -49,44 +50,6 @@ class TranscriberMixin:
         if not isinstance(audio, np.ndarray):
             audio = audio.detach().cpu().numpy().squeeze()
         return audio
-
-    def _plot_jiwer(self, ref: str, res: str) -> None:
-        env.jiwer  # noqa: B018
-        import jiwer  # type: ignore
-        res_flat = " ".join([seg.text for seg in res.segments])
-        ref_flat = " ".join([line.strip() for line in ref.split("\n") if line.strip() and not line.startswith('[')])
-        normalizer = jiwer.Compose([
-            jiwer.ToLowerCase(),
-            jiwer.RemovePunctuation(),
-            jiwer.RemoveMultipleSpaces(),
-            jiwer.Strip(),
-            jiwer.ReduceToListOfListOfWords(),
-        ])
-        out = jiwer.process_words(
-            ref_flat,
-            res_flat,
-            reference_transform=normalizer,
-            hypothesis_transform=normalizer
-        )
-        logger.info("--- Transcription Metrics ---")
-        metrics = {"WER (Word Error Rate)": out.wer,
-                "CER (Character Error Rate)": jiwer.cer(
-                    ref_flat, res_flat, 
-                    reference_transform=normalizer, hypothesis_transform=normalizer),
-                "MER (Match Error Rate)": out.mer,
-                "WIL (Word Information Lost)": out.wil,
-                "Substitutions": out.substitutions,
-                "Deletions": out.deletions,
-                "Insertions": out.insertions,
-                "Total Words": out.substitutions + out.deletions + out.hits}
-        logger.info(jiwer.visualize_error_counts(out))
-        for key, value in metrics.items():
-            if isinstance(value, float):
-                logger.info(f"{key}: {value:.2%}")
-            else:
-                logger.info(f"{key}: {value}")
-        from pprint import pprint
-        pprint(out)
 
     _PUNCTUATION_TRANSLATOR = str.maketrans('', '', string.punctuation)
 
@@ -379,6 +342,118 @@ class TranscriberMixin:
             console.print(table)
             console.print("\n")
         return Result(segments=final_segments), final_audio_segments
+
+    def refine_timestamp(self, audio: AudioType, sr: int, ref_result: Result,
+        audio_segments: list[AudioSegment]
+    ) -> Result:
+        env.librosa; import librosa
+        audio_np = self._process_audio(audio, sr)
+        align_results = self.align(audio_np, None, ref_result, audio_segments)
+        precision_ms=1
+        if self.verbose:
+            env.rich
+            from rich.console import Console
+            from rich.table import Table
+            from rich.panel import Panel
+            from rich.text import Text
+            console = Console()
+            console.rule("[bold cyan]⏱️ Acoustic Refinement & RMS Envelope Debug[/]")
+        for i, (prev_res, new_res, audio_seg) in enumerate(zip(ref_result, align_results, audio_segments)):
+            safe_start = max(min(new_res.start, audio_seg.start), new_res.start - 1.0)
+            safe_end = min(max(new_res.end, audio_seg.end), new_res.end + 1.0)
+            start, end = int(safe_start*self.sr), int(safe_end*self.sr)
+            audio_chunk = audio_np[start:end]
+            hop_length = int(self.sr / 1000) * precision_ms # 16 frames
+            frame_length = int(hop_length * 2) # 32 frames
+            rms = librosa.feature.rms(y=audio_chunk, frame_length=frame_length, hop_length=hop_length)[0]
+            if self.verbose:
+                if len(audio_chunk) == 0:
+                    console.print(f"[bright_yellow]⚠ Empty audio chunk for Segment {i:02d}. Skipping.[/]")
+                    continue
+                delta_start_ms = (new_res.start - prev_res.start) * 1000
+                delta_end_ms = (new_res.end - prev_res.end) * 1000
+                shift_start_color = "bright_green" if abs(delta_start_ms) < 50 else ("bright_yellow" if abs(delta_start_ms) < 150 else "bright_red")
+                shift_end_color = "bright_green" if abs(delta_end_ms) < 50 else ("bright_yellow" if abs(delta_end_ms) < 150 else "bright_red")
+                header = Text.from_markup(
+                    f"[bold]Segment {i:02d}[/] | Duration: [{audio_seg.h_start} - {audio_seg.h_end}]\n"
+                    f"Refined: [cyan]{new_res.h_start} → {new_res.h_end}[/]\n"
+                    f"Original: [dim]{prev_res.h_start} → {prev_res.h_end}[/]\n"
+                    f"Δ Shift: Start [{shift_start_color}]{delta_start_ms:+.1f}ms[/] | "
+                    f"End [{shift_end_color}]{delta_end_ms:+.1f}ms[/]"
+                )
+                console.print(Panel(header, border_style="cyan", expand=False))
+                rms_db = librosa.amplitude_to_db(rms, ref=np.max)
+                rms_times = librosa.frames_to_time(np.arange(len(rms)),sr=self.sr, hop_length=hop_length) + safe_start
+                for prev_word, new_word in zip(prev_res.words, new_res.words):
+                    assert prev_word.word == new_word.word
+                    delta_start_ms = (new_word.start - prev_word.start) * 1000
+                    delta_end_ms = (new_word.end - prev_word.end) * 1000
+                    shift_start_color = "bright_green" if abs(delta_start_ms) < 50 else ("bright_yellow" if abs(delta_start_ms) < 150 else "bright_red")
+                    shift_end_color = "bright_green" if abs(delta_end_ms) < 50 else ("bright_yellow" if abs(delta_end_ms) < 150 else "bright_red")
+                    console.print(f"! {prev_word.word}")
+                    console.print(f"Original: {prev_word.h_start} - {prev_word.h_end}")
+                    console.print(f"Refined: {new_word.h_start} - {new_word.h_end}")
+                    console.print((
+                        f"Shift: Start[{shift_start_color}]{delta_start_ms:+.1f}ms[/] | "
+                        f"End[{shift_end_color}]{delta_end_ms:+.1f}ms[/]"
+                    ))
+                if not sys.stdout.isatty():
+                    env.plotext; import plotext as plt
+                    plt.clear_figure()
+                    plt.theme("pro")
+                    plt.plot(rms_times, rms_db, label="RMS Energy (dB)", color="yellow", marker="hd")
+                    plt.vline(new_res.start, color="green")
+                    plt.vline(new_res.end, color="red")
+                    plt.vline(prev_res.start, color="cyan")
+                    plt.vline(prev_res.end, color="magenta")
+                    plt.title(f"Segment {i:02d} RMS Envelope & Boundaries")
+                    plt.xlabel("Time (s)")
+                    plt.ylabel("Amplitude (dB)")
+                    plt.show()
+                    console.print()
+                else:
+                    env.plotly
+                    from plotly.subplots import make_subplots
+                    import plotly.graph_object as go
+                    from IPython.display import Audio, HTML, display
+                    import json
+                    fig = make_subplots(rows=2, cols=1, shared_xaxes=True,
+                                vertical_spacing=0.05,
+                                subplot_titles=("Raw Waveform", "RMS Energy (dB)"))
+                    time_axis = np.linspace(safe_start, safe_end, len(audio_chunk))
+                    fig.add_trace(go.Scatter(x=time_axis, y=audio_chunk, name="Waveform",
+                                             line=dict(color="#00d2ff", width=1)), row=1, col=1)
+                    fig.add_trace(go.Scatter(x=rms_times, y=rms_db, name="RMS (dB)",
+                                             fill="tozeroy", line=dict(color="#ffaa00", width=2)), row=2, col=1)
+                    fig.add_vrect(x0=new_res.start, x1=new_res.end, fillcolor="green", opacity=0.15,
+                                  layer="below", line_width=0, row="all")
+                    fig.add_vline(x=new_res.start, line_width=2, line_color="green", name="Refined Start", row="all")
+                    fig.add_vline(x=new_res.end, line_width=2, line_color="red", name="Refined End", row="all")
+                    fig.add_vline(x=prev_res.start, line_width=1, line_dash="dash", line_color="cyan", name="Original Start", row="all")
+                    fig.add_vline(x=prev_res.end, line_width=1, line_dash="dash", line_color="magenta", name="Original End", row="all")
+                    fig.update_layout(
+                        template="plotly_dark",
+                        hovermode="x unified",
+                        height=450,
+                        margin=dict(l=20, r=20, t=40, b=20),
+                        showlegend=False
+                    )
+                    fig.show()
+                    html_str = fig.to_html(include_plotlyjs="cdn", full_html=True)
+                    safe_html_str = json.dumps(html_str)
+                    button_html = f"""
+                    <button onclick='
+                        var w = window.open("", "_blank");
+                        w.document.write({safe_html_str});
+                        w.document.close();
+                    ' style='padding: 12px 24px; font-size: 16px; font-weight: bold; background-color: #00d2ff; color: black; border: none; border-radius: 8px; cursor: pointer; width: 100%; box-shadow: 0px 4px 6px rgba(0,0,0,0.3); margin: 10px 0;'>
+                        Open Graph in Full Tab
+                    </button>
+                    """
+                    display(HTML(button_html))
+                    display(Audio(data=audio_chunk, rate=self.sr, autoplay=False))
+                    console.print()
+
 
     def transcribe(self, audio: AudioType, audio_segments: list[AudioSegment] | None = None, lyrics: str | None = None, sr: int | None = None) -> Result:
         raise NotImplementedError()

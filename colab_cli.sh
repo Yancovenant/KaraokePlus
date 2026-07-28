@@ -63,7 +63,7 @@ echo "⚙️ Extracting, installing, and running script..."
 echo "!tar -xzf /content/kplus.tar.gz -C $REMOTE_DIR && \
     cd /content/KaraokePlus && \
     python kplus-bin $ARGS \
-    " | colab exec -s "$SESS" --timeout 0.0
+    " | colab exec -s "$SESS" --timeout 120.0
 
 echo "Cleaning up local files..."
 rm "$FILE"

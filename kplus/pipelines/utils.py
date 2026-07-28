@@ -76,7 +76,7 @@ class WordTiming(TimingMixin):
 @dataclass(slots=True)
 class Segment(TimingMixin):
     words: list[WordTiming]
-    language: str
+    language: str | None = None
 
     @property
     def text(self) -> str:
