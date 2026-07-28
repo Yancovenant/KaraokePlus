@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import logging
 import re
-import sys
 import string
+import sys
 from collections import defaultdict
 from pathlib import Path
 from types import SimpleNamespace
@@ -13,7 +13,7 @@ from kplus.environment import env
 from kplus.tools.progress import MainProgress
 
 from .aad import AudioSegment
-from .utils import Result, Segment, WordTiming
+from .utils import Result, Segment, WordTiming, sec2ass
 
 if TYPE_CHECKING:
     import numpy as np  # type: ignore
@@ -346,19 +346,20 @@ class TranscriberMixin:
     def refine_timestamp(self, audio: AudioType, sr: int, ref_result: Result,
         audio_segments: list[AudioSegment]
     ) -> Result:
-        env.librosa; import librosa
+        env.librosa; import librosa  # type: ignore  # noqa: B018, I001
         audio_np = self._process_audio(audio, sr)
         align_results = self.align(audio_np, None, ref_result, audio_segments)
+        align_results.populate_ass()
         precision_ms=1
         if self.verbose:
-            env.rich
-            from rich.console import Console
-            from rich.table import Table
-            from rich.panel import Panel
-            from rich.text import Text
+            env.rich  # noqa: B018
+            from rich.console import Console  # type: ignore
+            from rich.panel import Panel  # type: ignore
+            from rich.table import Table  # type: ignore
+            from rich.text import Text  # type: ignore
             console = Console()
             console.rule("[bold cyan]⏱️ Acoustic Refinement & RMS Envelope Debug[/]")
-        for i, (prev_res, new_res, audio_seg) in enumerate(zip(ref_result, align_results, audio_segments)):
+        for i, (prev_res, new_res, audio_seg) in enumerate(zip(ref_result.segments, align_results.segments, audio_segments)):
             safe_start = max(min(new_res.start, audio_seg.start), new_res.start - 1.0)
             safe_end = min(max(new_res.end, audio_seg.end), new_res.end + 1.0)
             start, end = int(safe_start*self.sr), int(safe_end*self.sr)
@@ -382,23 +383,33 @@ class TranscriberMixin:
                     f"End [{shift_end_color}]{delta_end_ms:+.1f}ms[/]"
                 )
                 console.print(Panel(header, border_style="cyan", expand=False))
+                # Word
+                word_table = Table(title=f"Word-Level Shifts (Segment {i:02d})", show_lines=False, expand=True, border_style="dim")
+                word_table.add_column("Word", style="bold white", no_wrap=True)
+                word_table.add_column("Orig Start", justify="center", style="dim")
+                word_table.add_column("Ref Start", justify="center", style="cyan")
+                word_table.add_column("Δ Start", justify="right")
+                word_table.add_column("Orig End", justify="center", style="dim")
+                word_table.add_column("Ref End", justify="center", style="cyan")
+                word_table.add_column("Δ End", justify="right")
+                for prev_word, new_word in zip(prev_res.words, new_res.words):
+                    d_start = (new_word.start - prev_word.start) * 1000
+                    d_end = (new_word.end - prev_word.end) * 1000
+                    c_start = "bright_green" if abs(d_start) < 50 else ("bright_yellow" if abs(d_start) < 150 else "bright_red")
+                    c_end = "bright_green" if abs(d_end) < 50 else ("bright_yellow" if abs(d_end) < 150 else "bright_red")
+                    
+                    word_table.add_row(
+                        prev_word.word,
+                        prev_word.h_start, new_word.h_start, f"[{c_start}]{d_start:+.1f}ms[/]",
+                        prev_word.h_end, new_word.h_end, f"[{c_end}]{d_end:+.1f}ms[/]"
+                    )
+                console.print(word_table)
                 rms_db = librosa.amplitude_to_db(rms, ref=np.max)
                 rms_times = librosa.frames_to_time(np.arange(len(rms)),sr=self.sr, hop_length=hop_length) + safe_start
-                for prev_word, new_word in zip(prev_res.words, new_res.words):
-                    assert prev_word.word == new_word.word
-                    delta_start_ms = (new_word.start - prev_word.start) * 1000
-                    delta_end_ms = (new_word.end - prev_word.end) * 1000
-                    shift_start_color = "bright_green" if abs(delta_start_ms) < 50 else ("bright_yellow" if abs(delta_start_ms) < 150 else "bright_red")
-                    shift_end_color = "bright_green" if abs(delta_end_ms) < 50 else ("bright_yellow" if abs(delta_end_ms) < 150 else "bright_red")
-                    console.print(f"! {prev_word.word}")
-                    console.print(f"Original: {prev_word.h_start} - {prev_word.h_end}")
-                    console.print(f"Refined: {new_word.h_start} - {new_word.h_end}")
-                    console.print((
-                        f"Shift: Start[{shift_start_color}]{delta_start_ms:+.1f}ms[/] | "
-                        f"End[{shift_end_color}]{delta_end_ms:+.1f}ms[/]"
-                    ))
-                if not sys.stdout.isatty():
-                    env.plotext; import plotext as plt
+                ## ASS Video Preview
+                full_ass = Result.ASS_HEADER + new_res.ass_event
+                if sys.stdout.isatty():
+                    env.plotext; import plotext as plt  # type: ignore  # noqa: B018, I001
                     plt.clear_figure()
                     plt.theme("pro")
                     plt.plot(rms_times, rms_db, label="RMS Energy (dB)", color="yellow", marker="hd")
@@ -412,19 +423,18 @@ class TranscriberMixin:
                     plt.show()
                     console.print()
                 else:
-                    env.plotly
-                    from plotly.subplots import make_subplots
-                    import plotly.graph_object as go
-                    from IPython.display import Audio, HTML, display
-                    import json
+                    env.plotly; import json, base64  # noqa: B018, I001
+                    import plotly.graph_objects as go # type: ignore
+                    from IPython.display import HTML, Audio, display # type: ignore
+                    from plotly.subplots import make_subplots  # type: ignore
                     fig = make_subplots(rows=2, cols=1, shared_xaxes=True,
                                 vertical_spacing=0.05,
                                 subplot_titles=("Raw Waveform", "RMS Energy (dB)"))
                     time_axis = np.linspace(safe_start, safe_end, len(audio_chunk))
                     fig.add_trace(go.Scatter(x=time_axis, y=audio_chunk, name="Waveform",
-                                             line=dict(color="#00d2ff", width=1)), row=1, col=1)
+                                             line={"color": "#00d2ff", "width": 1}), row=1, col=1)
                     fig.add_trace(go.Scatter(x=rms_times, y=rms_db, name="RMS (dB)",
-                                             fill="tozeroy", line=dict(color="#ffaa00", width=2)), row=2, col=1)
+                                             fill="tozeroy", line={"color": "#ffaa00", "width": 2}), row=2, col=1)
                     fig.add_vrect(x0=new_res.start, x1=new_res.end, fillcolor="green", opacity=0.15,
                                   layer="below", line_width=0, row="all")
                     fig.add_vline(x=new_res.start, line_width=2, line_color="green", name="Refined Start", row="all")
@@ -435,24 +445,89 @@ class TranscriberMixin:
                         template="plotly_dark",
                         hovermode="x unified",
                         height=450,
-                        margin=dict(l=20, r=20, t=40, b=20),
+                        margin={"l": 20, "r": 20, "t": 40, "b": 20},
                         showlegend=False
                     )
                     fig.show()
                     html_str = fig.to_html(include_plotlyjs="cdn", full_html=True)
-                    safe_html_str = json.dumps(html_str)
+                    b64_html = base64.b64encode(html_str.encode('utf-8')).decode('utf-8')
                     button_html = f"""
-                    <button onclick='
-                        var w = window.open("", "_blank");
-                        w.document.write({safe_html_str});
-                        w.document.close();
-                    ' style='padding: 12px 24px; font-size: 16px; font-weight: bold; background-color: #00d2ff; color: black; border: none; border-radius: 8px; cursor: pointer; width: 100%; box-shadow: 0px 4px 6px rgba(0,0,0,0.3); margin: 10px 0;'>
-                        Open Graph in Full Tab
-                    </button>
+                    <a href="data:text/html;base64,{b64_html}" download="plotly_graph.html"  target="_blank" style="
+                        display: block;
+                        text-align: center;
+                        text-decoration: none;
+                        padding: 14px 24px;
+                        font-size: 16px;
+                        font-weight: bold;
+                        background-color: #00d2ff;
+                        color: black;
+                        border-radius: 8px;
+                        box-shadow: 0px 4px 6px rgba(0,0,0,0.3);
+                        margin: 10px 0;
+                        cursor: pointer;
+                    ">
+                        Open Graph in Full Tab / Download Graph
+                    </a>
                     """
                     display(HTML(button_html))
                     display(Audio(data=audio_chunk, rate=self.sr, autoplay=False))
+                    self._render_ass_preview(audio_chunk, new_res, safe_start) 
                     console.print()
+
+    def _render_ass_preview(self, audio_chunk, segment: Segment, safe_start):
+        """ Renders an ASS video preview using FFmpeg and libass. """
+        env.rich, env.ffmpeg  # noqa: B018
+        import rich, soundfile as sf  # type: ignore # noqa: I001
+        console = rich.console.Console()
+        try:
+            import tempfile
+            with tempfile.TemporaryDirectory() as tmpdir:
+                audio_path = Path(tmpdir) / "audio.wav"
+                ass_path = Path(tmpdir) / "subs.ass"
+                output_path = Path(tmpdir) / "preview.mp4"
+                sf.write(audio_path, audio_chunk, self.sr)
+                parts = segment.ass_event.split(',', 9)
+                def ass2sec(t):
+                    h, m, s = t.split(':')
+                    return int(h)*3600 + int(m)*60 + float(s)
+                if len(parts) >= 10 and parts[0].startswith("Dialogue"):
+                    start_sec = ass2sec(parts[1])
+                    end_sec = ass2sec(parts[2])
+                    new_start = max(0.0, start_sec - safe_start)
+                    new_end = max(new_start + 0.1, end_sec - safe_start)
+                    parts[1] = sec2ass(new_start)
+                    parts[2] = sec2ass(new_end)
+                    shifted_event = ",".join(parts)
+                else:
+                    shifted_event = segment.ass_event
+                ass_content = Result.ASS_HEADER + shifted_event + "\n"
+                with open(ass_path, "w", encoding="utf-8-sig") as f:
+                    f.write(ass_content)
+                duration = len(audio_chunk) / self.sr
+                ass_path_ffmpeg = ass_path.as_posix()
+                cmd = [
+                    "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
+                    "-f", "lavfi", "-i", f"color=c=black:s=1280x720:r=30:d={duration}",
+                    "-i", audio_path,
+                    "-vf", f"ass={ass_path_ffmpeg}",
+                    "-c:v", "libx264", "-preset", "ultrafast", "-tune", "stillimage", "-pix_fmt", "yuv420p",
+                    "-c:a", "aac", "-b:a", "128k",
+                    "-shortest",
+                    output_path
+                ]
+                import subprocess
+                result = subprocess.run(cmd, capture_output=True)
+                
+                if result.returncode == 0:
+                    from IPython.display import display, Video  # type: ignore # noqa: I001
+                    # embed=True base64 encodes the MP4 so it displays perfectly in Jupyter
+                    display(Video(output_path, embed=True, width=720))
+                else:
+                    console.print(f"[red]⚠ FFmpeg failed to render preview: {result.stderr.decode()[:150]}[/]")
+
+        except Exception as e:
+            console.print(f"[yellow]⚠ Video preview skipped: {e}[/]")
+            
 
 
     def transcribe(self, audio: AudioType, audio_segments: list[AudioSegment] | None = None, lyrics: str | None = None, sr: int | None = None) -> Result:
