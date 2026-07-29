@@ -1,5 +1,5 @@
 from .songdownloader import *
-from .audioseparation import SeparationDemucs
+from .audioseparation import SeparatorMixin
 from .visualizer import VisualizeWaveform
 from .aligner import *
 from .aad import *

@@ -1,13 +1,13 @@
-import sys
 import logging
 import os
-
+import sys
 from pathlib import Path
 
-from .command import Command
-from kplus.tools.config import config
-from kplus.pipelines import SeparationDemucs, VisualizeWaveform, get_track_file
 from kplus.environment import env
+from kplus.pipelines import SeparatorMixin, VisualizeWaveform, get_track_file
+from kplus.tools.config import config
+
+from .command import Command
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +30,7 @@ class Separate(Command):
                                 all predictions are averaged. This effectively makes the model time equivariant
                                 and improves SDR by up to 0.2 points.""")
         group.add_argument("--visualize", action="store_true", dest="visualize", help="Visualize the separated stems into 5 different graphic, (Waveform, Mel Spectogram, Harmonic vs Percussive, Pitch Tracking (F0), Chromagram)")
+        group.add_argument("--modelname", help="Model to use")
         opt, unknown = self.parser.parse_known_args(args)
         if not opt.filepath:
             self.parser.print_help()
@@ -37,9 +38,8 @@ class Separate(Command):
         config.parse_config(unknown, setup_logging=True)
         info = get_track_file(opt.filepath, True)
         filepath = Path(info.filename)
-        separation_model = SeparationDemucs(preset=opt.preset, overlap_ratio=opt.overlap,
-                                            segment_size=opt.segment, shifts=opt.shifts)
-        separation_info = separation_model.separate(filepath, opt.stems)
+        separation_model = SeparatorMixin.get_model(opt)
+        separation_info = separation_model.separate(filepath)
         logger.info(f"Finished separating {filepath}")
         del separation_model.model, separation_model
         env.clean()
