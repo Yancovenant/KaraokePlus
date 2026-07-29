@@ -39,22 +39,7 @@ class SeparatorMixin:
         self._bootstrapt()
 
     def _bootstrapt(self):
-        env.onnxruntime, env.torch  # noqa: B018
-        import torch, onnxruntime as ot  # type: ignore # noqa: I001
-        if torch.cuda.is_available():
-            if "CUDAExecutionProvider" in ot.get_available_providers():
-                logger.info("ONNXruntime has CUDAExecutionProvider available, enabling acceleration")
-                self.ot_exec_provider = ["CUDAExecutionProvider"]
-            else:
-                logger.warning("CUDAExecutionProvider not available in ONNXruntime, so acceleration will NOT be enabled")
-        else:
-            logger.info("No hardware acceleration could be configured, running in CPU mode")
-            available = ot.get_available_providers()
-            if 'NnapiExecutionProvider' in available or 'XnnpackExecutionProvider' in available:
-                 logger.info("Using android...")
-                 self.ot_exec_provider = available
-            else: 
-                 self.ot_exec_provider = ["CPUExecutionProvider"]
+        env.onnxruntime, env.onnxruntime_gpu  # noqa: B018
 
     @classmethod
     def get_model(cls, options):
