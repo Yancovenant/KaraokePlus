@@ -83,7 +83,7 @@ class environment:
         if name == "stable_ts":
             install_name, import_name = "stable-ts", "stable_whisper"
         elif name == "onnxruntime_gpu":
-            install_name, import_name = "onnxruntime-gpu", "onnxruntime"
+            install_name, import_name = "onnxruntime-gpu==1.26.0", "onnxruntime"
         else:
             install_name, import_name = name, name
         def attempt_import():
@@ -192,7 +192,12 @@ class environment:
     def _ensure_onnxruntime(self) -> bool:
         if os.name != "nt":
             try:
-                
+                onnx_cmds:[
+                    
+                ]
+                for cmd in onnx_cmds:
+                    subprocess.run(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                return True
             except Exception as e:
                 pass
         logger.warning("!!! Continuing while no onnxruntime acceleration installed")

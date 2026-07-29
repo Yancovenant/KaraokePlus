@@ -39,8 +39,13 @@ class SeparatorMixin:
         self._bootstrapt()
 
     def _bootstrapt(self):
-        env.onnxruntime_gpu, env.onnxruntime  # noqa: B018
-
+        env.torch; import torch
+        if torch.cuda.is_available():
+            env.onnxruntime_gpu
+        else:
+            env.onnxruntime
+        import onnxruntime
+        
     @classmethod
     def get_model(cls, options):
         model_map: dict = {"demucs": "mdx_extra_q",
