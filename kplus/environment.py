@@ -83,7 +83,7 @@ class environment:
         if name == "stable_ts":
             install_name, import_name = "stable-ts", "stable_whisper"
         elif name == "onnxruntime_gpu":
-            install_name, import_name = "onnxruntime-gpu", "onxxruntime"
+            install_name, import_name = "onnxruntime-gpu", "onnxruntime"
         else:
             install_name, import_name = name, name
         def attempt_import():
