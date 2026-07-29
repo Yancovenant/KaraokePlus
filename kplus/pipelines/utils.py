@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from itertools import pairwise
-
 from dataclasses import dataclass, field
-from itertools import groupby
+from itertools import groupby, pairwise
+from pathlib import Path
 from typing import TYPE_CHECKING, TypeAlias
 
 import kplus
@@ -24,6 +23,19 @@ def convert_audio(audio: torch.Tensor, fromsr: float, tosr: float, channels=int)
     kplus.env.demucs  # noqa: B018
     from demucs.audio import convert_audio as julius_resampler  # type: ignore
     return julius_resampler(audio, fromsr, tosr, channels)
+
+
+def _process_audio(audio: AudioType, from_sr: int | None, to_sr: int | None) -> np.ndarray:
+    kplus.env.numpy, kplus.env.torch, kplus.env.ffmpeg  # noqa: B018
+    import numpy as np, torch  # type: ignore  # noqa: I001
+    if isinstance(audio, torch.Tensor):
+        assert from_sr is not None, "Passing ``torch.Tensor`` require to also have ``sr`` included"
+        audio = convert_audio(audio, from_sr, to_sr, 1)
+    elif isinstance(audio, (str, Path)):
+        audio: torch.Tensor = load_audio(audio, to_sr, 1)
+    if not isinstance(audio, np.ndarray):
+        audio = audio.detach().cpu().numpy().squeeze()
+    return audio
 
 
 class TimingMixin:
@@ -96,6 +108,7 @@ class Segment(TimingMixin):
 
 import re
 from typing import ClassVar
+
 RE_CJK = re.compile(r'[\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]+')
 
 @dataclass(slots=True)
@@ -120,7 +133,7 @@ class Result:
     ASS_HEADER: ClassVar[str] =  (
             "[Script Info]\n"
             "Title: KaraokePlus+\nScriptType: v4.00+\n"
-            "PlayResX: 384\nPlayResY: 288\nScaledBorderAndShadow: yes\n"
+            "PlayResX: 1920\nPlayResY: 1080\nScaledBorderAndShadow: yes\n"
             "[V4+ Styles]\n"
             "Format: Name, Fontname, Fontsize, PrimaryColour, "
             "SecondaryColour, OutlineColour, BackColour, Bold, "
@@ -165,14 +178,14 @@ class Result:
                 wait_start_sec = max(word.start - 0.3, prev_word_ts)
                 gap_start_sec = max(0.0, word.start - wait_start_sec)
                 gap_end_sec = max(0.0, wait_end_sec - word.end)
-                dur_start_cs = max(1, round(gap_start_sec * 100))
-                dur_end_cs = max(1, round(gap_end_sec * 100))
+                dur_start_cs = max(0, round(gap_start_sec * 100))
+                dur_end_cs = max(0, round(gap_end_sec * 100))
                 dur_sec = max(0.0, word.end - word.start)
-                dur_cs = max(1, round(dur_sec * 100))
+                dur_cs = max(0, round(dur_sec * 100))
                 k_tokens.append(
                     f"{{\\kf{dur_start_cs}}}"
                     f"{{\\kf{dur_cs}}}{word.word}"
-                    f"{{\\kf{dur_end_cs}}}"
+                    f"{{\\kf{dur_end_cs}}} "
                 )
             karaoke_content = "".join(k_tokens)
             current.ass_event = (

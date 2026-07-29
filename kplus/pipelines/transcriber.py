@@ -343,14 +343,28 @@ class TranscriberMixin:
             console.print("\n")
         return Result(segments=final_segments), final_audio_segments
 
-    def refine_timestamp(self, audio: AudioType, sr: int, ref_result: Result,
-        audio_segments: list[AudioSegment]
-    ) -> Result:
+    def refine_timestamp(self, audio: AudioType, sr: int,
+                         whisper_res: Result, qwen_res: Result,
+                         audio_segments: list[AudioSegment]) -> Result:
+        """ Head-to-head debug view of two forced aligners (whisper vs qwen),
+        plus a midpoint consensus Result. Verdicts flag where the midpoint
+        is a *guess* so you know exactly which words to scrub to. """
         env.librosa; import librosa  # type: ignore  # noqa: B018, I001
+        from itertools import zip_longest  # noqa: F401
         audio_np = self._process_audio(audio, sr)
-        align_results = self.align(audio_np, None, ref_result, audio_segments)
-        align_results.populate_ass()
+        total_dur = len(audio_np) / self.sr
         precision_ms=1
+        hop_length = int(self.sr / 1000) * precision_ms # 16 frames
+        frame_length = int(hop_length * 2) # 32 frames
+        W_COLOR, Q_COLOR = "#0984e3", "#e84393"          # whisper=blue, qwen=magenta
+        V_HEX = {"agree": "#2ecc71", "partial": "#f1c40f",
+                "conflict": "#e74c3c", "mismatch": "#c0392b"}
+        _PH = WordTiming(word="—", start=None, end=None, score=None)   # sentinel for zip_longest
+        def _is_ph(w):  return w is _PH
+        def _mid(a, b): return (a + b) / 2 if a is not None and b is not None else (a if a is not None else b)
+        def _hms(w):    return "--:--.--" if (_is_ph(w) or w.start is None) else w.h_start
+        def _hend(w):   return "--:--.--" if (_is_ph(w) or w.end   is None) else w.h_end
+
         if self.verbose:
             env.rich  # noqa: B018
             from rich.console import Console  # type: ignore
@@ -359,9 +373,268 @@ class TranscriberMixin:
             from rich.text import Text  # type: ignore
             console = Console()
             console.rule("[bold cyan]⏱️ Acoustic Refinement & RMS Envelope Debug[/]")
+        cons_segs: list[Segment] = []
+        for i, (w_seg, q_seg, audio_seg) in enumerate(
+                zip(whisper_res.segments, qwen_res.segments, audio_segments)):
+            pairs = list(zip_longest(w_seg.words, q_seg.words, fillvalue=_PH))
+            len_mismatch = len(w_seg.words) != len(q_seg.words)
+            cons_words, meta = [], []
+            for w1, w2 in pairs:
+                s1, e1 = (None if _is_ph(w1) else w1.start, None if _is_ph(w1) else w1.end)
+                s2, e2 = (None if _is_ph(w2) else w2.start, None if _is_ph(w2) else w2.end)
+                d_start = (s2 - s1) * 1000 if (s1 is not None and s2 is not None) else None
+                d_end   = (e2 - e1) * 1000 if (e1 is not None and e2 is not None) else None
+
+                if _is_ph(w1) or _is_ph(w2):
+                    verdict = "mismatch"
+                else:
+                    worst = max(abs(d_start), abs(d_end))
+                    verdict = "agree" if worst < 50 else ("conflict" if worst > 150 else "partial")
+
+                cons_start, cons_end = _mid(s1, s2), _mid(e1, e2)
+                if cons_end is not None and cons_start is not None and cons_end < cons_start:
+                    cons_end = cons_start + 0.03
+
+                word_text = w1.word if not _is_ph(w1) else w2.word
+                cw = WordTiming(word=word_text, start=cons_start, end=cons_end,
+                                score=getattr(w1, "score", None) if not _is_ph(w1) else getattr(w2, "score", None))
+                cw.verdict = verdict                                   # stash trust on the word itself
+                for attr in ("line_idx", "source"):
+                    src = w1 if not _is_ph(w1) else w2
+                    if hasattr(src, attr): setattr(cw, attr, getattr(src, attr))
+                cons_words.append(cw)
+                ss = [x for x in (s1, s2) if x is not None]
+                meta.append({
+                    "word": word_text, "verdict": verdict, "color": V_HEX[verdict],
+                    "w1s": s1, "w2s": s2, "w1e": e1, "w2e": e2, "d_start": d_start, "d_end": d_end,
+                    "w1_hs": _hms(w1), "w2_hs": _hms(w2), "w1_he": _hend(w1), "w2_he": _hend(w2),
+                    "cons_start": cons_start, "cons_end": cons_end,
+                    "min_s": min(ss) if ss else cons_start, "max_s": max(ss) if ss else cons_start,
+                })
+            cons_segs.append(Segment(words=cons_words))
+            a_starts = [x for x in (w_seg.start, q_seg.start) if x is not None] or [0.0]
+            a_ends   = [x for x in (w_seg.end,   q_seg.end)   if x is not None] or [0.0]
+            earliest, latest = min(a_starts), max(a_ends)
+            inner_s = min(earliest, audio_seg.start) if audio_seg.start is not None else earliest
+            inner_e = max(latest,   audio_seg.end)   if audio_seg.end   is not None else latest
+            safe_start = max(0.0, inner_s, earliest - 1.0)
+            safe_end   = min(total_dur, inner_e, latest + 1.0)
+            s0, s1 = int(safe_start * self.sr), int(safe_end * self.sr)
+            audio_chunk = audio_np[s0:s1]
+            if len(audio_chunk) == 0:
+                console.print(f"[bright_yellow]⚠ Empty audio chunk for Segment {i:02d}. Skipping.[/]"); continue
+
+            fl = min(frame_length, len(audio_chunk)) or 1
+            hl = min(hop_length,   len(audio_chunk)) or 1
+            rms = librosa.feature.rms(y=audio_chunk, frame_length=fl, hop_length=hl)[0]
+            rms_db = librosa.amplitude_to_db(rms, ref=np.max)
+            rms_times = librosa.frames_to_time(np.arange(len(rms)), sr=self.sr, hop_length=hl) + safe_start
+
+            # --- header with a verdict tally ---
+            n_agree  = sum(m["verdict"] == "agree"     for m in meta)
+            n_part   = sum(m["verdict"] == "partial"   for m in meta)
+            n_conf   = sum(m["verdict"] == "conflict"  for m in meta)
+            n_mis    = sum(m["verdict"] == "mismatch"  for m in meta)
+            console.print(Panel(Text.from_markup(
+                f"[bold]Segment {i:02d}[/]  audio [cyan]{audio_seg.h_start} → {audio_seg.h_end}[/]\n"
+                f"[bright_blue]whisper[/] [dim]{w_seg.h_start} → {w_seg.h_end}[/]   "
+                f"[bright_magenta]qwen[/] [dim]{q_seg.h_start} → {q_seg.h_end}[/]\n"
+                f"verdicts: [bright_green]{n_agree} agree[/] · [bright_yellow]{n_part} partial[/] · "
+                f"[bright_red]{n_conf} conflict[/] · [bold bright_red]{n_mis} mismatch[/]"
+            ), border_style="cyan", expand=False))
+            if len_mismatch:
+                console.print(f"[bold bright_red]⚠ Word-count mismatch: whisper={len(w_seg.words)} "
+                            f"qwen={len(q_seg.words)} — lanes/Δ are positionally padded, NOT semantically aligned.[/]")
+
+            # --- word table: one column per witness + Δ + verdict ---
+            def _dcell(d):
+                if d is None: return "[bold bright_red]miss[/]"
+                c = "bright_green" if abs(d) < 50 else ("bright_yellow" if abs(d) < 150 else "bright_red")
+                return f"[{c}]{d:+.1f}ms[/]"
+
+            wt = Table(title=f"Word-Level (Segment {i:02d})", show_lines=False, expand=True, border_style="dim")
+            wt.add_column("Word", style="bold white", no_wrap=True)
+            wt.add_column("whisper▶", justify="center", style="bright_blue")
+            wt.add_column("qwen▶",    justify="center", style="bright_magenta")
+            wt.add_column("Δ start",  justify="right")
+            wt.add_column("whisper◀", justify="center", style="bright_blue")
+            wt.add_column("qwen◀",    justify="center", style="bright_magenta")
+            wt.add_column("Δ end",    justify="right")
+            wt.add_column("verdict",  justify="center")
+            for m in meta:
+                wt.add_row(
+                    escape(m["word"]),
+                    m["w1_hs"], m["w2_hs"], _dcell(m["d_start"]),
+                    m["w1_he"], m["w2_he"], _dcell(m["d_end"]),
+                    f"[{('bold ' if m['verdict']=='mismatch' else '')}{_dcell(0).split('[')[1] if False else ''}]"
+                    f"{'[bright_green]agree[/]' if m['verdict']=='agree' else '[bright_yellow]partial[/]' if m['verdict']=='partial' else '[bright_red]conflict[/]' if m['verdict']=='conflict' else '[bold bright_red]mismatch[/]'}",
+                )
+            console.print(wt)
+            if not sys.stdout.isatty():
+                env.plotly; import base64  # noqa: B018, I001
+                import plotly.graph_objects as go  # type: ignore
+                from IPython.display import HTML, Audio, display  # type: ignore
+                from plotly.subplots import make_subplots  # type: ignore
+
+                fig = make_subplots(
+                    rows=3, cols=1, shared_xaxes=True, vertical_spacing=0.05,
+                    row_heights=[0.34, 0.26, 0.40],
+                    subplot_titles=("Raw Waveform", "RMS Energy (dB)", "Witness Lanes → Verdict"))
+                time_axis = np.linspace(safe_start, safe_end, len(audio_chunk))
+                fig.add_trace(go.Scatter(x=time_axis, y=audio_chunk, name="Waveform",
+                                        line={"color": "#00d2ff", "width": 1}, showlegend=False), row=1, col=1)
+                fig.add_trace(go.Scatter(x=rms_times, y=rms_db, name="RMS (dB)", fill="tozeroy",
+                                        line={"color": "#ffaa00", "width": 2}, showlegend=False), row=2, col=1)
+
+                # one toggleable Gantt lane per witness (built from each witness's OWN word list)
+                for name, color, words in (("whisper", W_COLOR, w_seg.words),
+                                        ("qwen",    Q_COLOR, q_seg.words)):
+                    ws = [w for w in words if w.start is not None and w.end is not None]
+                    if not ws: continue
+                    fig.add_trace(go.Bar(
+                        orientation="h", y=[name] * len(ws),
+                        base=[w.start for w in ws],
+                        x=[max(0.02, w.end - w.start) for w in ws],
+                        text=[w.word for w in ws], textposition="inside", insidetextanchor="middle",
+                        textfont={"color": "white", "size": 9}, cliponaxis=False,
+                        marker_color=color, opacity=0.55, name=name, legendgroup=name,
+                        hovertemplate=f"<b>{name}</b> | %{{text}}<br>start %{{base:.3f}}s<extra></extra>",
+                    ), row=3, col=1)
+
+                # the VERDICT lane = consensus chips, colored by agreement
+                vm = [m for m in meta if m["cons_start"] is not None and m["cons_end"] is not None]
+                if vm:
+                    fig.add_trace(go.Bar(
+                        orientation="h", y=["VERDICT"] * len(vm),
+                        base=[m["cons_start"] for m in vm],
+                        x=[max(0.02, m["cons_end"] - m["cons_start"]) for m in vm],
+                        text=[m["word"] for m in vm], textposition="inside", insidetextanchor="middle",
+                        textfont={"color": "white", "size": 9}, cliponaxis=False,
+                        marker_color=[m["color"] for m in vm], opacity=0.95,
+                        name="VERDICT", legendgroup="VERDICT",
+                        customdata=[m["verdict"] for m in vm],
+                        hovertemplate="<b>VERDICT</b> | %{text} [%{customdata}]<br>start %{base:.3f}s<extra></extra>",
+                    ), row=3, col=1)
+                fig.update_yaxes(type="category", categoryorder="array",
+                                categoryarray=["whisper", "qwen", "VERDICT"], row=3, col=1)
+                fig.update_layout(bargap=0.25)
+
+                # conflict bands: shade the start-disagreement zone across ALL rows
+                for m in meta:
+                    if m["verdict"] != "agree" and m["min_s"] != m["max_s"]:
+                        fig.add_vrect(x0=m["min_s"], x1=m["max_s"], fillcolor="#e74c3c",
+                                    opacity=0.12, line_width=0, layer="below", row="all")
+                # consensus decision guides (tie audio ↔ lanes)
+                for m in meta:
+                    if m["cons_start"] is not None:
+                        fig.add_vline(x=m["cons_start"], line_width=1, line_color="#9b59b6", opacity=0.6, row="all")
+                # segment boundaries: witnesses dashed, consensus solid
+                fig.add_vrect(x0=cons_segs[-1].start, x1=cons_segs[-1].end, fillcolor="green",
+                            opacity=0.10, layer="below", line_width=0, row="all")
+                fig.add_vline(x=cons_segs[-1].start, line_width=2, line_color="green", row="all")
+                fig.add_vline(x=cons_segs[-1].end,   line_width=2, line_color="red",   row="all")
+                fig.add_vline(x=w_seg.start, line_width=1, line_dash="dash", line_color=W_COLOR, row="all")
+                fig.add_vline(x=q_seg.start, line_width=1, line_dash="dash", line_color=Q_COLOR, row="all")
+
+                fig.update_layout(template="plotly_dark", hovermode="x unified", height=640,
+                                margin={"l": 20, "r": 20, "t": 40, "b": 20}, showlegend=True)
+                fig.show()
+
+                b64 = base64.b64encode(fig.to_html(include_plotlyjs="cdn", full_html=True).encode()).decode()
+                display(HTML(f"""
+                    <a href="data:text/html;base64,{b64}" download="False" target="_blank" style="display:block;
+                    text-align:center; text-decoration:none; padding:14px 24px; font-size:16px; font-weight:bold;
+                    background-color:#00d2ff; color:black; border-radius:8px; box-shadow:0 4px 6px rgba(0,0,0,.3);
+                    margin:10px 0; cursor:pointer;">Open Graph in Full Tab / Download Graph</a>"""))
+                display(Audio(data=audio_chunk, rate=self.sr, autoplay=False))
+                console.print()
+        return
+        for i, (first_res, second_res, audio_seg) in enumerate(zip(whisper_res.segments, qwen_res.segments, audio_segments)):
+            min_start = min(0, first_res.start, second_res.start)
+            max_end = max(first_res.end, second_res.end)
+            safe_start = max(min(min_start, audio_seg.start), min_start - 1.0)
+            safe_end = min(max(max_end, audio_seg.end), max_end + 1.0)
+            start, end = int(safe_start*self.sr), int(safe_end*self.sr)
+            audio_chunk = audio_np[start:end]
+            
+            rms = librosa.feature.rms(y=audio_chunk, frame_length=frame_length, hop_length=hop_length)[0]
+            if self.verbose:
+                if len(audio_chunk) == 0: console.print(f"[bright_yellow]⚠ Empty audio chunk for Segment {i:02d}. Skipping.[/]"); continue
+                header = Text.from_markup(
+                    f"[bold]AudioSegment {i:02d}: [{audio_seg.h_start} - {audio_seg.h_end}][/]"
+                    f"1st: [{first_res.h_start} - {first_res.h_end}]"
+                    f"2nd: [{second_res.h_start} - {second_res.h_end}]"
+                )
+                console.print(Panel(header, border_style="cyan", expand=False))
+                word_table = Table(title=f"Word-Level (Segment {i:02d})", show_lines=False, expand=True, border_style="dim")
+                word_table.add_column("Word", style="bold white", no_wrap=True)
+                word_table.add_column("1st Start", justify="center", style="grey70")
+                word_table.add_column("2nd Start", justify="center", style="bright_cyan")
+                word_table.add_column("Δ Start", justify="right")
+                word_table.add_column("Orig End", justify="center", style="grey70")
+                word_table.add_column("Ref End", justify="center", style="bright_cyan")
+                word_table.add_column("Δ End", justify="right")
+                for first_res_word, second_res_word in zip(first_res.words, second_res.words):
+                    d_start = (second_res_word.start - first_res_word.start) * 1000
+                    d_end = (second_res_word.end - first_res_word.end) * 1000
+                    c_start = "bright_green" if abs(d_start) < 50 else ("bright_yellow" if abs(d_start) < 150 else "bright_red")
+                    c_end = "bright_green" if abs(d_end) < 50 else ("bright_yellow" if abs(d_end) < 150 else "bright_red")
+                    
+                    word_table.add_row(
+                        first_res_word.word,
+                        first_res_word.h_start, second_res_word.h_start, f"[{c_start}]{d_start:+.1f}ms[/]",
+                        first_res_word.h_end, second_res_word.h_end, f"[{c_end}]{d_end:+.1f}ms[/]"
+                    )
+                console.print(word_table)
+                rms_db = librosa.amplitude_to_db(rms, ref=np.max)
+                rms_times = librosa.frames_to_time(np.arange(len(rms)),sr=self.sr, hop_length=hop_length) + safe_start
+                if not sys.stdout.isatty():
+                    env.plotly; import base64  # noqa: B018, I001
+                    import plotly.graph_objects as go # type: ignore
+                    from IPython.display import HTML, Audio, display # type: ignore
+                    from plotly.subplots import make_subplots  # type: ignore
+                    fig = make_subplots(
+                        rows=1, cols=1, shared_xaxes=True,
+                        vertical_spacing=0.06,
+                        row_heights=[0.5],
+                        subplot_titles=("Raw Waveform", "RMS Energy (dB)"),
+                    )
+                    time_axis = np.linspace(safe_start, safe_end, len(audio_chunk))
+                    fig.add_trace(go.Scatter(x=time_axis, y=audio_chunk, name="Waveform",
+                                                line={"color": "#00d2ff", "width": 1}), row=1, col=1)
+                    for first_res_word, second_res_word in zip(first_res.words, second_res.words):
+                        fig.add_vrect(x0=first_res_word.start, x1=first_res_word.end, fillcolor="#2ecc71", row=1, opacity=0.30)
+                        fig.add_vrect(x0=second_res_word.start, x1=second_res_word.end, fillcolor="#2ecc71", row=1, opacity=0.30)
+                        fig.add_vline(x=first_res_word.start, line_width=2, line_color="#f1c40f", name="1st Word start")
+                        fig.add_vline(x=first_res_word.end, line_width=2, line_color="#f1c40f", name="1st Word end")
+                        fig.add_vline(x=second_res_word.start, line_width=2, line_color="#f1c40f", name="2nd Word start")
+                        fig.add_vline(x=second_res_word.end, line_width=2, line_color="#f1c40f", name="2nd Word end")
+                        fig.add_annotation(
+                            xref="x", yref="y2",
+                            x=(first_res_word.start + first_res_word.end) / 2, y=0.25,
+                            text=first_res_word.word, showarrow=False,
+                            font={"color": "white", "size": 11},
+                            bgcolor="#e74c3c", opacity=0.92,
+                        )
+                        fig.add_annotation(
+                            xref="x", yref="y2",
+                            x=(second_res_word.start + second_res_word.end) / 2, y=0.75,
+                            text=second_res_word.word, showarrow=False,
+                            font={"color": "white", "size": 11},
+                            bgcolor="#e74c3c", opacity=0.92,
+                        )
+                    fig.update_layout(
+                        template="plotly_dark",
+                        hovermode="x unified",
+                        height=450,
+                        margin={"l": 20, "r": 20, "t": 40, "b": 20},
+                        showlegend=False
+                    )
+                    fig.show()
+        return
         for i, (prev_res, new_res, audio_seg) in enumerate(zip(ref_result.segments, align_results.segments, audio_segments)):
-            safe_start = max(min(new_res.start, audio_seg.start), new_res.start - 1.0)
-            safe_end = min(max(new_res.end, audio_seg.end), new_res.end + 1.0)
+            safe_start = max(min(new_res.start, audio_seg.start), new_res.start - 0.8)
+            safe_end = min(max(new_res.end, audio_seg.end), new_res.end + 1.5)
             start, end = int(safe_start*self.sr), int(safe_end*self.sr)
             audio_chunk = audio_np[start:end]
             hop_length = int(self.sr / 1000) * precision_ms # 16 frames
@@ -427,14 +700,31 @@ class TranscriberMixin:
                     import plotly.graph_objects as go # type: ignore
                     from IPython.display import HTML, Audio, display # type: ignore
                     from plotly.subplots import make_subplots  # type: ignore
-                    fig = make_subplots(rows=2, cols=1, shared_xaxes=True,
-                                vertical_spacing=0.05,
-                                subplot_titles=("Raw Waveform", "RMS Energy (dB)"))
+                    def _shift_hex(ms: float) -> str:
+                        a = abs(ms)
+                        return "#2ecc71" if a < 50 else ("#f1c40f" if a < 150 else "#e74c3c")
+                    fig = make_subplots(
+                        rows=2, cols=1, shared_xaxes=True,
+                        vertical_spacing=0.06,
+                        row_heights=[0.5, 0.5],
+                        subplot_titles=("Raw Waveform", "RMS Energy (dB)"),
+                    )
                     time_axis = np.linspace(safe_start, safe_end, len(audio_chunk))
                     fig.add_trace(go.Scatter(x=time_axis, y=audio_chunk, name="Waveform",
                                              line={"color": "#00d2ff", "width": 1}), row=1, col=1)
                     fig.add_trace(go.Scatter(x=rms_times, y=rms_db, name="RMS (dB)",
                                              fill="tozeroy", line={"color": "#ffaa00", "width": 2}), row=2, col=1)
+                    for word in new_res.words:
+                        fig.add_vrect(x0=word.start, x1=word.end, fillcolor="#2ecc71", row="all", opacity=0.30)
+                        fig.add_vline(x=word.start, line_width=2, line_color="#f1c40f", name="Word start")
+                        fig.add_vline(x=word.end, line_width=2, line_color="#f1c40f", name="Word end")
+                        fig.add_annotation(
+                            xref="x", yref="y2",
+                            x=(word.start + word.end) / 2, y=0.5,
+                            text=word.word, showarrow=False,
+                            font={"color": "white", "size": 11},
+                            bgcolor="#e74c3c", opacity=0.92,
+                        )
                     fig.add_vrect(x0=new_res.start, x1=new_res.end, fillcolor="green", opacity=0.15,
                                   layer="below", line_width=0, row="all")
                     fig.add_vline(x=new_res.start, line_width=2, line_color="green", name="Refined Start", row="all")
@@ -471,10 +761,10 @@ class TranscriberMixin:
                     """
                     display(HTML(button_html))
                     display(Audio(data=audio_chunk, rate=self.sr, autoplay=False))
-                    self._render_ass_preview(audio_chunk, new_res, safe_start) 
+                    self._render_ass_preview(audio_np, new_res)
                     console.print()
 
-    def _render_ass_preview(self, audio_chunk, segment: Segment, safe_start):
+    def _render_ass_preview(self, audio_np, segment: Segment):
         """ Renders an ASS video preview using FFmpeg and libass. """
         env.rich, env.ffmpeg  # noqa: B018
         import rich, soundfile as sf  # type: ignore # noqa: I001
@@ -485,7 +775,6 @@ class TranscriberMixin:
                 audio_path = Path(tmpdir) / "audio.wav"
                 ass_path = Path(tmpdir) / "subs.ass"
                 output_path = Path(tmpdir) / "preview.mp4"
-                sf.write(audio_path, audio_chunk, self.sr)
                 parts = segment.ass_event.split(',', 9)
                 def ass2sec(t):
                     h, m, s = t.split(':')
@@ -493,13 +782,22 @@ class TranscriberMixin:
                 if len(parts) >= 10 and parts[0].startswith("Dialogue"):
                     start_sec = ass2sec(parts[1])
                     end_sec = ass2sec(parts[2])
-                    new_start = max(0.0, start_sec - safe_start)
-                    new_end = max(new_start + 0.1, end_sec - safe_start)
-                    parts[1] = sec2ass(new_start)
-                    parts[2] = sec2ass(new_end)
+                    duration = end_sec - start_sec
+                    # safe start is max(min(new_res.start, audio_seg.start), new_res.start - 0.8)
+                    # While our ass event is pad_start = max(0.0, current.start - 0.8, prev_end)
+                    safe_start = int(start_sec * self.sr)
+                    safe_end = int(end_sec * self.sr)
+                    safe_start = max(0, min(safe_start, len(audio_np)))
+                    safe_end = max(safe_start, min(safe_end, len(audio_np)))
+                    audio_chunk = audio_np[safe_start:safe_end]
+                    parts[1] = sec2ass(0.0)
+                    parts[2] = sec2ass(duration)
                     shifted_event = ",".join(parts)
                 else:
                     shifted_event = segment.ass_event
+                    audio_chunk = audio_np
+                sf.write(audio_path, audio_chunk, self.sr)
+                console.print(f"ASS EVENT:\n{shifted_event}")
                 ass_content = Result.ASS_HEADER + shifted_event + "\n"
                 with open(ass_path, "w", encoding="utf-8-sig") as f:
                     f.write(ass_content)
@@ -600,7 +898,7 @@ class QwenTranscribe(TranscriberMixin):
         audio = self._process_audio(audio, sr)
         audio_chunk_list = text_chunk_list = lang_chunk_list = saved_safe_start = []
         for res, seg in zip(result.segments, audio_segments):
-            if seg.start <= (res.end - res.start) <= seg.end:
+            if seg.start <= ((res.end + res.start) / 2) <= seg.end:
                 # Capped maximum 1s
                 safe_start = max(min(res.start, seg.start), res.start - 1.0)
                 safe_end = min(max(res.end, seg.end), res.end + 1.0)
@@ -650,11 +948,11 @@ class WhisperTranscribe(TranscriberMixin):
         with MainProgress(total = len(audio_segments), desc="Whisper Starting Transcriptions...", unit="chunk") as main_bar:
             try:
                 # normal transcribe expect str, float() timestamp
-                # time_batches = ",".join(f"{seg.start},{seg.end}" for seg in audio_segments)
+                time_batches = ",".join(f"{seg.start},{seg.end}" for seg in audio_segments)
                 # batch transcribe expect a dict?
-                time_batches = [{"start": seg.start, "end": seg.end} for seg in audio_segments]
+                # time_batches = [{"start": seg.start, "end": seg.end} for seg in audio_segments]
                 batch_result = self.model.transcribe(audio, language=None, clip_timestamps=time_batches,
-                                                    initial_prompt=lyrics, beam_size=self.beamsize, batch_size=16,
+                                                    initial_prompt=lyrics, beam_size=self.beamsize, #batch_size=1, # need to be None
                                                     repetition_penalty=1.2, condition_on_previous_text=False)
                 for res in batch_result:
                     main_bar.update(1)
@@ -665,7 +963,7 @@ class WhisperTranscribe(TranscriberMixin):
                             end=float(w.end),
                             score=float(w.probability),
                             word=str(w.word)))
-                    results.append(Segment(words=seg_words))
+                    results.append(Segment(words=seg_words, language=batch_result.language))
             except Exception:
                 logger.exception("!!! Whisper Transcription Error:")
                 raise
@@ -683,7 +981,7 @@ class WhisperTranscribe(TranscriberMixin):
         results = []
         with MainProgress(total = len(audio_segments), desc="Whisper Starting align + refine...", unit="chunk") as main_bar:
             for res, seg in zip(result.segments, audio_segments):
-                if seg.start <= (res.end - res.start) <= seg.end:
+                if seg.start <= ((res.end + res.start) / 2) <= seg.end:
                     safe_start = max(min(res.start, seg.start), res.start - 1.0)
                     safe_end = min(max(res.end, seg.end), res.end + 1.0)
                     start_sample = int(safe_start * self.sr)
@@ -691,20 +989,20 @@ class WhisperTranscribe(TranscriberMixin):
                     audio_slice = audio[start_sample:end_sample]
                     assert audio_slice.shape[0] > 0
                     try:
-                        align_results = self.model.align(audio_slice, res.text, verbose=None, languange=seg.language or "en") # Auto lang later on.
-                        align_results = self.model.refine(audio_slice, result, steps="e", precision=0.5, verbose=None)
+                        align_results = self.model.align(audio_slice, res.text, verbose=None, language=res.language or "en") # Auto lang later on.
+                        align_results = self.model.refine(audio_slice, align_results, steps="ss", precision=0.5, verbose=None)
                         seg_words = []
                         for new_res in align_results.segments:
                             for word in new_res.words:
                                 seg_words.append(WordTiming(
                                     start=float(safe_start + word.start),
                                     end=float(safe_start + word.end),
-                                    score=word.score,
-                                    word=str(word.text)
+                                    score=float(word.probability),
+                                    word=str(word.word)
                                 ))
                         results.append(Segment(words=seg_words))
-                    except Exception:
-                        logger.exception("!!! Whisper align + refine Error:")
+                    except Exception as err:
+                        logger.exception(f"!!! Whisper align + refine Error: {err}")
                         raise
             results.sort(key=lambda x: x.words[0].start if x.words else 0.0)
             env.clean()

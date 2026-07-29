@@ -1,93 +1,109 @@
 from __future__ import annotations
 
-import logging
-import random
 import glob
-
-from types import SimpleNamespace
+import logging
+import os
+import random
+import tempfile
 from pathlib import Path
-from typing import TYPE_CHECKING, Union, Optional, Dict, Any
+from types import SimpleNamespace
+from typing import TYPE_CHECKING, Any, Dict, Optional, Union
 
 from kplus.environment import env
-from kplus.tools.progress import MainProgress
 from kplus.tools.config import config
+from kplus.tools.progress import MainProgress
 
 if TYPE_CHECKING:
-    import torch
-    
-    from demucs.apply import BagOfModels, TensorChunk
-    from demucs.htdemucs import HTDemucs
-    from demucs.demucs import Demucs
-    from demucs.hdemucs import HDemucs
+    import torch  # type: ignore
+    from demucs.apply import BagOfModels, TensorChunk  # type: ignore
+    from demucs.demucs import Demucs  # type: ignore
+    from demucs.hdemucs import HDemucs  # type: ignore
+    from demucs.htdemucs import HTDemucs  # type: ignore
     Model = Union[Demucs, HDemucs, HTDemucs]
+
+    from .utils import AudioType
 
 
 logger = logging.getLogger(__name__)
 
+        
 
-class SeparationDemucs:
-    def __init__(self, overlap_ratio: Optional[float] = None,
-                 segment_size: Optional[int] = None,
-                 shifts: Optional[int] = None,
-                 preset: Optional[str] = "high"):
-        env.diffq, env.demucs # Diffq first then demucs
-        from demucs.pretrained import get_model
+class SeparatorMixin:
+    def __init__(self, options):
+        env.rich  # noqa: B018
+        from rich.console import Console # type: ignore  # noqa: I001
+        self.console = Console()
+        self.model_dir = Path(tempfile.gettempdir()) / "karaoke+models"
+        self.repo_url = "https://github.com/Yancovenant/KaraokePlus"
+        self.output_dir = "separations_dir"
+        self._bootstrapt()
 
-        self.device = env.device
-        self.model = get_model("mdx_extra_q").to(self.device).eval()
+    def _bootstrapt(self):
+        env.onnxruntime, env.torch  # noqa: B018
+        import torch, onnxruntime as ot  # type: ignore # noqa: I001
+        if torch.cuda.is_available():
+            if "CUDAExecutionProvider" in ot.get_available_providers():
+                logger.info("ONNXruntime has CUDAExecutionProvider available, enabling acceleration")
+                self.ot_exec_provider = ["CUDAExecutionProvider"]
+            else:
+                logger.warning("CUDAExecutionProvider not available in ONNXruntime, so acceleration will NOT be enabled")
+        else:
+            logger.info("No hardware acceleration could be configured, running in CPU mode")
+            available = ot.get_available_providers()
+            if 'NnapiExecutionProvider' in available or 'XnnpackExecutionProvider' in available:
+                 logger.info("Using android...")
+                 self.ot_exec_provider = available
+            else: 
+                 self.ot_exec_provider = ["CPUExecutionProvider"]
+
+    def get_model(self, options):
+        model_map: dict = {"demucs": "mdx_extra_q",
+                           "kara": "UVR_MDXNET_KARA_2.onnx",
+                           "8kfft": "MDX23C-8KFFT-InstVoc_HQ.ckpt",}
+        if options.modelname == "demucs":
+            options.modelname = model_map.get(options.modelname)
+            return DemucsSeparator(options)
+        else:
+            options.modelname = model_map.get(options.modelname)
+            return MDXSeparator(options)
+
+    def ensureFile(self, target_path: Path):
+        """ Ensure path given is a file if not download 
+        """
+        localpath = self.model_dir / Path(str(target_path)).name
+        if localpath.is_file(): return
+        env.requests; import requests  # type: ignore  # noqa: B018, I001
+        url = f"{self.repo_url.rstrip('/')}/{target_path.lstrip('/')}"
+        self.console.print(f"Downloading file from {url}...")
+        response = requests.get(url, stream=True, timeout=300)
+        if response.status_code == 200:
+            size_bytes = int(response.headers.get("content-length", 0))
+            pbar = MainProgress(total=size_bytes, unit="B", unit_scale=True, unit_divisor=1024)
+            with open(localpath, "wb") as f:
+                 for chunk in response.iter_content(chunk_size=8192):
+                    pbar.update(len(chunk))
+                    f.write(chunk)
+            pbar.pbar.close()
+        else:
+            raise RuntimeError(f"Failed to download file from {url}, response code: {response.status_code}")
+    
+    def separate(self, audio: AudioType):
+        raise NotImplementedError()
+
+class DemucsSeparator(SeparatorMixin):
+    def __init__(self, options):
+        super().__init__(options)
+        env.diffq, env.demucs  # noqa: B018
+        from demucs.pretrained import get_model  # type: ignore
+        self.model = get_model(options.modelname).to(env.device).eval()
         self.sr = self.model.samplerate
         self.ac = self.model.audio_channels
-        self.shifts, self.overlap, self.segment = self._preprocess_preset(preset)
-        if any(val is not None for val in [overlap_ratio, segment_size, shifts]):
-            if preset:
-                logger.warning("Applying custom options while using preset's is not compatible. Overriding the preset template...")
-                preset = "custom"
-        self.preset = preset
-        if overlap_ratio is not None:
-            self.overlap = overlap_ratio
-        if segment_size is not None:
-            self.segment = segment_size
-        if shifts is not None:
-            self.shifts = shifts
-        logger.debug(f"Running separation | Preset: {preset} | shift: {self.shifts} | "
-                     f"Overlap: {self.overlap:.2f} | segment: {self.segment}")
-    
-    def _preprocess_preset(self, preset: Optional[str] = "high"):
-        env.torch
-        import torch
-        preset_map = {
-            "turbo": {"overlap": 0.1, "shift": 0,},
-            "fast": {"overlap": 0.15, "shift": 1,},
-            "standard": {"overlap": 0.3, "shift": 2,},
-            "high": {"overlap": 0.45, "shift": 2},
-            "studio": {"overlap": 0.75, "shift": 5,}}
-        settings = preset_map.get(preset, preset_map["high"]).copy()
-        logger.debug(f"Getting max preset for device: {self.device}")
-        try:
-            if self.device.type == "cuda": # add xpu later?
-                free_bytes, _ = torch.cuda.mem_get_info(self.device)
-                free_gb = free_bytes / (1024**3)
-                logger.debug("Running separation on CUDA VRAM: %.2f GB" % free_gb)
-                min_seg, max_seg = 15.0, 200.0
-                multiplier = 22.0
-            else: # cpu
-                try:
-                    env.psutil
-                    import psutil
-                    free_gb = psutil.virtual_memory().available / (1024**3)
-                    logger.debug("Running separation on CPU VRAM: %.2f GB" % free_gb)
-                except Exception as err:
-                    logger.warning("!!! Failed to get free vram on cpu device: %s", str(err))
-                    free_gb = 6.0 # REVIEW: need to check this
-                if self.device.type == "cpu": # add mps later?
-                    min_seg, max_seg = 10.0, 45.0
-                    multiplier = 8.0
-            calculated_size = free_gb * multiplier
-            final_capped_seg = float(max(min_seg, min(max_seg, calculated_size)))
-        except Exception as err:
-            logger.warning("!!! Exception while getting the resource for separation preset: %s", str(err))
-            final_capped_seg = 15.0 if self.device.type == "cpu" else 30.0
-        return settings["shift"], settings["overlap"], final_capped_seg
+        self._populate_model_data(options)
+
+    def _populate_model_data(self, options):
+        self.overlap = options.overlap
+        self.segment = options.segment
+        self.shifts = options.shift
 
     def _apply_model(self,
             model: Union[BagOfModels, Model],
@@ -106,9 +122,9 @@ class SeparationDemucs:
         
         pool = DummyPoolExecutor()
         kwargs: Dict[str, Any] = {'shifts': shifts, 'split': split,
-                                  'overlap': overlap, 'transition_power': transition_power,
-                                  'progress': progress, 'segment': segment,
-                                  'pbar': pbar, 'model_idx': model_idx}
+                                    'overlap': overlap, 'transition_power': transition_power,
+                                    'progress': progress, 'segment': segment,
+                                    'pbar': pbar, 'model_idx': model_idx}
         out: Union[float, torch.Tensor]
         if isinstance(model, BagOfModels):
             # Special treatment for bag of model.
@@ -182,8 +198,8 @@ class SeparationDemucs:
                 from tqdm import tqdm
                 desc_text = f"   ↳ Model {model_idx}" if model_idx else "   ↳ Processing"
                 futures = tqdm(futures, unit_scale=scale,
-                               ncols=120, unit='seconds',
-                               desc=desc_text, dynamic_ncols=True, position=1)
+                                ncols=120, unit='seconds',
+                                desc=desc_text, dynamic_ncols=True, position=1)
             for future, offset in futures:
                 chunk_out = future.result()
                 chunk_length = chunk_out.shape[-1]
@@ -211,13 +227,14 @@ class SeparationDemucs:
                 out = model(padded_mix)
             assert isinstance(out, torch.Tensor)
             return center_trim(out, length)
-    
-    def separate(self, input_path: Path, stems: str = "inst", external_id: Optional[int] = None):
-        env.torch
-        from demucs.audio import save_audio
-        from .utils import load_audio
-        filename = str(Path(input_path).stem)
-        wav = load_audio(input_path, self.sr, self.ac)
+
+    def separate(self, audio: AudioType, external_id: int | None = None):
+        import torch  # type: ignore  # noqa: I001
+        from .utils import _process_audio
+        from demucs.audio import save_audio # type: ignore
+        filename = str(Path(audio).stem)
+        audio_np = _process_audio(audio, self.sr, self.ac)
+        wav = torch.from_numpy(audio_np)
         original_mix: torch.Tensor = wav.clone()
         ref: torch.Tensor = wav.mean(0)
         wav -= ref.mean()
@@ -226,9 +243,11 @@ class SeparationDemucs:
         stride = int((1 - self.overlap) * segment_length)
         num_chunks = len(range(0, wav.shape[-1], stride))
         num_models = len(self.model.models) if hasattr(self.model, 'models') else 1
-        with MainProgress(total=(num_chunks * num_models) * max(1, self.shifts), desc="Separating %s" % filename, unit="chunk") as main_bar:
-            sources = self._apply_model(self.model, wav[None], progress=True, shifts=self.shifts,
-                                        overlap=self.overlap, segment=self.segment, pbar=main_bar)[0]
+        with MainProgress(total=(num_chunks * num_models) * max(1, self.shifts), desc="Separating...", unit="chunk") as main_bar:
+            sources = self._apply_model(self.model, wav[None],
+                                        progress=True, shifts=self.shifts,
+                                        overlap=self.overlap, segment=self.segment,
+                                        pbar=main_bar)[0]
         sources *= ref.std()
         sources += ref.mean()
         sources = list(sources)
@@ -236,11 +255,11 @@ class SeparationDemucs:
         instruments = original_mix - vocals
         del sources
         kwargs = {'samplerate': self.sr,
-                  'bitrate': 320, 'preset': 2,
-                  'clip': "rescale", 'as_float': False,
-                  'bits_per_sample': 16,}
+                    'bitrate': 320, 'preset': 2,
+                    'clip': "rescale", 'as_float': False,
+                    'bits_per_sample': 16,}
         inst_path, vocs_path = None, None
-        safe_title = "".join([c for c in filename if c.isalpha() or c.isdigit() or c in ' _-']).strip()
+        safe_title = "".join([c for c in audio if c.isalpha() or c.isdigit() or c in ' _-']).strip()
         search_pattern = str(Path(config["data_dir"]) / "*" / safe_title)
         matching_dirs = glob.glob(search_pattern)
         if matching_dirs:
@@ -249,21 +268,24 @@ class SeparationDemucs:
             filepath = f"{external_id:04d}_{safe_title}_separation" if external_id else f"{safe_title}_separation"
             dir_path = Path(config["data_dir"]) / filepath
             dir_path.mkdir(parents=True, exist_ok=True)
-        if stems in ["inst", "all"]:
-            inst_path = dir_path / f"{self.preset}_{filename}_instrumental.wav"
-            save_audio(instruments, str(inst_path), **kwargs)
-        if stems in ["vocs", "all"]:
-            vocs_path = dir_path / f"{self.preset}_{filename}_vocs.wav"
-            save_audio(vocals, str(vocs_path), **kwargs)
-        return SimpleNamespace(vocal_tensor=vocals, sr=self.sr, inst_path=inst_path, vocs_path=vocs_path)
+        inst_path = dir_path / f"{self.preset}_{filename}_instrumental.wav"
+        save_audio(instruments, str(inst_path), **kwargs)
+        vocs_path = dir_path / f"{self.preset}_{filename}_vocs.wav"
+        save_audio(vocals, str(vocs_path), **kwargs)
+        return SimpleNamespace(sr=self.sr, inst_path=inst_path, vocs_path=vocs_path)
 
 
-class AudioSeparation:
-    DEFAULT_DEMUCS_OPTS = {
-        "shifts": None,
-        "segment_size": None,
-        "overlap_ratio": None,
-        "preset": "high"
-    }
-    def __init__(self, modelname: str):
-        pass
+class MDXSeparator(SeparatorMixin):
+    def __init__(self, options):
+        super().__init__(options)
+        target_path = f"/releases/download/v1.0-models/{options.modelname}"
+        env.audio_separator; from audio_separator.separator import Separator  # type: ignore  # noqa: B018, I001
+        self.separator = Separator(output_dir=self.output_dir)
+        self.separator.load_model(model_filename=options.modelname)
+
+    def separate(self, audio):
+        primary_stem, secondary_stem = self.separator.separate(audio)
+        vocal_path = os.path.join(self.output_dir, primary_stem if "Vocals" in primary_stem else secondary_stem)
+        inst_path = os.path.join(self.output_dir, primary_stem if "Instrumental" in primary_stem else secondary_stem)
+        return SimpleNamespace(sr=self.separator.sr, inst_path=inst_path, vocs_path=vocal_path)
+    
