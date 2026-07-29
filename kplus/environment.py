@@ -187,7 +187,16 @@ class environment:
             except Exception as e:
                 raise Exception(f"!!! Command failed while trying to install fonts: {e}")
         raise Exception("!!! Cannot continue. as necessary fonts is not installed...")
-        
+
+    @cached_property
+    def _ensure_onnxruntime(self) -> bool:
+        if os.name != "nt":
+            try:
+                
+            except Exception as e:
+                pass
+        logger.warning("!!! Continuing while no onnxruntime acceleration installed")
+    
     @cached_property
     def device(self):
         return self.torch.device("cuda" if self.torch.cuda.is_available() else "cpu")
