@@ -39,7 +39,7 @@ class SeparatorMixin:
         self._bootstrapt()
 
     def _bootstrapt(self):
-        env.onnxruntime, env.onnxruntime_gpu  # noqa: B018
+        env.onnxruntime_gpu, env.onnxruntime  # noqa: B018
 
     @classmethod
     def get_model(cls, options):
