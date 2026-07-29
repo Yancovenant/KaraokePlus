@@ -285,6 +285,7 @@ class MDXSeparator(SeparatorMixin):
         self.separator.load_model(model_filename=options.modelname)
 
     def separate(self, audio):
+        if isinstance(audio, Path): audio = str(audio)
         primary_stem, secondary_stem = self.separator.separate(audio)
         vocal_path = os.path.join(self.output_dir, primary_stem if "Vocals" in primary_stem else secondary_stem)
         inst_path = os.path.join(self.output_dir, primary_stem if "Instrumental" in primary_stem else secondary_stem)
