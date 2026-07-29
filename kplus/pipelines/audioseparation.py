@@ -279,5 +279,5 @@ class MDXSeparator(SeparatorMixin):
         primary_stem, secondary_stem = self.separator.separate(audio)
         vocal_path = os.path.join(self.output_dir, primary_stem if "Vocals" in primary_stem else secondary_stem)
         inst_path = os.path.join(self.output_dir, primary_stem if "Instrumental" in primary_stem else secondary_stem)
-        return SimpleNamespace(sr=self.separator.sr, inst_path=inst_path, vocs_path=vocal_path)
+        return SimpleNamespace(sr=self.separator.sample_rate, inst_path=inst_path, vocs_path=vocal_path)
     
