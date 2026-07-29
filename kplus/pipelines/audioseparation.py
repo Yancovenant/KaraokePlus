@@ -56,7 +56,8 @@ class SeparatorMixin:
             else: 
                  self.ot_exec_provider = ["CPUExecutionProvider"]
 
-    def get_model(self, options):
+    @classmethod
+    def get_model(cls, options):
         model_map: dict = {"demucs": "mdx_extra_q",
                            "kara": "UVR_MDXNET_KARA_2.onnx",
                            "8kfft": "MDX23C-8KFFT-InstVoc_HQ.ckpt",}
