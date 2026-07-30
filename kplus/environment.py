@@ -192,8 +192,7 @@ class environment:
     def _ensure_onnxruntime(self) -> bool:
         if os.name != "nt":
             try:
-                onnx_cmds:[
-                    
+                onnx_cmds = [
                 ]
                 for cmd in onnx_cmds:
                     subprocess.run(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
