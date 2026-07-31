@@ -223,7 +223,7 @@ class DemucsSeparator(SeparatorMixin):
         import torch  # type: ignore  # noqa: I001
         from .utils import _process_audio, load_audio
         from demucs.audio import save_audio # type: ignore
-        filename = str(Path(audio).stem)
+        filename = Path(str(audio)).stem
         if isinstance(audio, (str, Path)):
             wav = load_audio(str(audio), self.sr, self.ac)
         else:
@@ -261,9 +261,9 @@ class DemucsSeparator(SeparatorMixin):
             filepath = f"{external_id:04d}_{safe_title}_separation" if external_id else f"{safe_title}_separation"
             dir_path = Path(config["data_dir"]) / filepath
             dir_path.mkdir(parents=True, exist_ok=True)
-        inst_path = dir_path / f"[S:{self.shifts},O:{self.overlap},SZ:{self.segment}]_inst_{filename}.wav"
+        inst_path = dir_path / f"[S:{self.shifts},O:{self.overlap},SZ:{self.segment}]_inst_{safe_title}.wav"
         save_audio(instruments, str(inst_path), **kwargs)
-        vocs_path = dir_path / f"[S:{self.shifts},O:{self.overlap},SZ:{self.segment}]_vocs_{filename}.wav"
+        vocs_path = dir_path / f"[S:{self.shifts},O:{self.overlap},SZ:{self.segment}]_vocs_{safe_title}.wav"
         save_audio(vocals, str(vocs_path), **kwargs)
         return SimpleNamespace(sr=self.sr, inst_path=inst_path, vocs_path=vocs_path)
 
