@@ -94,7 +94,7 @@ class DemucsSeparator(SeparatorMixin):
     def _populate_model_data(self, options):
         self.overlap = options.overlap
         self.segment = options.segment
-        self.shifts = options.shift
+        self.shifts = options.shifts
 
     def _apply_model(self,
             model: Union[BagOfModels, Model],
