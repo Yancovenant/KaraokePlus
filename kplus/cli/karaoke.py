@@ -72,7 +72,7 @@ class Karaoke(Command):
 
 
         # Step 2 get audio segment
-        _,audio_segments = AAD(False).get_audio_segments(audio_np, sr=sep_info.sr)
+        _,audio_segments = AAD(False).get_audio_segments(audio_np, sr=16000)
         logger.info(f"Finished Getting Audio Segments -- {len(audio_segments)} segments")
 
         # Step 3 Transcribe
