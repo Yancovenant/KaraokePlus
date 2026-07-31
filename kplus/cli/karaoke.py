@@ -65,6 +65,7 @@ class Karaoke(Command):
         logger.info(f">> Vocs Path: {sep_info.vocs_path}")
         logger.info(f">> SR: {sep_info.sr}")
 
+
         # At this point i think we wanna convert the sampling rate to be 16000 since both uses that?
         # 1.5 make the audio_np available and pass it then to the rest (using sr 16KHz for now for everything)
         audio_np = _process_audio(sep_info.vocs_path, from_sr=sep_info.sr, to_sr=16000)

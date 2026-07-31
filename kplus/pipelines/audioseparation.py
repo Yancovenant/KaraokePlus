@@ -126,7 +126,7 @@ class DemucsSeparator(SeparatorMixin):
             total_models = len(model.models)
             for i, (sub_model, model_weights) in enumerate(zip(model.models, model.weights)):
                 #original_model_device = next(iter(sub_model.parameters())).device
-                sub_model.to(self.device)
+                sub_model.to(env.device)
                 kwargs['model_idx'] = f"{i + 1}/{total_models}"
                 out = self._apply_model(sub_model, mix, **kwargs)
                 #sub_model.to(original_model_device)
@@ -141,7 +141,7 @@ class DemucsSeparator(SeparatorMixin):
                 estimates[:, k, :, :] /= totals[k]
             return estimates
 
-        model.to(self.device).eval()
+        model.to(env.device).eval()
         assert transition_power >= 1, "transition_power < 1 leads to weird behavior."
         batch, channels, length = mix.shape
         if shifts:
@@ -173,8 +173,8 @@ class DemucsSeparator(SeparatorMixin):
             # We start from a triangle shaped weight, with maximal weight in the middle
             # of the segment. Then we normalize and take to the power `transition_power`.
             # Large values of transition power will lead to sharper transitions.
-            weight = torch.cat([torch.arange(1, segment_length // 2 + 1, device=self.device),
-                            torch.arange(segment_length - segment_length // 2, 0, -1, device=self.device)])
+            weight = torch.cat([torch.arange(1, segment_length // 2 + 1, device=env.device),
+                            torch.arange(segment_length - segment_length // 2, 0, -1, device=env.device)])
             assert len(weight) == segment_length
             # If the overlap < 50%, this will translate to linear transition when
             # transition_power is 1.
@@ -213,7 +213,7 @@ class DemucsSeparator(SeparatorMixin):
                 valid_length = length
             mix = tensor_chunk(mix)
             assert isinstance(mix, TensorChunk)
-            padded_mix = mix.padded(valid_length).to(self.device)
+            padded_mix = mix.padded(valid_length).to(env.device)
             with torch.no_grad():
                 out = model(padded_mix)
             assert isinstance(out, torch.Tensor)
