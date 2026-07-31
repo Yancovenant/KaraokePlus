@@ -21,9 +21,9 @@ class Render:
         import rich # type: ignore # noqa: I001
         console = rich.console.Console()
         try:
-            if output_path is None: output_path = f"(Karaoke)_{safe_title}.mkv"
             safe_title = Path(str(video_filepath)).stem
             safe_title = "".join(c for c in safe_title if c.isalnum() or c in ' -_').rstrip()
+            if output_path is None: output_path = f"(Karaoke)_{safe_title}.mkv"
             render_cmds = [
                 "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
                 "-i", str(video_filepath), "-i", str(inst_path),]

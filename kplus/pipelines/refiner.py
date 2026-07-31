@@ -1,13 +1,12 @@
+from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
 from kplus.environment import env
 
-from .utils import AudioSegment, Result, Segment, WordTiming, sec2ass, _process_audio
+from .utils import AudioSegment, Result, Segment, _process_audio
 
 if TYPE_CHECKING:
-    import numpy as np  # type: ignore
-
     from .utils import AudioType
 
 class Refiner:
