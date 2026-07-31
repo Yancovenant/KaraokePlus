@@ -41,6 +41,9 @@ class Separate(Command):
         separation_model = SeparatorMixin.get_model(opt)
         separation_info = separation_model.separate(filepath)
         logger.info(f"Finished separating {filepath}")
+        logger.info(f">> Inst Path: {separation_info.inst_path}")
+        logger.info(f">> Vocs Path: {separation_info.vocs_path}")
+        logger.info(f">> SR: {separation_info.sr}")
         del separation_model.model, separation_model
         env.clean()
         if opt.visualize:
