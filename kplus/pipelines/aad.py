@@ -81,7 +81,8 @@ class AAD:
         # Quick Workaround to get sr
         if sr is None and isinstance(audio, (str, Path)):
             env.demucs; from demucs.audio import AudioFile
-            sr = AudioFile(str(audio)).samplerate
+            sr = AudioFile(str(audio)).samplerate()
+            logger.debug(f"Successfully get sr {sr}")
         audio = _process_audio(audio, sr, sr)
         # If time manually given maybe?
         with MainProgress(total=5, desc=f"Processing audio: {len(audio)} samples, {sr}Hz, {len(audio)/sr:.2f}") as main_bar:
