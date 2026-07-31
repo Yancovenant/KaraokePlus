@@ -221,26 +221,28 @@ class DemucsSeparator(SeparatorMixin):
 
     def separate(self, audio: AudioType, external_id: int | None = None):
         import torch  # type: ignore  # noqa: I001
-        from .utils import _process_audio
+        from .utils import _process_audio, load_audio
         from demucs.audio import save_audio # type: ignore
         filename = str(Path(audio).stem)
-        audio_np = _process_audio(audio, self.sr, self.ac)
-        wav = torch.from_numpy(audio_np)
-        original_mix: torch.Tensor = wav.clone()
-        ref: torch.Tensor = wav.mean(0)
-        wav -= ref.mean()
-        wav /= ref.std()
+        if isinstance(audio, (str, Path)):
+            wav = load_audio(str(audio), self.sr, self.ac)
+        else:
+            raise TypeError(f"Currently Support str input path but got {type(audio)}")
+        original_mix = wav.clone()
+
+        ref = wav.mean(0)
+        mean = ref.mean()
+        std = ref.std() + 1e-8
         segment_length = int(self.sr * self.segment)
         stride = int((1 - self.overlap) * segment_length)
         num_chunks = len(range(0, wav.shape[-1], stride))
         num_models = len(self.model.models) if hasattr(self.model, 'models') else 1
         with MainProgress(total=(num_chunks * num_models) * max(1, self.shifts), desc="Separating...", unit="chunk") as main_bar:
-            sources = self._apply_model(self.model, wav[None],
+            sources = self._apply_model(self.model, ((wav - mean) / std)[None],
                                         progress=True, shifts=self.shifts,
                                         overlap=self.overlap, segment=self.segment,
                                         pbar=main_bar)[0]
-        sources *= ref.std()
-        sources += ref.mean()
+        sources = sources * std + mean
         sources = list(sources)
         vocals = sources.pop(self.model.sources.index("vocals"))
         instruments = original_mix - vocals
