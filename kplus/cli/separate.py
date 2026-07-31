@@ -22,7 +22,7 @@ class Separate(Command):
         group.add_argument("-p", "--preset", dest="preset", choices=preset_choices, default="high", help="Specify the presets choice, Accepted values: %s." % (preset_choices,))
         group.add_argument("--segment", dest="segment", type=int,
                            help="Length (in seconds) of audio should be processed at once, !!! This can help save memory of graphic card")
-        group.add_argument("--overlap", dest="overlap", type=int,
+        group.add_argument("--overlap", dest="overlap", type=float,
                            help="The overlap between the splits")
         group.add_argument("--shifts", dest="shifts", type=int,
                            help="""if > 0, will shift in time `mix` by a random amount between 0 and 0.5 sec
