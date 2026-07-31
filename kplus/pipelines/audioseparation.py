@@ -190,7 +190,7 @@ class DemucsSeparator(SeparatorMixin):
                 desc_text = f"   ↳ Model {model_idx}" if model_idx else "   ↳ Processing"
                 futures = tqdm(futures, unit_scale=scale,
                                 ncols=120, unit='seconds',
-                                desc=desc_text, dynamic_ncols=True, position=1)
+                                desc=desc_text, dynamic_ncols=True, position=0)
             for future, offset in futures:
                 chunk_out = future.result()
                 chunk_length = chunk_out.shape[-1]
@@ -252,7 +252,7 @@ class DemucsSeparator(SeparatorMixin):
                     'clip': "rescale", 'as_float': False,
                     'bits_per_sample': 16,}
         inst_path, vocs_path = None, None
-        safe_title = "".join([c for c in audio if c.isalpha() or c.isdigit() or c in ' _-']).strip()
+        safe_title = "".join([c for c in filename if c.isalpha() or c.isdigit() or c in ' _-']).strip()
         search_pattern = str(Path(config["data_dir"]) / "*" / safe_title)
         matching_dirs = glob.glob(search_pattern)
         if matching_dirs:
@@ -261,9 +261,9 @@ class DemucsSeparator(SeparatorMixin):
             filepath = f"{external_id:04d}_{safe_title}_separation" if external_id else f"{safe_title}_separation"
             dir_path = Path(config["data_dir"]) / filepath
             dir_path.mkdir(parents=True, exist_ok=True)
-        inst_path = dir_path / f"{self.preset}_{filename}_instrumental.wav"
+        inst_path = dir_path / f"[S:{self.shifts},O:{self.overlap},SZ:{self.segment}]_inst_{filename}.wav"
         save_audio(instruments, str(inst_path), **kwargs)
-        vocs_path = dir_path / f"{self.preset}_{filename}_vocs.wav"
+        vocs_path = dir_path / f"[S:{self.shifts},O:{self.overlap},SZ:{self.segment}]_vocs_{filename}.wav"
         save_audio(vocals, str(vocs_path), **kwargs)
         return SimpleNamespace(sr=self.sr, inst_path=inst_path, vocs_path=vocs_path)
 
