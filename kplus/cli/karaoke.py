@@ -65,15 +65,13 @@ class Karaoke(Command):
         logger.info(f">> Vocs Path: {sep_info.vocs_path}")
         logger.info(f">> SR: {sep_info.sr}")
 
-
-        # At this point i think we wanna convert the sampling rate to be 16000 since both uses that?
-        # 1.5 make the audio_np available and pass it then to the rest (using sr 16KHz for now for everything)
-        audio_np = _process_audio(sep_info.vocs_path, from_sr=sep_info.sr, to_sr=16000)
-
-
         # Step 2 get audio segment
-        _,audio_segments = AAD(False).get_audio_segments(audio_np, sr=16000)
+        _,audio_segments = AAD(False).get_audio_segments(sep_info.vocs_path, sr=sep_info.sr)
         logger.info(f"Finished Getting Audio Segments -- {len(audio_segments)} segments")
+        
+        # At this point i think we wanna convert the sampling rate to be 16000 since both uses that?
+        # 2.5 make the audio_np available and pass it then to the rest (using sr 16KHz for now for everything)
+        audio_np = _process_audio(sep_info.vocs_path, from_sr=sep_info.sr, to_sr=16000)
 
         # Step 3 Transcribe
         trans_opts = SimpleNamespace(verbose=True, modeltype="whisper", modelname="tiny", beamsize=5, max_threads=2)
@@ -88,7 +86,7 @@ class Karaoke(Command):
         # Already cleaned
         refiner_class = Refiner(verbose=False, sr=16000, precision_ms=0.5) #0.5ms
         refine_result = refiner_class.refine_timestamp(audio_np, None, *ai_align_result, audio_segments=audio_segments)
-        refine_result.populate_ass()
+        refine_result.to_lyrics_segment().populate_ass()
         logger.info(f"Finished Refinement and populating ass -- {len(refine_result.segments)} segments")
 
         # Last step rendering

@@ -194,6 +194,7 @@ class Result:
                 f"{{\\fad({fade_in_ms},{fade_out_ms})}}"
                 f"{{\\an2}}{karaoke_content}"
             )
+        return self
 
 
 def sec2ass(s: (float, int)) -> str:
