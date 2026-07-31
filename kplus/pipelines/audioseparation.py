@@ -228,7 +228,6 @@ class DemucsSeparator(SeparatorMixin):
             wav = load_audio(str(audio), self.sr, self.ac)
         else:
             raise TypeError(f"Currently Support str input path but got {type(audio)}")
-        original_mix = wav.clone()
 
         ref = wav.mean(0)
         mean = ref.mean()
@@ -238,15 +237,16 @@ class DemucsSeparator(SeparatorMixin):
         num_chunks = len(range(0, wav.shape[-1], stride))
         num_models = len(self.model.models) if hasattr(self.model, 'models') else 1
         with MainProgress(total=(num_chunks * num_models) * max(1, self.shifts), desc="Separating...", unit="chunk") as main_bar:
-            sources = self._apply_model(self.model, ((wav - mean) / std)[None],
+            out = self._apply_model(self.model,
+                                        ((wav - mean) / std)[None],
                                         progress=True, shifts=self.shifts,
                                         overlap=self.overlap, segment=self.segment,
-                                        pbar=main_bar)[0]
-        sources = sources * std + mean
-        sources = list(sources)
-        vocals = sources.pop(self.model.sources.index("vocals"))
-        instruments = original_mix - vocals
-        del sources
+                                        pbar=main_bar)
+        out = out * std + mean
+        res = dict(zip(self.model.sources, out[0]))
+        vocals = res["vocals"]
+        instruments = wav - vocals
+        del res
         kwargs = {'samplerate': self.sr,
                     'bitrate': 320, 'preset': 2,
                     'clip': "rescale", 'as_float': False,
