@@ -184,7 +184,7 @@ class Result:
                 dur_cs = max(0, round(dur_sec * 100))
                 k_tokens.append(
                     f"{{\\kf{dur_start_cs}}}"
-                    f"{{\\kf{dur_cs}}}{word.word}"
+                    f"{{\\kf{dur_cs}}}{word.word.strip()}"
                     f"{{\\kf{dur_end_cs}}} "
                 )
             karaoke_content = "".join(k_tokens)

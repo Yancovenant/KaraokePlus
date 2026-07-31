@@ -1,15 +1,24 @@
-import sys
 import logging
-
+import subprocess
+import sys
 from pathlib import Path
+from types import SimpleNamespace
 from typing import TYPE_CHECKING
 
-from .command import Command
-from kplus.tools.config import config
-from kplus.pipelines import SeparationDemucs, get_track_file, \
-    Aligner, AAD, TranscriberMixin
 from kplus.environment import env
+from kplus.pipelines import (
+    AAD,
+    Aligner,
+    SeparatorMixin,
+    TranscriberMixin,
+    get_track_file,
+    Refiner
+)
+from kplus.pipelines.utils import _process_audio
+from kplus.tools.config import config
 from kplus.tools.render import Render
+
+from .command import Command
 
 if TYPE_CHECKING:
     from kplus.pipelines.transcriber import Result
@@ -38,27 +47,67 @@ class Karaoke(Command):
             with open(opt.lyricsfile, "rt", encoding="utf-8") as f:
                 info.lyrics = f.readlines()
         filepath = Path(info.filename)
-        separation_model = SeparationDemucs(overlap_ratio=0.75,
-                                            segment_size=200, shifts=1)
-        separation_info = separation_model.separate(filepath, "all")
-        logger.info(f"Finished separating {filepath}")
-        del separation_model.model, separation_model
+
+
+        # Step 1 separate and maybe make it a wav first
+        env.ffmpeg  # noqa: B018
+        audio_file_path = f"{filepath.stem}.wav"
+        # Hardcoded for now
+        options = SimpleNamespace(modelname="demucs", overlap=0.75, segment=200, shifts=1)
+        sep_class = SeparatorMixin.get_model(options)
+        subprocess.run(["ffmpeg", "-y", "-i", str(filepath), "-vn", "-ar", sep_class.sr, "-ac", sep_class.ac, audio_file_path],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        sep_info = sep_class.separate(audio_file_path)
+        del sep_class.model, sep_class
         env.clean()
-        filtered_audio_np, audio_segments = AAD(False).get_audio_segments(separation_info.vocal_tensor,
-                sr=separation_info.sr)
+        logger.info(f"Finished separating -- {audio_file_path}")
+        logger.info(f">> Inst Path: {sep_info.inst_path}")
+        logger.info(f">> Vocs Path: {sep_info.vocs_path}")
+        logger.info(f">> SR: {sep_info.sr}")
+
         # At this point i think we wanna convert the sampling rate to be 16000 since both uses that?
-        transcribe_model = TranscriberMixin(opt)
-        transcriptions  : Result = transcribe_model.transcribe(separation_info.vocal_tensor, sr=separation_info.sr,
-                                                                audio_segments=audio_segments, lyrics=info.lyrics)
-        del transcribe_model.model, transcribe_model
+        # 1.5 make the audio_np available and pass it then to the rest (using sr 16KHz for now for everything)
+        audio_np = _process_audio(sep_info.vocs_path, from_sr=sep_info.sr, to_sr=16000)
+
+
+        # Step 2 get audio segment
+        _,audio_segments = AAD(False).get_audio_segments(audio_np, sr=sep_info.sr)
+        logger.info(f"Finished Getting Audio Segments -- {len(audio_segments)} segments")
+
+        # Step 3 Transcribe
+        trans_opts = SimpleNamespace(verbose=True, modeltype="whisper", modelname="tiny", beamsize=5, max_threads=2)
+        trans_class = TranscriberMixin.get_model(trans_opts)
+        trans_result = trans_class.transcribe(audio_np, audio_segments=audio_segments, sr=sep_info.sr, lyrics=info.lyrics)
+        logger.info(f"Finished Transcribing -- {len(trans_result.segments)} segments")
+        ref_segments, new_audio_segments = trans_class.get_reference_timestamp(
+            trans_result, info.lyrics, audio_segments
+        )
+        ai_align_result = self._align_many(trans_class, audio_np, ref_segments, new_audio_segments)
+        logger.info(f"Finished Alignment -- {len(ai_align_result)} AI Aligner, with {(len(seg) for ai_segs in ai_align_result for seg in ai_segs.segments)}")
+        # Already cleaned
+        refiner_class = Refiner(verbose=False, sr=16000, precision_ms=0.5) #0.5ms
+        refine_result = refiner_class.refine_timestamp(audio_np, None, *ai_align_result, audio_segments=audio_segments)
+        refine_result.populate_ass()
+        logger.info(f"Finished Refinement and populating ass -- {len(refine_result.segments)} segments")
+
+        # Last step rendering
+        Render(with_ass=True).render(video_filepath=filepath, inst_path=sep_info.inst_path, duration=info.duration, result=refine_result)
+        
+    
+    def _align_many(self, trans_class, audio, ref_segments, audio_segments):
+        # Whisper
+        fa_res_1 = trans_class.align(audio, None, ref_segments, audio_segments)
+        del trans_class.model, trans_class
         env.clean()
-        aligner_model = Aligner()
-        aligner_info = aligner_model.main(separation_info.vocal_tensor,
-                separation_info.sr, info.lyrics, audio_segments, transcriptions)
-        del aligner_model.model, aligner_model
+        # Qwen
+        trans_opts = SimpleNamespace(verbose=True,modeltype="qwen")
+        trans_class = TranscriberMixin.get_model(trans_opts)
+        fa_res_2 = trans_class.align(audio, None, ref_segments, audio_segments)
+        del trans_class.model, trans_class
         env.clean()
-        karaoke_data = []
-        for seg in aligner_info.segments:
-            word_list = [{"word": w.word, "start": w.start, "end": w.end} for w in seg.words]
-            karaoke_data.append({"text": seg.text, "words": word_list})
-        Render().render(None, info.title, info.filename, separation_info.inst_path, info.duration, karaoke_data)
+        # MMS FA
+        align_class = Aligner()
+        fa_res_3 = align_class.align(audio, None, ref_segments, audio_segments)
+        del align_class.model, align_class.tokenizer, align_class.aligner, align_class
+        env.clean()
+        return (fa_res_1, fa_res_2, fa_res_3)

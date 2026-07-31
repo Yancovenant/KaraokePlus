@@ -1,16 +1,17 @@
 from __future__ import annotations
-import string
-import logging
-import difflib
-import re
 
-from typing import TYPE_CHECKING, List
+import difflib
+import logging
+import re
+import string
 from types import SimpleNamespace
-from itertools import pairwise
+from typing import TYPE_CHECKING, List
 
 from kplus.environment import env
-from .transcriber import WordTiming, Result, Segment
+
 from .aad import AudioSegment
+from .transcriber import Result, Segment, WordTiming
+from .utils import _process_audio
 
 if TYPE_CHECKING:
     import torch
@@ -22,6 +23,90 @@ logger = logging.getLogger(__name__)
 
 
 class Aligner:
+    def __init__(self):
+        env.torchaudio; import torchaudio  # type: ignore # noqa: B018, I001
+        bundle = torchaudio.pipelines.MMS_FA
+        self.sr = bundle.sample_rate
+        self.model = bundle.get_model(with_star=True).to(env.device)
+        self.tokenizer = bundle.get_tokenizer()
+        self.aligner = bundle.get_aligner()
+
+        self.RE_CHINESE = re.compile(r'[\u4e00-\u9fff]+')
+        self.RE_JP = re.compile(r'[\u3040-\u30ff]+')
+        self.RE_KR = re.compile(r'[\uac00-\ud7af]+')
+        self.RE_LATIN = re.compile(r'[^a-z]')
+
+    def tokenize_line(self, text) -> list[SimpleNamespace]:
+        tokens = []
+        chunks = re.split(r'([\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]+)', text)
+        for chunk in chunks:
+            if not chunk: continue
+            if (self.RE_JP.search(chunk) or
+                self.RE_CHINESE.search(chunk) or
+                self.RE_KR.search(chunk)):
+                tokens.extend(SimpleNamespace(
+                    original=char, token=token
+                ) for char in chunk if (token:=self.RE_LATIN.sub('', char.lower())))
+            else:
+                prev_token = None
+                for w in chunk.split():
+                    if w in ".,!?" and prev_token: prev_token.original += w; continue
+                    if token := self.RE_LATIN.sub('', w.lower()):
+                        tokens.append(prev_token:=SimpleNamespace(
+                        original=w, token=token))
+        return tokens
+
+    def align(self, audio: torch.Tensor, sr:int, result: Result, audio_segments: List[AudioSegment]) -> Result:
+        env.torch; import torch, copy  # type: ignore # noqa: B018, I001
+        audio = _process_audio(audio, sr, self.sr)
+        results = []
+        for res, seg in zip(result.segments, audio_segments):
+            if seg.start <= ((res.start + res.end) / 2) <= seg.end:
+                safe_start = max(min(res.start, seg.start), res.start - 1.0)
+                safe_end = min(max(res.end, seg.end), res.end + 1.0)
+                start_sample = int(safe_start * self.sr)
+                end_sample = int(safe_end * self.sr)
+                audio_slice = audio[start_sample:end_sample]
+                assert audio_slice.shape[0] > 0
+                try:
+                    # Convert to tensor
+                    audio_slice = torch.from_numpy(audio_slice).unsqueeze(0)
+                    tokens = self.tokenize_line(res.text)
+                    transcript_tokens = ["*"]
+                    for tok in tokens:
+                        transcript_tokens.extend(list(tok.token))
+                        transcript_tokens.append("*")
+                    try:
+                        with torch.inference_mode():
+                            emission, _ = self.model(audio_slice.to(env.device))
+                            token_spans = self.aligner(emission[0], self.tokenizer(transcript_tokens))
+                    except Exception as err:
+                        logger.error(f"!!! Error while doing ctc align: {err}", exc_info=True)
+                    char_spans = [span for token, span in zip(transcript_tokens, token_spans) if token != "*"]
+                    ratio = audio_slice.size(1) / emission.size(1)
+                    char_idx = 0
+                    seg_words = []
+                    for i, tok in enumerate(tokens):
+                        word_len = len(tok.token)
+                        current_char_spans = char_spans[char_idx : char_idx + word_len]
+                        char_idx += word_len
+                        if not current_char_spans: continue
+                        first_char_span = current_char_spans[0]
+                        last_char_span = current_char_spans[-1]
+                        local_start = int(ratio * first_char_span[0].start) / self.sr
+                        local_end = int(ratio * last_char_span[-1].end) / self.sr
+                        rw = copy.copy(res.words[i])
+                        rw.start = local_start + safe_start
+                        rw.end = local_end + safe_start
+                        seg_words.append(rw)
+                    results.append(Segment(words=seg_words))
+                    del token_spans, emission, audio_slice
+                except Exception as err:
+                    logger.error(f"!!! Error while doing ctc align: {err}", exc_info=True)
+                    raise
+        return Result(segments=results)
+
+class AlignerDeprecated:
     def __init__(self):
         env.torchaudio
         import torchaudio

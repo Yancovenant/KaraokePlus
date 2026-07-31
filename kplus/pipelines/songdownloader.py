@@ -72,7 +72,7 @@ class SongDownloader:
                 if not self.without_lyrics:
                     main_bar.pbar.set_description("Fetching Lyrics")
                     if not (lyrics := self.fetch_lyrics(title, artist, duration)):
-                        raise Exception("!!! Lyrics not found, cannot continue")
+                        raise ValueError("!!! Lyrics not found, cannot continue")
                     main_bar.update(1)
                 filename = Path(ydl.prepare_filename(info))
                 main_bar.pbar.set_description("Downloading..")
@@ -95,5 +95,6 @@ def get_track_file(inputpath: str, without_lyrics: bool) -> SimpleNamespace:
     except Exception as err:
         # is this a filepath?
         logger.warning("!!! Exception on parsing URL as an input: %s", str(err))
-        pass
+    if not Path(inputpath).is_file():
+        raise RuntimeError("!!! input file have not been download or is not a file")
     return SimpleNamespace(filename=inputpath, lyrics=None)

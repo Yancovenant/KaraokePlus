@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 from kplus.environment import env
 from kplus.tools.progress import MainProgress
 
-from .utils import AudioSegment
+from .utils import AudioSegment, _process_audio
 
 if TYPE_CHECKING:
     import numpy as np  # type: ignore
@@ -74,19 +74,11 @@ class AAD:
                     of peak_prob_sec. 0.6 means a peak must be at least 40% quieter
         """
         env.scipy, env.librosa  # noqa: B018
-        import librosa, scipy, numpy as np, torch  # type: ignore # noqa: I001
+        import librosa, scipy, numpy as np # type: ignore # noqa: I001
         from scipy.signal import find_peaks # type: ignore
         from scipy.ndimage import uniform_filter1d # type: ignore
-        if isinstance(audio, torch.Tensor):
-            from .utils import convert_audio
-            audio = convert_audio(audio, sr, sr, 1)
-            audio = audio.detach().cpu().numpy().squeeze()
-            assert sr is not None, "Passing torch.Tensor must be accompanied by its sample rate"
-        elif not isinstance(audio, np.ndarray):
-            audio, lsr = librosa.load(audio, sr=None)
-            sr = lsr
-            logger.debug(f"Changing sr value from {sr} to {lsr}")
-        # If time manually given
+        audio = _process_audio(audio, sr, sr)
+        # If time manually given maybe?
         with MainProgress(total=5, desc=f"Processing audio: {len(audio)} samples, {sr}Hz, {len(audio)/sr:.2f}") as main_bar:
             main_bar.pbar.set_description("Computing RMS")
             hop_length = int(sr / 1000) * precision_ms
