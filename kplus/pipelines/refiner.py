@@ -18,7 +18,7 @@ class Refiner:
     def _get_med_segs(self, ref_seg, *align_segs) -> Segment:
         env.numpy; import copy, numpy as np # type: ignore  # noqa: B018, I001
         # median_words = []
-        for words, r_word in zip(*(seg.words for seg in align_segs), ref_seg.words):
+        for *words, r_word in zip(*(seg.words for seg in align_segs), ref_seg.words):
             med_start = np.median([w.start for w in words])
             med_end = np.median([w.end for w in words])
             r_word.start = float(med_start)
