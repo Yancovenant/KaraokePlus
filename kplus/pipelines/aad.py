@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -77,6 +78,10 @@ class AAD:
         import librosa, scipy, numpy as np # type: ignore # noqa: I001
         from scipy.signal import find_peaks # type: ignore
         from scipy.ndimage import uniform_filter1d # type: ignore
+        # Quick Workaround to get sr
+        if sr is None and isinstance(audio, (str, Path)):
+            env.demucs; from demucs.audio import AudioFile
+            sr = AudioFile(str(audio)).samplerate
         audio = _process_audio(audio, sr, sr)
         # If time manually given maybe?
         with MainProgress(total=5, desc=f"Processing audio: {len(audio)} samples, {sr}Hz, {len(audio)/sr:.2f}") as main_bar:
