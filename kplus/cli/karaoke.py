@@ -55,7 +55,7 @@ class Karaoke(Command):
         # Hardcoded for now
         options = SimpleNamespace(modelname="demucs", overlap=0.75, segment=200, shifts=1)
         sep_class = SeparatorMixin.get_model(options)
-        subprocess.run(["ffmpeg", "-y", "-i", str(filepath), "-vn", "-ar", sep_class.sr, "-ac", sep_class.ac, audio_file_path],
+        subprocess.run(["ffmpeg", "-y", "-i", str(filepath), "-vn", "-ar", str(sep_class.sr), "-ac", str(sep_class.ac), str(audio_file_path)],
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         sep_info = sep_class.separate(audio_file_path)
         del sep_class.model, sep_class
@@ -92,7 +92,7 @@ class Karaoke(Command):
 
         # Last step rendering
         Render(with_ass=True).render(video_filepath=filepath, inst_path=sep_info.inst_path, duration=info.duration, result=refine_result)
-        
+
     
     def _align_many(self, trans_class, audio, ref_segments, audio_segments):
         # Whisper
