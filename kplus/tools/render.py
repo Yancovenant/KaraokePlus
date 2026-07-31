@@ -28,7 +28,7 @@ class Render:
                 "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
                 "-i", str(video_filepath), "-i", str(inst_path),]
             if self.with_ass:
-                ass_content = Result.ASS_HEADER + "\n".join(seg.ass_event for seg in result)
+                ass_content = Result.ASS_HEADER + "\n".join(seg.ass_event for seg in result.segments)
                 ass_path = Path(config.work_dir) / f"ass_{safe_title}.ass"
                 ass_path.write_text(ass_content, encoding="utf-8-sig")
                 scale_filter = "fps=30,scale=if(gt(iw/ih\\,16/9)\\,-1\\,1280):if(gt(iw/ih\\,16/9)\\,720\\,-1):flags=fast_bilinear,crop=1280:720"
