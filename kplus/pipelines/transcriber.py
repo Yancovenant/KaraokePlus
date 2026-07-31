@@ -896,7 +896,7 @@ class QwenTranscribe(TranscriberMixin):
 
     def align(self, audio: AudioType, sr: int, result: Result, audio_segments: list[AudioSegment]) -> Result:
         audio = self._process_audio(audio, sr)
-        audio_chunk_list = text_chunk_list = lang_chunk_list = saved_safe_start = []
+        audio_chunk_list, text_chunk_list, lang_chunk_list, saved_safe_start = [], [], [], []
         for res, seg in zip(result.segments, audio_segments):
             if seg.start <= ((res.end + res.start) / 2) <= seg.end:
                 # Capped maximum 1s
