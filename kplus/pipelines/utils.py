@@ -42,8 +42,7 @@ class TimingMixin:
     @property
     def duration(self) -> float:
         """Returns the length of the segment in seconds."""
-        if self.start is None or self.end is None: 
-            return 0.0
+        if self.start is None or self.end is None: return 0.0
         return self.end - self.start
 
     def start(self): raise NotImplementedError()
