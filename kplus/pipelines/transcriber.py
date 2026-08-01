@@ -343,6 +343,7 @@ class TranscriberMixin:
             console.print("\n")
         return Result(segments=final_segments), final_audio_segments
 
+
     def refine_timestamp(self, audio: AudioType, sr: int,
                          whisper_res: Result, qwen_res: Result,
                          audio_segments: list[AudioSegment]) -> Result:
@@ -827,7 +828,6 @@ class TranscriberMixin:
             console.print(f"[yellow]⚠ Video preview skipped: {e}[/]")
             
 
-
     def transcribe(self, audio: AudioType, audio_segments: list[AudioSegment] | None = None, lyrics: str | None = None, sr: int | None = None) -> Result:
         raise NotImplementedError()
 
@@ -871,7 +871,7 @@ class QwenTranscribe(TranscriberMixin):
                             ))
                         results.append(Segment(words=seg_words, language=seg.language))
             except Exception:
-                logger.exception("!!! Whisper Transcription Error:")
+                logger.exception("!!! Qwen Transcription Error:")
                 raise
         results.sort(key=lambda x: x.words[0].start if x.words else 0.0)
         logger.debug(">> Qwen Transcription:")

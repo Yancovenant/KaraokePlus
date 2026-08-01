@@ -56,7 +56,7 @@ class Aligner:
                         original=w, token=token))
         return tokens
 
-    def align(self, audio: torch.Tensor, sr:int, result: Result, audio_segments: List[AudioSegment]) -> Result:
+    def align(self, audio: torch.Tensor, sr:int, result: Result, audio_segments: list[AudioSegment]) -> Result:
         env.torch; import torch, copy  # type: ignore # noqa: B018, I001
         audio = _process_audio(audio, sr, self.sr)
         results = []
