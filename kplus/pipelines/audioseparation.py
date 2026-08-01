@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from demucs.demucs import Demucs  # type: ignore
     from demucs.hdemucs import HDemucs  # type: ignore
     from demucs.htdemucs import HTDemucs  # type: ignore
-    Model = Union[Demucs, HDemucs, HTDemucs]
+    Model = Union[Demucs, HDemucs, HTDemucs]  # noqa: UP007
 
     from .utils import AudioType
 
@@ -97,31 +97,31 @@ class DemucsSeparator(SeparatorMixin):
         self.shifts = options.shifts
 
     def _apply_model(self,
-            model: Union[BagOfModels, Model],
-            mix: Union[torch.Tensor, TensorChunk],
+            model: BagOfModels | Model,
+            mix: torch.Tensor | TensorChunk,
             shifts: int = 1, split: bool = True,
             overlap: float = 0.25, transition_power: float = 1.,
-            progress: bool = False, segment: Optional[float] = None,
+            progress: bool = False, segment: float | None = None,
             pbar=None, model_idx: str = "") -> torch.Tensor:
         """ Code purely from demucs file
         """
-        env.demucs, env.torch
-        from demucs.utils import center_trim, DummyPoolExecutor
-        from demucs.apply import BagOfModels, TensorChunk, tensor_chunk
-        from demucs.htdemucs import HTDemucs
-        import torch
+        env.demucs, env.torch  # noqa: B018
+        from demucs.utils import center_trim, DummyPoolExecutor  # type: ignore # noqa: I001
+        from demucs.apply import BagOfModels, TensorChunk, tensor_chunk # type: ignore
+        from demucs.htdemucs import HTDemucs # type: ignore
+        import torch # type: ignore
         
         pool = DummyPoolExecutor()
-        kwargs: Dict[str, Any] = {'shifts': shifts, 'split': split,
+        kwargs: dict[str, Any] = {'shifts': shifts, 'split': split,
                                     'overlap': overlap, 'transition_power': transition_power,
                                     'progress': progress, 'segment': segment,
                                     'pbar': pbar, 'model_idx': model_idx}
-        out: Union[float, torch.Tensor]
+        out: float | torch.Tensor
         if isinstance(model, BagOfModels):
             # Special treatment for bag of model.
             # We explicitely apply multiple times `apply_model` so that the random shifts
             # are different for each model.
-            estimates: Union[float, torch.Tensor] = 0.
+            estimates: float | torch.Tensor = 0.
             totals = [0.] * len(model.sources)
             total_models = len(model.models)
             for i, (sub_model, model_weights) in enumerate(zip(model.models, model.weights)):
