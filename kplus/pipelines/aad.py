@@ -92,8 +92,8 @@ class AAD:
             hop_length = int((sr / 1000) * precision_ms) # if sr == 44100 and precision_ms == 1, hop_length = 44 samples
             frame_length = int(hop_length * 1.5) # 150% of hop_length = 66 samples
             # Add filter?
-            # sos = scipy.signal.butter(10, [300, 3000], btype='bandpass', fs=sr, output='sos')
-            # audio = scipy.signal.sosfilt(sos, audio)
+            sos = scipy.signal.butter(10, [300, 3000], btype='bandpass', fs=sr, output='sos')
+            audio = scipy.signal.sosfilt(sos, audio)
             rms = librosa.feature.rms(y=audio, frame_length=frame_length, hop_length=hop_length)[0]
             rms_times = librosa.frames_to_time(np.arange(len(rms)),sr=sr, hop_length=hop_length)
             uniform_f_length_sec = 0.5 #500ms original
@@ -217,7 +217,7 @@ class AAD:
                 if (end_t - start_t) >= min_segment_sec:
                     audio_segments.append(AudioSegment(start=start_t, end=end_t))
 
-        return audio_segments
+        return audio, audio_segments
         ###
 
         env.scipy, env.librosa  # noqa: B018
