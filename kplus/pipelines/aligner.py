@@ -1,23 +1,24 @@
 from __future__ import annotations
 
-import difflib
 import logging
 import re
 import string
 from collections import defaultdict
 from types import SimpleNamespace
-from typing import TYPE_CHECKING, List
+from typing import TYPE_CHECKING
 
 from kplus.environment import env
 from kplus.tools.progress import MainProgress
 
 from .aad import AudioSegment
 from .transcriber import Result, Segment, WordTiming
-from .utils import AudioType, _process_audio
+from .utils import _process_audio
 
 if TYPE_CHECKING:
     import numpy as np  # type: ignore
     import torch  # type: ignore
+
+    from .utils import AudioType
 
 
 logger = logging.getLogger(__name__)
