@@ -134,6 +134,8 @@ class AudioLoader:
         return wav
 
     def _process_audio(self, audio: AudioType, **kwargs) -> np.ndarray:
+        kplus.env.numpy, kplus.env.torch # noqa: B018
+        import torch, numpy as np  # type: ignore  # noqa: I001
         if isinstance(audio, (str, Path)):
             self.audio_path = str(audio)
             streams = kwargs.pop("streams", 0)
