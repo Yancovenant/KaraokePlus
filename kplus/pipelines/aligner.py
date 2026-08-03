@@ -408,7 +408,7 @@ class ReferenceAligner:
         super_phrases: list[tuple[list[WordTiming], AudioSegment, int, int]] = self._2superlines(sorted_indices, lines_map, line_to_segments, seg_index_map)
         final_segments, final_audio_segments = self._interpolate_deleted_words(super_phrases)
         if self.verbose:
-            env.console; from rich.console import Console; from rich.table import Table  # type: ignore  # noqa: B018, I001
+            env.rich; from rich.console import Console; from rich.table import Table  # type: ignore  # noqa: B018, I001
             console = Console()
             console.rule("[bold bright_cyan]Reference Timestamps (Final State)[/]")
             for line_idx in sorted_indices:
