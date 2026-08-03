@@ -62,7 +62,7 @@ class Transcriber:
                    sr: int | None = None) -> Result:
         audio_loader = AudioLoader(audio, samplerate=self.sr, channels=1)
         audio = audio_loader.audio_np
-        logger.debug("Audio", audio_loader)
+        logger.debug(f"Audio: {audio_loader}")
         if not audio_segments:
             duration = len(audio) / self.sr
             audio_segments = [AudioSegment(start=0.0, end=duration)]
