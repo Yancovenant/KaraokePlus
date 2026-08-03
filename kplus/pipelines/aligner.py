@@ -67,7 +67,7 @@ class AlignerAny:
                         original=w, token=token))
         return tokens
 
-    def default_align(self, audio_slice: np.ndarray, res: Segment, safe_start: float) -> SimpleNamespace:
+    def default_align(self, audio_slice: np.ndarray, res: Segment) -> SimpleNamespace:
         env.torch; import torch  # type: ignore # noqa: B018, I001
         audio_slice = torch.from_numpy(audio_slice).unsqueeze(0)
         tokens = self.default_tokenize(res.text)
@@ -135,7 +135,7 @@ class AlignerAny:
                             results.append(Segment(words=seg_words))
                             main_bar.update(1)
                         elif is_default_model:
-                            align_results = self.default_align(self, audio_slice, res, safe_start)
+                            align_results = self.default_align(audio_slice, res)
                             char_idx, char_spans, ratio = 0, align_results.char_spans, align_results.ratio
                             seg_words = []
                             for i, tok in enumerate(align_results.tokens):

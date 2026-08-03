@@ -94,8 +94,6 @@ class Transcriber:
                     batch_result =  self.model.transcribe(audio=audio_chunk_list, context=None, return_time_stamps=True,)
                     logger.debug(f"Qwen ASR model returned {len(batch_result)} segments")
                     for seg, aseg in zip(batch_result, audio_segments):
-                        from rich import inspect
-                        inspect(seg)
                         main_bar.update(1)
                         if seg.time_stamps is not None:
                             seg_words = []
