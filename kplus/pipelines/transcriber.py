@@ -47,12 +47,12 @@ class Transcriber:
             env.stable_ts, env.faster_whisper  # noqa: B018
             import stable_whisper  # type: ignore
             self.beamsize = kwargs.pop("beamsize")
+            self.max_threads = max(1, kwargs.pop("max_threads"))
             compute_type = "float16" if env.device.type == "cuda" else "float32"
             self.model = stable_whisper.load_faster_whisper(
                 modelname, device=env.device.type,
-                compute_type=compute_type,
+                compute_type=compute_type, num_workers=self.max_threads,
                 **kwargs)
-            self.max_threads = max(1, kwargs.get("max_threads"))
         return self.model
 
     def transcribe(self,
