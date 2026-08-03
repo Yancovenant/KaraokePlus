@@ -70,6 +70,8 @@ class Karaoke(Command):
         aad_opts = SimpleNamespace(verbose=False, precision_ms=0.5, sr=sep_info.sr)
         _,audio_segments = AAD(aad_opts).get_audio_segments(sep_info.vocs_path)
         logger.info(f"Finished Getting Audio Segments -- {len(audio_segments)} segments")
+        for aseg in audio_segments:
+            logger.debug(f"Segment: {aseg.h_start:.3f} - {aseg.h_end:.3f} ({aseg.duration:.3f})")
         
         # At this point i think we wanna convert the sampling rate to be 16000 since both uses that?
         # 2.5 make the audio_np available and pass it then to the rest (using sr 16KHz for now for everything)
