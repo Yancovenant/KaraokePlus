@@ -152,7 +152,7 @@ class AudioLoader:
         elif isinstance(audio, torch.Tensor):
             self.audio_tensor = audio
         elif isinstance(audio, np.ndarray):
-            self.audio_tensor = torch.from_numpy(audio)
+            self.audio_tensor = torch.from_numpy(audio).unsqueeze(0)
         else:
             raise TypeError(f"Unsupported audio type: {type(audio)}")
         self.audio_np = self.audio_tensor.detach().cpu().numpy().squeeze()
