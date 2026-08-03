@@ -89,7 +89,6 @@ class AudioLoader:
     def _read_audio(self, seek_time=None, duration=None,
                     streams=slice(None), samplerate=None,
                     channels=None):
-        print("Kwargs", seek_time, duration, streams, samplerate, channels)
         kplus.env.ffmpeg, kplus.env.numpy, kplus.env.torch # noqa: B018
         import torch, numpy as np  # type: ignore  # noqa: I001
         streams = np.array(range(len(self)))[streams]
@@ -106,7 +105,6 @@ class AudioLoader:
             command = ['ffmpeg', '-y']
             command += ['-loglevel', 'panic']
             if seek_time:
-                print("SEEEK", seek_time)
                 command += ['-ss', str(seek_time)]
             command += ['-i', str(self.audio_path)]
             for stream, filename in zip(streams, filenames):
@@ -138,7 +136,8 @@ class AudioLoader:
     def _process_audio(self, audio: AudioType, **kwargs) -> np.ndarray:
         if isinstance(audio, (str, Path)):
             self.audio_path = str(audio)
-            self.audio_tensor = self._read_audio(**kwargs)
+            streams = kwargs.pop("streams", 0)
+            self.audio_tensor = self._read_audio(streams=streams, **kwargs)
         elif isinstance(audio, torch.Tensor):
             self.audio_tensor = audio
         elif isinstance(audio, np.ndarray):

@@ -235,10 +235,10 @@ class DemucsSeparator(SeparatorMixin):
         num_models = len(self.model.models) if hasattr(self.model, 'models') else 1
         with MainProgress(total=(num_chunks * num_models) * max(1, self.shifts), desc="Separating...", unit="chunk") as main_bar:
             out = self._apply_model(self.model,
-                                        ((wav - mean) / std)[None],
-                                        progress=True, shifts=self.shifts,
-                                        overlap=self.overlap, segment=self.segment,
-                                        pbar=main_bar)
+                                    ((wav - mean) / std)[None],
+                                    progress=True, shifts=self.shifts,
+                                    overlap=self.overlap, segment=self.segment,
+                                    pbar=main_bar)
         out = out * std + mean
         res = dict(zip(self.model.sources, out[0]))
         vocals = res["vocals"]
