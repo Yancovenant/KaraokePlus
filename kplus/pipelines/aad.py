@@ -206,7 +206,7 @@ class AAD:
     def get_audio_segments(self, audio: AudioType) -> tuple[np.ndarray, list[AudioSegment]]:
         env.numpy; import numpy as np # type: ignore  # noqa: B018, I001
         from scipy.ndimage import label, find_objects # type: ignore
-        audio_loader = AudioLoader(audio)
+        audio_loader = AudioLoader(audio, channels=1)
         if self.sr == None:
             self.sr = audio_loader.samplerate()
         audio = audio_loader.audio_np
