@@ -28,6 +28,7 @@ class AAD:
         import librosa; self.librosa = librosa  # type: ignore  # noqa: I001
         self.precision_ms = options.precision_ms
         self.verbose = options.verbose
+        self.sr = None
         if options.sr is not None:
             self._populate_sr(options.sr)
         if self.verbose:
