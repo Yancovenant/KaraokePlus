@@ -27,13 +27,13 @@ class Transcriber:
             import torch # type: ignore
             self.model = Qwen3ASRModel.from_pretrained(
                 "Qwen/Qwen3-ASR-1.7B",
-                dtype=torch.bfloat16,
+                dtype=torch.float32,
                 device_map=env.device.type,
                 attn_implementation="sdpa",
                 max_inference_batch_size=-1, # Batch size limit for inference. -1 means unlimited. Smaller values can help avoid OOM.
                 max_new_tokens=4096, # Maximum number of tokens to generate. Set a larger value for long audio input.
                 forced_aligner="Qwen/Qwen3-ForcedAligner-0.6B",
-                forced_aligner_kwargs={"dtype": torch.bfloat16,
+                forced_aligner_kwargs={"dtype": torch.float32,
                                         "device_map": env.device.type,
                                         "attn_implementation": "sdpa",},)
         else:
