@@ -85,7 +85,7 @@ class Transcriber:
                                 score=float(w.probability), word=str(w.word)))
                         results.append(Segment(words=seg_words, language=batch_result.language))
                 elif self.model.__module__.startswith('qwen_asr.'):
-                    logger.debug(f"Running Qwen ASR model with {len(audio_segments)} segments and config: {self.sr}, {reference}")
+                    logger.debug(f"Running Qwen ASR model with {len(audio_segments)} segments and config: {self.sr}")
                     audio_chunk_list = []
                     for seg in audio_segments:
                         start, end = int(seg.start * self.sr), int(seg.end * self.sr)
