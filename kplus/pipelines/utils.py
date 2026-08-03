@@ -58,6 +58,7 @@ def convert_audio_channels(wav, channels=2):
 
 class AudioLoader:
     def __init__(self, audio: AudioType, **kwargs):
+        self.audio_path = "None"
         self._process_audio(audio, **kwargs)
 
     @cached_property
