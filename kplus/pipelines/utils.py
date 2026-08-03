@@ -104,7 +104,7 @@ class AudioLoader:
         with temp_filenames(len(streams)) as filenames:
             command = ['ffmpeg', '-y']
             command += ['-loglevel', 'panic']
-            if seek_time:
+            if seek_time is not None:
                 command += ['-ss', str(seek_time)]
             command += ['-i', str(self.audio_path)]
             for stream, filename in zip(streams, filenames):
@@ -142,7 +142,7 @@ class AudioLoader:
         elif isinstance(audio, np.ndarray):
             self.audio_tensor = torch.from_numpy(audio)
         else:
-            raise ValueError(f"Unsupported audio type: {type(audio)}")
+            raise TypeError(f"Unsupported audio type: {type(audio)}")
         self.audio_np = self.audio_tensor.detach().cpu().numpy().squeeze()
 
 
