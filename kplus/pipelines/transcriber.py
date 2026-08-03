@@ -31,7 +31,7 @@ class Transcriber:
                 and torch.cuda.get_device_capability()[0] >= 8
                 else torch.float16
             )
-            device_map = f"cuda:{'1' if torch.cuda.device_count() > 1 else '0'}" if env.device.type == "cuda" else env.device.type
+            device_map = "auto" if env.device.type == "cuda" else env.device.type
             self.model = Qwen3ASRModel.from_pretrained(
                 "Qwen/Qwen3-ASR-1.7B",
                 dtype=dtype,
