@@ -25,6 +25,10 @@ logger = logging.getLogger(__name__)
 
 class AlignerAny:
 
+    def __init__(self):
+        self.is_qwen = False
+        self.is_whisper = False
+
     def populate_model(self, model):
         self.sr = 16000 # qwen and whisper
         self.model = model
