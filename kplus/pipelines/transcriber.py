@@ -25,16 +25,17 @@ class Transcriber:
             env.torchvision, env.qwen_asr  # noqa: B018
             from qwen_asr import Qwen3ASRModel  # type: ignore # noqa: I001
             import torch # type: ignore
+            device_map = f"cuda:{'1' if torch.cuda.device_count() > 1 else '0'}" if env.device.type == "cuda" else env.device.type
             self.model = Qwen3ASRModel.from_pretrained(
                 "Qwen/Qwen3-ASR-1.7B",
-                dtype=torch.float32,
-                device_map=env.device.type,
+                dtype=torch.bfloat32 if torch.cuda.is_bf16_supported() else torch.float32,
+                device_map=device_map,
                 attn_implementation="sdpa",
-                max_inference_batch_size=-1, # Batch size limit for inference. -1 means unlimited. Smaller values can help avoid OOM.
+                max_inference_batch_size=8, # Batch size limit for inference. -1 means unlimited. Smaller values can help avoid OOM.
                 max_new_tokens=4096, # Maximum number of tokens to generate. Set a larger value for long audio input.
                 forced_aligner="Qwen/Qwen3-ForcedAligner-0.6B",
-                forced_aligner_kwargs={"dtype": torch.float32,
-                                        "device_map": env.device.type,
+                forced_aligner_kwargs={"dtype": torch.bfloat32 if torch.cuda.is_bf16_supported() else torch.float32,
+                                        "device_map": device_map,
                                         "attn_implementation": "sdpa",},)
         else:
             env.stable_ts, env.faster_whisper  # noqa: B018
