@@ -7,7 +7,7 @@ from kplus.environment import env
 from kplus.tools.progress import MainProgress
 
 from .aad import AudioSegment
-from .utils import AudioLoader, AudioLoader, Result, Segment, WordTiming, _process_audio, sec2ass
+from .utils import AudioLoader, Result, Segment, WordTiming
 
 if TYPE_CHECKING:
     from .utils import AudioType
