@@ -8,15 +8,14 @@ from typing import TYPE_CHECKING
 from kplus.environment import env
 from kplus.pipelines import (
     AAD,
-    Aligner,
+    AlignerAny,
+    ReferenceAligner,
     Refiner,
     SeparatorMixin,
-    TranscriberMixin,
+    Transcriber,
     get_track_file,
 )
-from kplus.pipelines.aligner import AlignerAny, ReferenceAligner
-from kplus.pipelines.transcriber import Transcriber
-from kplus.pipelines.utils import AudioLoader, _process_audio
+from kplus.pipelines.utils import AudioLoader
 from kplus.tools.config import config
 from kplus.tools.render import Render
 
