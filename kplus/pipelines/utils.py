@@ -1,21 +1,158 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from itertools import groupby, pairwise
+import subprocess
+from dataclasses import dataclass
+from functools import cached_property
+from itertools import groupby
+import json
 from pathlib import Path
 from typing import TYPE_CHECKING, TypeAlias
-
+from contextlib import contextmanager
 import kplus
+import os
+import tempfile
+
 
 if TYPE_CHECKING:
     import numpy as np, torch # type: ignore  # noqa: I001
     AudioType : TypeAlias = "torch.Tensor | np.ndarray | str"
 
 
-def load_audio(audio_path: str, sr: float, channels: int) -> torch.Tensor:
+@contextmanager
+def temp_filenames(count: int, delete=True):
+    names = []
+    try:
+        for _ in range(count):
+            names.append(tempfile.NamedTemporaryFile(delete=False).name)
+        yield names
+    finally:
+        if delete:
+            for name in names:
+                os.unlink(name)
+
+def convert_audio_channels(wav, channels=2):
+    """Convert audio to the given number of channels."""
+    *shape, src_channels, length = wav.shape
+    if src_channels == channels:
+        pass
+    elif channels == 1:
+        # Case 1:
+        # The caller asked 1-channel audio, but the stream have multiple
+        # channels, downmix all channels.
+        wav = wav.mean(dim=-2, keepdim=True)
+    elif src_channels == 1:
+        # Case 2:
+        # The caller asked for multiple channels, but the input file have
+        # one single channel, replicate the audio over all channels.
+        wav = wav.expand(*shape, channels, length)
+    elif src_channels >= channels:
+        # Case 3:
+        # The caller asked for multiple channels, and the input file have
+        # more channels than requested. In that case return the first channels.
+        wav = wav[..., :channels, :]
+    else:
+        # Case 4: What is a reasonable choice here?
+        raise ValueError('The audio file has less channels than requested but is not mono.')
+    return wav
+
+
+class AudioLoader:
+    def __init__(self, audio: AudioType, **kwargs):
+        self._process_audio(self.audio, **kwargs)
+
+    @cached_property
+    def info(self):
+        stdout_data = subprocess.check_output([
+            'ffprobe', "-loglevel", "panic",
+            str(self.audio_path), '-print_format', 'json', '-show_format', '-show_streams'
+        ])
+        return json.loads(stdout_data.decode('utf-8'))
+
+    @property
+    def duration(self):
+        return float(self.info['format']['duration'])
+
+    def channels(self, stream=0):
+        return int(self.info['streams'][self._audio_streams[stream]]['channels'])
+
+    def samplerate(self, stream=0):
+        return int(self.info['streams'][self._audio_streams[stream]]['sample_rate'])
+
+    @property
+    def _audio_streams(self):
+        return [index for index, stream in enumerate(self.info["streams"])
+                if stream["codec_type"] == "audio"]
+
+    def __len__(self):
+        return len(self._audio_streams)
+
+    def _read_audio(self, seek_time=None, duration=None,
+                    streams=slice(None), samplerate=None,
+                    channels=None):
+        kplus.env.ffmpeg, kplus.env.numpy, kplus.env.torch # noqa: B018
+        import torch, numpy as np  # type: ignore  # noqa: I001
+        streams = np.array(range(len(self)))[streams]
+        single = not isinstance(streams, np.ndarray)
+        if single:
+            streams = [streams]
+        if duration is None:
+            target_size = None
+            query_duration = None
+        else:
+            target_size = int((samplerate or self.samplerate()) * duration)
+            query_duration = float((target_size + 1) / (samplerate or self.samplerate()))
+        with temp_filenames(len(streams)) as filenames:
+            command = ['ffmpeg', '-y']
+            command += ['-loglevel', 'panic']
+            if seek_time:
+                command += ['-ss', str(seek_time)]
+            command += ['-i', str(self.audio_path)]
+            for stream, filename in zip(streams, filenames):
+                command += ['-map', f'0:{self._audio_streams[stream]}']
+                if query_duration is not None:
+                    command += ['-t', str(query_duration)]
+                command += ['-threads', '1']
+                command += ['-f', 'f32le']
+                if samplerate is not None:
+                    command += ['-ar', str(samplerate)]
+                command += [filename]
+
+            subprocess.run(command, check=True)
+            wavs = []
+            for stream, filename in zip(streams, filenames):
+                wav = np.fromfile(filename, dtype=np.float32)
+                wav = torch.from_numpy(wav)
+                wav = wav.view(-1, self.channels(stream)).t()
+                if channels is not None:
+                    wav = convert_audio_channels(wav, channels)
+                if target_size is not None:
+                    wav = wav[..., :target_size]
+                wavs.append(wav)
+        wav = torch.stack(wavs, dim=0)
+        if single:
+            wav = wav[0]
+        return wav
+
+    def _process_audio(self, audio: AudioType, **kwargs) -> np.ndarray:
+        if isinstance(audio, (str, Path)):
+            self.audio_path = str(audio)
+            self.audio_tensor = self._read_audio(audio, **kwargs)
+        elif isinstance(audio, torch.Tensor):
+            self.audio_tensor = audio
+        elif isinstance(audio, np.ndarray):
+            self.audio_tensor = torch.from_numpy(audio)
+        else:
+            raise ValueError(f"Unsupported audio type: {type(audio)}")
+        self.audio_np = self.audio_tensor.detach().cpu().numpy().squeeze()
+
+
+def load_audio(audio_path: str, sr: float, channels: int, return_sr: bool = False) -> torch.Tensor:
     kplus.env.demucs  # noqa: B018
     from demucs.audio import AudioFile  # type: ignore
-    return AudioFile(str(audio_path)).read(
+    audio_file = AudioFile(str(audio_path))
+    if return_sr:
+        return audio_file.read(streams=0, samplerate=sr, channels=channels), audio_file.samplerate()
+    return audio_file.read(
         streams=0, samplerate=sr, channels=channels
     )
 
@@ -24,17 +161,21 @@ def convert_audio(audio: torch.Tensor, fromsr: float, tosr: float, channels=int)
     from demucs.audio import convert_audio as julius_resampler  # type: ignore
     return julius_resampler(audio, fromsr, tosr, channels)
 
-
-def _process_audio(audio: AudioType, from_sr: int | None, to_sr: int | None) -> np.ndarray:
+def _process_audio(audio: AudioType, from_sr: int | None, to_sr: int | None, return_sr: bool = False) -> np.ndarray:
     kplus.env.numpy, kplus.env.torch, kplus.env.ffmpeg  # noqa: B018
     import numpy as np, torch  # type: ignore  # noqa: I001
     if isinstance(audio, torch.Tensor):
         assert from_sr is not None, "Passing ``torch.Tensor`` require to also have ``sr`` included"
         audio = convert_audio(audio, from_sr, to_sr, 1)
     elif isinstance(audio, (str, Path)):
-        audio: torch.Tensor = load_audio(audio, to_sr, 1)
+        if from_sr is None or return_sr:
+            audio, from_sr = load_audio(audio, to_sr, 1, return_sr=return_sr)
+        else:
+            audio: torch.Tensor = load_audio(audio, to_sr, 1)
     if not isinstance(audio, np.ndarray):
         audio = audio.detach().cpu().numpy().squeeze()
+    if return_sr:
+        return audio, from_sr
     return audio
 
 

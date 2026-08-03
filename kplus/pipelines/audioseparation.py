@@ -10,6 +10,7 @@ from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, Dict, Optional, Union
 
 from kplus.environment import env
+from kplus.pipelines.utils import AudioLoader
 from kplus.tools.config import config
 from kplus.tools.progress import MainProgress
 
@@ -220,14 +221,10 @@ class DemucsSeparator(SeparatorMixin):
             return center_trim(out, length)
 
     def separate(self, audio: AudioType, external_id: int | None = None):
-        import torch  # type: ignore  # noqa: I001
-        from .utils import _process_audio, load_audio
-        from demucs.audio import save_audio # type: ignore
-        filename = Path(str(audio)).stem
-        if isinstance(audio, (str, Path)):
-            wav = load_audio(str(audio), self.sr, self.ac)
-        else:
-            raise TypeError(f"Currently Support str input path but got {type(audio)}")
+        from demucs.audio import save_audio  # type: ignore
+        audio_loader = AudioLoader(audio, samplerate=self.sr, channels=self.ac)
+        wav = audio_loader.audio_tensor
+        filename = Path(str(audio_loader.audio_path)).stem
 
         ref = wav.mean(0)
         mean = ref.mean()

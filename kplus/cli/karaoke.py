@@ -9,20 +9,22 @@ from kplus.environment import env
 from kplus.pipelines import (
     AAD,
     Aligner,
+    Refiner,
     SeparatorMixin,
     TranscriberMixin,
     get_track_file,
-    Refiner
 )
-from kplus.pipelines.utils import _process_audio
+from kplus.pipelines.aligner import AlignerAny, ReferenceAligner
+from kplus.pipelines.transcriber import Transcriber
+from kplus.pipelines.utils import AudioLoader, _process_audio
 from kplus.tools.config import config
 from kplus.tools.render import Render
 
 from .command import Command
 
 if TYPE_CHECKING:
-    from kplus.pipelines.transcriber import Result
     from kplus.pipelines.aad import AudioSegment
+    from kplus.pipelines.transcriber import Result
 
 logger = logging.getLogger(__name__)
 
@@ -66,21 +68,24 @@ class Karaoke(Command):
         logger.info(f">> SR: {sep_info.sr}")
 
         # Step 2 get audio segment
-        _,audio_segments = AAD(False).get_audio_segments(sep_info.vocs_path, sr=sep_info.sr)
+        aad_opts = SimpleNamespace(verbose=False, precision_ms=0.5, sr=sep_info.sr)
+        _,audio_segments = AAD(aad_opts).get_audio_segments(sep_info.vocs_path)
         logger.info(f"Finished Getting Audio Segments -- {len(audio_segments)} segments")
         
         # At this point i think we wanna convert the sampling rate to be 16000 since both uses that?
         # 2.5 make the audio_np available and pass it then to the rest (using sr 16KHz for now for everything)
-        audio_np = _process_audio(sep_info.vocs_path, from_sr=sep_info.sr, to_sr=16000)
+        audio_loader = AudioLoader(sep_info.vocs_path, samplerate=16000, channels=1)
+        audio_np = audio_loader.audio_np
 
         # Step 3 Transcribe
-        trans_opts = SimpleNamespace(verbose=True, modeltype="whisper", modelname="tiny", beamsize=5, max_threads=2)
-        trans_class = TranscriberMixin.get_model(trans_opts)
-        trans_result = trans_class.transcribe(audio_np, audio_segments=audio_segments, sr=sep_info.sr, lyrics=info.lyrics)
+        trans_class = Transcriber(verbose=True)
+        trans_class.load_model("qwen")
+        trans_result =  trans_class.transcribe(audio_np, audio_segments, info.lyrics)
         logger.info(f"Finished Transcribing -- {len(trans_result.segments)} segments")
-        ref_segments, new_audio_segments = trans_class.get_reference_timestamp(
+        ref_segments, new_audio_segments = ReferenceAligner(verbose=True).get_reference_timestamp(
             trans_result, info.lyrics, audio_segments
         )
+
         ai_align_result = self._align_many(trans_class, audio_np, ref_segments, new_audio_segments)
         logger.info(f"Finished Alignment -- {len(ai_align_result)} AI Aligner, with {(len(seg) for ai_segs in ai_align_result for seg in ai_segs.segments)}")
         # Already cleaned
@@ -93,20 +98,19 @@ class Karaoke(Command):
         Render(with_ass=True).render(video_filepath=filepath, inst_path=sep_info.inst_path, duration=info.duration, result=refine_result)
 
     
-    def _align_many(self, trans_class, audio, ref_segments, audio_segments):
-        # Whisper
-        fa_res_1 = trans_class.align(audio, None, ref_segments, audio_segments)
-        del trans_class.model, trans_class
+    def _align_many(self, trans_class, audio_np, ref_segments, audio_segments):
+        # qwen...
+        model = trans_class.model
+        fa_res_qwen = AlignerAny().align(model, audio_np, None, ref_segments, audio_segments)
+        del model, trans_class.model, trans_class
         env.clean()
-        # Qwen
-        trans_opts = SimpleNamespace(verbose=True,modeltype="qwen")
-        trans_class = TranscriberMixin.get_model(trans_opts)
-        fa_res_2 = trans_class.align(audio, None, ref_segments, audio_segments)
-        del trans_class.model, trans_class
+        # Whisper
+        trans_class = Transcriber(verbose=True)
+        model = trans_class.load_model("tiny", beamsize=10, max_threads=2)
+        fa_res_whisper = AlignerAny().align(model, audio_np, None, ref_segments, audio_segments)
+        del model, trans_class.model, trans_class
         env.clean()
         # MMS FA
-        align_class = Aligner()
-        fa_res_3 = align_class.align(audio, None, ref_segments, audio_segments)
-        del align_class.model, align_class.tokenizer, align_class.aligner, align_class
+        fa_res_def = AlignerAny().align(None, audio_np, None, ref_segments, audio_segments)
         env.clean()
-        return (fa_res_1, fa_res_2, fa_res_3)
+        return (fa_res_qwen, fa_res_whisper, fa_res_def)

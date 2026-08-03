@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 from kplus.environment import env
 from kplus.tools.progress import MainProgress
 
-from .utils import AudioSegment, _process_audio
+from .utils import AudioLoader, AudioSegment, _process_audio
 
 if TYPE_CHECKING:
     import numpy as np  # type: ignore
@@ -22,296 +22,216 @@ logger = logging.getLogger(__name__)
 class AAD:
     """ Audio Activity Detection via RMS/DB 
     """
-    def __init__(self, visualize: bool = False):
-        self.visual = visualize
-        env.matplotlib  # noqa: B018
-        import matplotlib.pyplot as plt # type: ignore  # noqa: I001
-        plt.style.use('seaborn-v0_8-darkgrid')
-        plt.rcParams['figure.figsize'] = (20, 12)
-        plt.rcParams['font.size'] = 10
+    def __init__(self, options):
+        env.librosa, env.scipy # noqa: B018
+        import scipy; self.scipy = scipy  # type: ignore  # noqa: I001
+        import librosa; self.librosa = librosa  # type: ignore  # noqa: I001
+        self.precision_ms = options.precision_ms
+        self.sr = options.sr
+        self.verbose = options.verbose
+        self.hop_length = int((self.sr / 1000) * self.precision_ms) # if sr == 44100 and precision_ms == 1, hop_length = 44 samples
+        self.frame_length = int(self.hop_length * 1.5) # 150% of hop_length = 66 samples
+        if self.verbose:
+            env.plotly  # noqa: B018
+            import plotly.graph_objects as go  # type: ignore
+            from plotly.subplots import make_subplots  # type: ignore
+            from plotly_resampler import register_plotly_resampler  # type: ignore
+            register_plotly_resampler(mode='auto')
+            self.go = go
+            self.make_subplots = make_subplots
 
-        import plotly.graph_objects as go  # type: ignore
-        self.go = go
-    
-    def plotvisual(self, audio, sr, start_times, end_times, valley_times, rms_times, rms_smoothed, valleys, raw_valleys, raw_valleys_times, silence_threshold):
-        env.matplotlib, env.librosa  # noqa: B018
-        import matplotlib.pyplot as plt, librosa # type: ignore  # noqa: I001
-        fig, axes = plt.subplots(2, 1, figsize=(50, 10), sharex=True)
-        librosa.display.waveshow(audio, sr=sr, ax=axes[0], color='darkgray', alpha=0.5)
-        axes[0].set_title("Audio Waveform")
-        axes[0].set_ylabel("Amplitude")
-        for start, end in zip(start_times, end_times):
-            axes[0].axvspan(start, end, color='green', alpha=0.2) 
-            axes[0].axvline(x=start, color='green', linestyle='-', linewidth=1.5, alpha=0.8)
-            axes[0].axvline(x=end, color='red', linestyle='--', linewidth=1.5, alpha=0.8)
-        axes[1].plot(rms_times, rms_smoothed, label="Smoothed RMS", color='blue', linewidth=1.5)
-        axes[1].axhline(y=silence_threshold, color='black', linestyle='--', label="Silence Threshold")
-        axes[1].plot(valley_times, rms_smoothed[valleys], "mo", markersize=8, label="Detected Deepest Peak")
-        axes[1].plot(raw_valleys_times, rms_smoothed[raw_valleys], "mo", markersize=4, label="All Valleys")
-        for start, end in zip(start_times, end_times):
-            axes[1].axvspan(start, end, color='green', alpha=0.2)
-        axes[1].set_title("RMS")
-        axes[1].set_ylabel("RMS Amplitude")
-        axes[1].set_xlabel("Time (s)")
-        axes[1].legend(loc="upper right")
-        axes[1].label_outer()
-        plt.tight_layout()
-        plt.show()
-        plt.savefig("valleycuts.png", bbox_inches='tight')
-        plt.close()
+    def _get_rms(self, audio):
+        from scipy.ndimage import uniform_filter1d  # type: ignore
+        rms = self.librosa.feature.rms(y=audio, frame_length=self.frame_length, hop_length=self.hop_length)[0]
+        times = self.librosa.frames_to_time(np.arange(len(rms)), sr=self.sr, hop_length=self.hop_length)
+        uniform_f_length_sec = 0.060 #500ms original
+        frames_per_half_sec = max(1, int(uniform_f_length_sec / (self.precision_ms / 1000)))
+        rms_smoothed = uniform_filter1d(rms, size=frames_per_half_sec)
+
+        rms_noise_floor = np.percentile(rms_smoothed, 5)
+        rms_threshold = rms_noise_floor + (np.std(rms_smoothed) * 0.2)
+        rms_mask = (rms_smoothed > rms_threshold)
+
+        if self.verbose:
+            self.fig.add_trace(self.go.Scattergl(
+                x=times, y=rms_mask * np.max(rms_smoothed),
+                name="Mask (Active Audio)", fill="tozeroy",
+                line={"color": "red", "width": 1, "shape": "hv"}, # 'hv' draws sharp 90-degree square waves
+            ), row=2, col=1)
+            self.fig.add_trace(self.go.Scatter(
+                x=times, y=rms_smoothed, name="RMS Smooth", fill="tozeroy",
+                    line={"color": "#ffaa00", "width": 2}
+            ), row=2, col=1)
+            self.fig.add_hline(y=rms_threshold, line_dash="dot", line_color="magenta", row=2, col=1,
+                annotation_text="RMS Threshold", annotation_position="top right")
+        return times, rms_smoothed, rms_mask
+
+    def _get_valleys(self, rms_smoothed, rms_times):
+        inverted_rms = -rms_smoothed
+        raw_valleys = self.scipy.signal.find_peaks(inverted_rms, prominence=0.01)[0]
+        if self.verbose:
+            self.fig.add_trace(self.go.Scattergl(
+                x=rms_times[raw_valleys], y=rms_smoothed[raw_valleys],
+                name="Valleys/Peaks", mode="markers", marker={'color': "red", 'size': 8, 'symbol': "circle"}
+            ), row=2, col=1)
+        return raw_valleys
+
+    def _get_flux(self, audio, rms_smoothed, rms_times, rms_mask):
+        import numpy as np  # type: ignore
+        from scipy.ndimage import uniform_filter1d  # type: ignore
+        flux = self.librosa.onset.onset_strength(y=audio, sr=self.sr, hop_length=self.hop_length, lag=1)
+        flux_scaled = (flux / np.max(flux)) #* np.max(rms_smoothed) if np.max(flux) > 0 else flux
+        times = self.librosa.times_like(flux, sr=self.sr, hop_length=self.hop_length)
+
+        uniform_f_length_sec = 0.060 #500ms original
+        frames_per_half_sec = max(1, int(uniform_f_length_sec / (self.precision_ms / 1000)))
+        flux_smoothed = uniform_filter1d(flux_scaled, size=frames_per_half_sec)
+
+        flux_noise_floor = np.percentile(flux_smoothed, 5)
+        flux_threshold = flux_noise_floor + (np.std(flux_smoothed) * 0.2)
+        mask_flux = (flux_smoothed > flux_threshold) & rms_mask
+        onsets = self.librosa.onset.onset_detect(
+            onset_envelope=flux_smoothed, sr=self.sr, hop_length=self.hop_length,
+            backtrack=True, delta=0.01, #normalize=False, delta=0.04
+        )
+        if self.verbose:
+            self.fig.add_trace(self.go.Scattergl(
+                x=times, y=mask_flux * np.max(flux_smoothed),
+                name="Mask (Spectral Flux)", fill="tozeroy",
+                line={"color": "cyan", "width": 1, "shape": "hv"}, # 'hv' draws sharp 90-degree square waves
+            ), row=2, col=1)
+            self.fig.add_trace(self.go.Scattergl(
+                x=times, y=flux_smoothed, name="Flux Smoothed",
+                line={"color":"#00ffcc", "width": 3},
+            ), row=2, col=1)
+            self.fig.add_trace(self.go.Scattergl(
+                x=times[onsets], y=flux_smoothed[onsets],
+                name="Onsets", mode="markers", marker={'color': "black", 'size': 4, 'symbol': "circle"}
+            ), row=2, col=1)
+            self.fig.add_hline(y=flux_threshold, line_dash="dot", line_color="cyan", row=2, col=1,
+                annotation_text="Flux Threshold", annotation_position="top right")
+        return mask_flux, onsets
+
+    def _get_final_mask(self, rms_mask, flux_mask, rms_times, rms_smoothed, onsets, raw_valleys):
+        import numpy as np  # type: ignore
+        from scipy.ndimage import binary_closing, binary_opening  # type: ignore
+        merge_gap_frames = max(1, int(140 / self.precision_ms)) # 140ms gap
+        min_width_frames = max(1, int(100 / self.precision_ms)) # 100ms width
+        raw_mask = rms_mask | flux_mask
+
+        lookahead_frames = max(1, int(150 / self.precision_ms))
+        for o in onsets[onsets < len(raw_mask)]:
+            if not raw_mask[o] and np.any(raw_mask[o : o + lookahead_frames]):
+                block_start = o + np.argmax(raw_mask[o : o + lookahead_frames])
+                raw_mask[o : block_start] = True
         
-    def get_audio_segments(self, audio: AudioType,
-                sr: int, precision_ms: float = 0.5, silence_threshold: int = 0.01,
-                min_segment_sec: float = 2.0, peak_prob_sec: float = 8.0,
-                depth_ratio: float = 0.6) -> tuple[np.ndarray, list[AudioSegment]]:
-        """ Detect audio activity RMS, Peak, Voice 300fq - 3000fq
-            Args:
-                audio: AudioType
-                sr: Sample rate
-                precision_ms: in milisecond >= 1ms
-                silence_treshold: anything below this value means silence
-                min_segment_sec: segment needs to be minimal this value if it detect
-                    a drop in the middle.
-                peak_prob_sec: the peak will be compared by average mean value
-                    of peak_prob_sec.
-                depth_ratio: control how deep a peak should be to survive the average
-                    of peak_prob_sec. 0.6 means a peak must be at least 40% quieter
-        """
-        ### New code:
-        env.scipy, env.librosa # noqa: B018
-        import librosa, scipy, numpy as np # type: ignore  # noqa: I001
-        from plotly.subplots import make_subplots # type: ignore
-        from scipy.ndimage import uniform_filter1d, median_filter
-        from scipy.ndimage import label, find_objects
-        if sr is None and isinstance(audio, (str, Path)):
-            env.demucs; from demucs.audio import AudioFile # type: ignore  # noqa: B018, I001
-            sr = AudioFile(str(audio)).samplerate()
-            logger.debug(f"Successfully get sr {sr}")
-        audio = _process_audio(audio, sr, sr)
-        with MainProgress(total=5, desc=f"Processing audio: {len(audio)} samples, {sr}Hz, {len(audio)/sr:.2f}") as main_bar:
-            hop_length = int((sr / 1000) * precision_ms) # if sr == 44100 and precision_ms == 1, hop_length = 44 samples
-            frame_length = int(hop_length * 1.5) # 150% of hop_length = 66 samples
-            # Add filter?
-            sos = scipy.signal.butter(10, [300, 3000], btype='bandpass', fs=sr, output='sos')
-            audio = scipy.signal.sosfilt(sos, audio)
-            rms = librosa.feature.rms(y=audio, frame_length=frame_length, hop_length=hop_length)[0]
-            rms_times = librosa.frames_to_time(np.arange(len(rms)),sr=sr, hop_length=hop_length)
-            uniform_f_length_sec = 0.5 #500ms original
-            frames_per_half_sec = max(1, int(uniform_f_length_sec / (precision_ms / 1000)))
-            rms_smoothed = uniform_filter1d(rms, size=frames_per_half_sec)
+        falling_edges = np.where((raw_mask[:-1] == True) & (raw_mask[1:] == False))[0]
+        max_forward_stretch_ms = 200 # Don't stretch more than 200ms into silence
+        max_forward_frames = int(max_forward_stretch_ms / self.precision_ms)
+        for edge in falling_edges:
+            valleys_after = raw_valleys[raw_valleys > edge]
+            if len(valleys_after) > 0:
+                next_valley = valleys_after[0]
+                end_point = min(next_valley, edge + max_forward_frames)
+                raw_mask[edge : end_point] = True
 
-            # Peaks
-            inverted_rms = -rms_smoothed
-            raw_valleys = scipy.signal.find_peaks(inverted_rms, prominence=0.01)[0]
+        merged_mask = binary_closing(raw_mask, structure=np.ones(merge_gap_frames))
+        final_mask = binary_opening(merged_mask, structure=np.ones(min_width_frames))
+        max_block_frames = int(10000 / self.precision_ms)
+        gap_frames = max(1, int(0.1 / self.precision_ms))
+        flux_tolerance_frames = int(50 / self.precision_ms)
+        diffs = np.diff(np.concatenate(([0], final_mask.astype(int), [0])))
+        starts = np.where(diffs == 1)[0]
+        ends = np.where(diffs == -1)[0]
+        min_width_frames = max(1, int(1000 / self.precision_ms)) # 1000ms width
+        for s, e in zip(starts, ends):
+            chunks = [(s, e)]
+            while any((ce - cs) > max_block_frames for cs, ce in chunks):
+                new_chunks = []
+                for cs, ce in chunks:
+                    if (ce - cs) > max_block_frames:
+                        # Find valleys safely inside the chunk (preserving 1000ms minimum width on both sides)
+                        valid_valleys = [v for v in raw_valleys if cs + min_width_frames <= v <= ce - min_width_frames - gap_frames]
+                        safe_split_points = []
+                        for v in valid_valleys:
+                            win_start = max(0, v - flux_tolerance_frames) # -50ms
+                            win_end = min(len(flux_mask), v + flux_tolerance_frames) # +50ms
+                            window_flux = flux_mask[win_start:win_end]
+                            # If there is ANY False in this window, it's not solid flux
+                            if not np.all(window_flux):
+                                # Find exactly WHICH frames in this window have False flux
+                                false_flux_local_indices = np.where(window_flux == False)[0]
+                                false_flux_global_indices = false_flux_local_indices + win_start
 
-            rms_noise_floor = np.percentile(rms_smoothed, 5)
-            rms_threshold = rms_noise_floor + (np.std(rms_smoothed) * 0.2)
+                                # Out of those False flux frames, find the exact one with the lowest volume
+                                best_false_idx = min(false_flux_global_indices, key=lambda idx: rms_smoothed[idx])
+                                left = best_false_idx
+                                while left > 0 and not flux_mask[left]: left -= 1
+                                right = best_false_idx
+                                while right < len(flux_mask) - 1 and not flux_mask[right]: right += 1
+                                flux_gap_width = right - left
+                                safe_split_points.append({
+                                    'idx': best_false_idx,
+                                    'gap_width': flux_gap_width
+                                })
 
-            flux = librosa.onset.onset_strength(y=audio, sr=sr, hop_length=hop_length)
-            flux_scaled = (flux / np.max(flux)) * np.max(rms_smoothed) if np.max(flux) > 0 else flux
-            flux_noise_floor = np.percentile(flux_scaled, 5)
-            flux_threshold = flux_noise_floor + (np.std(flux_scaled) * 0.2)
+                        if safe_split_points:
+                            # 1. Reject plosive (like 'd', 'p', 'b')
+                            min_word_gap_frames = int(10 / self.precision_ms) # e.g., 10ms
+                            valid_splits = [s for s in safe_split_points if s['gap_width'] >= min_word_gap_frames]
 
-            mask = (rms_smoothed > rms_threshold)
+                            if valid_splits:
+                                # 2. Pick the split with the WIDEST flux gap (the clearest breath)
+                                best_split = max(valid_splits, key=lambda s: s['gap_width'])
+                                final_split = best_split['idx']
 
-            onsets = librosa.onset.onset_detect(onset_envelope=flux, sr=sr, hop_length=hop_length,
-                                            backtrack=True, normalize=True, delta=0.04)
-            mask_flux = (flux_scaled > flux_threshold)
-            valid_flux = mask_flux & (rms_smoothed > rms_noise_floor)
+                                final_mask[final_split : final_split + gap_frames] = False
+                                new_chunks.extend([(cs, final_split), (final_split + gap_frames, ce)])
+                            else:
+                                new_chunks.append((cs, ce))
+                    else:
+                        new_chunks.append((cs, ce))
 
-            combined_mask = mask | valid_flux
-            # combined_mask[onsets[onsets < len(combined_mask)]] = False
+                if chunks == new_chunks: break # Failsafe: exit if no splits were made
+                chunks = new_chunks
+        if self.verbose:
+            self.fig.add_trace(self.go.Scattergl(
+                x=rms_times, y=final_mask * np.max(rms_smoothed),
+                name="Mask (Combined)", fill="tozeroy",
+                line={"color": "rgba(0, 255, 170, 0.5)", "width": 1, "shape": "hv"}, # 'hv' draws sharp 90-degree square waves
+            ), row=3, col=1)
+        return final_mask
 
-            merge_window_ms = 140 # 140ms
-            frames_to_bridge = max(1, int(merge_window_ms / precision_ms))
-            final_mask = combined_mask.copy()
-            lookahead_frames = max(1, int(150 / precision_ms))
-            for o in onsets[onsets < len(final_mask)]:
-                # If onset is outside a block, but a block starts shortly after...
-                if not final_mask[o] and np.any(final_mask[o : o + lookahead_frames]):
-                    # Find exactly where the block starts and fill the gap backward!
-                    block_start = o + np.argmax(final_mask[o : o + lookahead_frames])
-                    final_mask[o : block_start] = True
-            # Find every frame where the mask turns OFF (the end of a block)
-            falling_edges = np.where((final_mask[:-1] == True) & (final_mask[1:] == False))[0]
-            max_forward_stretch_ms = 200 # Don't stretch more than 200ms into silence
-            max_forward_frames = int(max_forward_stretch_ms / precision_ms)
-            for edge in falling_edges:
-                # Find the next valley that happens after this block ends
-                valleys_after = raw_valleys[raw_valleys > edge]
-                if len(valleys_after) > 0:
-                    next_valley = valleys_after[0]
-                    # Stretch forward to the valley, but cap it at max_forward_frames
-                    end_point = min(next_valley, edge + max_forward_frames)
-                    final_mask[edge : end_point] = True
-            final_mask = median_filter(final_mask, size=frames_to_bridge)
-            for v in raw_valleys:
-                if final_mask[v]:
-                    is_flux_dropping = (flux_scaled[v] <= flux_scaled[v-1]) if v > 0 else True
-                    is_flux_low = flux_scaled[v] < flux_threshold
-                    if is_flux_dropping and is_flux_low: final_mask[v] = False
-            #
-            if self.visual:
-                fig = make_subplots(rows=3, cols=1, shared_xaxes=True,
+    def get_audio_segments(self, audio: AudioType) -> tuple[np.ndarray, list[AudioSegment]]:
+        env.numpy; import numpy as np # type: ignore  # noqa: B018, I001
+        from scipy.ndimage import label, find_objects # type: ignore
+        audio_loader = AudioLoader(audio)
+        if self.sr == None:
+            self.sr = audio_loader.samplerate()
+        audio = audio_loader.audio_np
+        sos = self.scipy.signal.butter(10, [200, 5000], btype='bandpass', fs=self.sr, output='sos')
+        audio = self.scipy.signal.sosfilt(sos, audio).astype(np.float32)
+        self.fig = None
+        if self.verbose:
+            self.fig = self.make_subplots(rows=3, cols=1, shared_xaxes=True,
                     vertical_spacing=0.05, row_heights=[0.5, 0.5, 0.5],
                     subplot_titles=("Raw Waveform", "RMS", "Segmented"))
-                time_axis = np.linspace(0, len(audio) / sr, len(audio))
-                fig.add_trace(self.go.Scattergl(x=time_axis, y=audio, name="Waveform",
-                                line={"color": "#00d2ff", "width": 1}), row=1, col=1)
-                fig.add_trace(self.go.Scattergl(
-                    x=rms_times, y=rms_smoothed, name="RMS Smooth", fill="tozeroy",
-                    line={"color": "#ffaa00", "width": 2}
-                ), row=2, col=1)
-                fig.add_trace(self.go.Scattergl(
-                        x=rms_times[raw_valleys], y=rms_smoothed[raw_valleys],
-                        name="Valleys/Peaks", mode="markers", marker={'color': "red", 'size': 8, 'symbol': "circle"}
-                    ), row=2, col=1)
-                fig.add_trace(self.go.Scattergl(
-                    x=rms_times[onsets], y=rms_smoothed[onsets],
-                    name="Onsets", mode="markers", marker={'color': "green", 'size': 8, 'symbol': "triangle-up"}
-                ), row=2, col=1)
-                fig.add_trace(self.go.Scattergl(
-                    x=rms_times, y=final_mask * np.max(rms_smoothed),
-                    name="Final Mask", line={"color": "purple", "width": 2, "shape": "hv"},
-                ), row=3, col=1)
-                fig.add_trace(self.go.Scattergl(
-                    x=rms_times, y=combined_mask * np.max(rms_smoothed),
-                    name="Combined Mask", line={"color": "red", "width": 1, "shape": "hv"},
-                ), row=3, col=1)
-                fig.add_trace(self.go.Scattergl(
-                    x=rms_times, y=flux_scaled, name="Spectral Flux",
-                    line={"color": "#00ffcc", "width": 2} # Cyan color to stand out against orange
-                ), row=2, col=1)
-                fig.add_trace(self.go.Scattergl(
-                    x=rms_times, y=mask * np.max(rms_smoothed),
-                    name="Mask (Active Audio)",
-                    line={"color": "rgba(255, 0, 170, 0.5)", "width": 1, "shape": "hv"}, # 'hv' draws sharp 90-degree square waves
-                ), row=2, col=1)
-                fig.add_trace(self.go.Scattergl(
-                    x=rms_times, y=mask_flux * np.max(rms_smoothed),
-                    name="Mask (Spectral Flux)",
-                    line={"color": "rgba(0, 255, 170, 0.5)", "width": 1, "shape": "hv"}, # 'hv' draws sharp 90-degree square waves
-                ), row=2, col=1)
-                fig.add_hline(y=flux_threshold, line_dash="dot", line_color="cyan", row=2, col=1,
-                              annotation_text="Flux Threshold", annotation_position="top right")
-                fig.add_hline(y=rms_threshold, line_dash="dash", line_color="green", row=2, col=1,
-                              annotation_text="RMS Threshold", annotation_position="top left")
-                fig.add_hline(y=rms_noise_floor, line_dash="dot", line_color="blue", row=2, col=1,
-                              annotation_text="Noise Floor", annotation_position="top left")
-                fig.update_layout(template="plotly_dark", hovermode="x unified",
-                    height=675, margin={"l": 20, "r": 20, "t": 40, "b": 20},showlegend=False
-                )
-                fig.show()
-
-            audio_segments = []
-            labeled_array, num_features = label(final_mask)
-            for i in range(1, num_features + 1):
-                segment_slice = find_objects(labeled_array == i)[0]
-                start_frame = segment_slice[0].start
-                end_frame = segment_slice[0].stop - 1  # stop is exclusive, so -1 gets the last active frame
-                
-                start_t = rms_times[start_frame]
-                end_t = rms_times[end_frame]
-                
-                # Optional: Filter out segments that are too short based on your function argument
-                if (end_t - start_t) >= min_segment_sec:
-                    audio_segments.append(AudioSegment(start=start_t, end=end_t))
-
+        rms_times, rms_smoothed, rms_mask = self._get_rms(audio)
+        raw_valleys = self._get_valleys(rms_smoothed, rms_times)
+        flux_mask, onsets = self._get_flux(audio, rms_smoothed, rms_times, rms_mask)
+        final_mask = self._get_final_mask(rms_mask, flux_mask, rms_times, rms_smoothed, onsets, raw_valleys)
+        if self.verbose:
+            self.fig.update_layout(template="plotly_dark", hovermode="x unified",
+                height=675, margin={"l": 20, "r": 20, "t": 40, "b": 20},showlegend=False
+            )
+            self.fig.show()
+        audio_segments = []
+        labeled_array, num_features = label(final_mask)
+        for i in range(1, num_features + 1):
+            segment_slice = find_objects(labeled_array == i)[0]
+            start_frame = segment_slice[0].start
+            end_frame = segment_slice[0].stop - 1  # stop is exclusive, so -1 gets the last active frame
+            start_t = rms_times[start_frame]
+            end_t = rms_times[end_frame]
+            audio_segments.append(AudioSegment(start=start_t, end=end_t))
         return audio, audio_segments
-        ###
-
-        env.scipy, env.librosa  # noqa: B018
-        import librosa, scipy, numpy as np # type: ignore # noqa: I001
-        from scipy.signal import find_peaks # type: ignore
-        from scipy.ndimage import uniform_filter1d # type: ignore
-        # Quick Workaround to get sr
-        if sr is None and isinstance(audio, (str, Path)):
-            env.demucs; from demucs.audio import AudioFile # type: ignore  # noqa: B018, I001
-            sr = AudioFile(str(audio)).samplerate()
-            logger.debug(f"Successfully get sr {sr}")
-        audio = _process_audio(audio, sr, sr)
-        # If time manually given maybe?
-        with MainProgress(total=5, desc=f"Processing audio: {len(audio)} samples, {sr}Hz, {len(audio)/sr:.2f}") as main_bar:
-            main_bar.pbar.set_description("Computing RMS")
-            hop_length = int(sr / 1000) * precision_ms
-            frame_length = int(hop_length * 1.5) # 150% 
-            sos = scipy.signal.butter(10, [300, 3000], btype='bandpass', fs=sr, output='sos')
-            audio = scipy.signal.sosfilt(sos, audio)
-            rms = librosa.feature.rms(y=audio, frame_length=frame_length, hop_length=hop_length)[0]
-            main_bar.update(1)
-            main_bar.pbar.set_description("Smoothing out RMS")
-            uniform_f_length_sec = 0.060 #500ms original
-            frames_per_half_sec = max(1, int(uniform_f_length_sec / (precision_ms / 1000)))
-            rms_smoothed = uniform_filter1d(rms, size=frames_per_half_sec)
-            main_bar.update(1)
-
-            ### New
-            rms_noise_floor = np.percentile(rms_smoothed, 5)
-            rms_threshold = rms_noise_floor + (np.std(rms_smoothed) * 0.2)
-            ###
-            
-            inverted_rms = -rms_smoothed
-            min_segment_frames = int(min_segment_sec / (precision_ms / 1000))
-            main_bar.pbar.set_description("Finding out peak on an invertes RMS")
-            raw_valleys, _ = find_peaks(inverted_rms, prominence=0.01)
-            peak_prob_frames = max(1, int(peak_prob_sec / (precision_ms / 1000)))
-            local_mean = uniform_filter1d(rms_smoothed, size=peak_prob_frames)
-            valleys = []
-            for v in raw_valleys:
-                if rms_smoothed[v] < (local_mean[v] * depth_ratio):
-                    valleys.append(v)
-            valleys = np.array(valleys)
-            main_bar.update(1)
-            main_bar.pbar.set_description("Building up segments last")
-            segments = []
-            current_start = None
-            for i in range(len(rms_smoothed)):
-                # 1. If we hit a flat-line (silence), treat it as a silence breath gap
-                if rms_smoothed[i] < silence_threshold:
-                    if current_start is not None:
-                        if ((end_frame := i - 1) - current_start) < min_segment_frames and segments:
-                            # merge it if this chunk is too tiny
-                            prev_start, _ = segments[-1]
-                            segments[-1] = (prev_start, end_frame)
-                        else:
-                            segments.append((current_start, end_frame))
-                        current_start = None
-                    continue
-                # 2. If we come out of a gap, start a new segment
-                if current_start is None:
-                    current_start = i
-                    continue
-                # 3. If we hit a peak, cut exactly at the lowest point!
-                if i in valleys:
-                    # Only cut if the segment is long enough
-                    if (i - current_start) > min_segment_frames:
-                        segments.append((current_start, i))
-                        current_start = i  # Start next segment immediately (touching)
-            # Catch the final segment at the end of the song
-            if current_start is not None and current_start < len(rms_smoothed) - 1:
-                end_frame = len(rms_smoothed) - 1
-                if (end_frame - current_start) < min_segment_frames and segments:
-                    prev_start, _ = segments[-1]
-                    segments[-1] = (prev_start, end_frame)
-                else:
-                    segments.append((current_start, len(rms_smoothed) - 1))
-            main_bar.update(1)
-            main_bar.pbar.set_description("Unpacking segments...")
-            start_frames = np.array([seg[0] for seg in segments])
-            end_frames = np.array([seg[1] for seg in segments])
-            start_times = librosa.frames_to_time(start_frames, sr=sr, hop_length=hop_length)
-            end_times = librosa.frames_to_time(end_frames, sr=sr, hop_length=hop_length)
-            rms_times = librosa.frames_to_time(np.arange(len(rms)), sr=sr, hop_length=hop_length)
-            valley_times = librosa.frames_to_time(valleys, sr=sr, hop_length=hop_length)
-            raw_valleys_times = librosa.frames_to_time(raw_valleys, sr=sr, hop_length=hop_length)
-            if self.visual:
-                self.plotvisual(audio, sr, start_times, end_times, valley_times, rms_times, rms_smoothed, valleys, raw_valleys, raw_valleys_times, silence_threshold)
-            logger.debug(f">> Total Audio Segment: {len(start_times)}")
-            results = []
-            for i, (start_t, end_t) in enumerate(zip(start_times, end_times)):
-                logger.debug(f"{'':<2}{i+1}/{len(start_times)}: {start_t:.2f}s - {end_t:.2f}")
-                results.append(AudioSegment(
-                start=start_t, end=end_t))
-            main_bar.update(1)
-            return audio, results
-            
