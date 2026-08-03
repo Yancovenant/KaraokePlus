@@ -82,7 +82,7 @@ class Transcriber:
                     for seg in audio_segments:
                         start, end = int(seg.start * self.sr), int(seg.end * self.sr)
                         audio_chunk_list.append((audio[start:end], self.sr))
-                    batch_result =  self.model.transcribe(audio=audio, context=reference, return_time_stamps=True,)
+                    batch_result =  self.model.transcribe(audio=audio_chunk_list, context=reference, return_time_stamps=True,)
                     for seg, aseg in zip(batch_result, audio_segments):
                         main_bar.update(1)
                         if seg.time_stamps is not None:
