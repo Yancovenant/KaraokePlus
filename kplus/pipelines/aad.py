@@ -41,6 +41,7 @@ class AAD:
             self.make_subplots = make_subplots
 
     def _get_rms(self, audio):
+        env.numpy; import numpy as np  # type: ignore  # noqa: B018, I001
         from scipy.ndimage import uniform_filter1d  # type: ignore
         rms = self.librosa.feature.rms(y=audio, frame_length=self.frame_length, hop_length=self.hop_length)[0]
         times = self.librosa.frames_to_time(np.arange(len(rms)), sr=self.sr, hop_length=self.hop_length)
