@@ -32,7 +32,7 @@ class AAD:
         if options.sr is not None:
             self._populate_sr(options.sr)
         if self.verbose:
-            env.plotly  # noqa: B018
+            env.plotly, env.plotly_resampler  # noqa: B018
             import plotly.graph_objects as go  # type: ignore
             from plotly.subplots import make_subplots  # type: ignore
             from plotly_resampler import register_plotly_resampler  # type: ignore

@@ -103,7 +103,8 @@ class AlignerAny:
             is_default_model = False
         audio = _process_audio(audio, sr, self.sr)
         results = []
-        with MainProgress(total = len(audio_segments), desc="Aligning...", unit="chunk") as main_bar:
+        desc = "Qwen" if self.is_qwen else ("Whisper" if self.is_whisper else "MMS_FA") + " Aligning..."
+        with MainProgress(total = len(audio_segments), desc=desc, unit="chunk") as main_bar:
             try:
                 if self.is_qwen:
                     audio_chunk_list, text_chunk_list, lang_chunk_list, saved_safe_start = [], [], [], []
