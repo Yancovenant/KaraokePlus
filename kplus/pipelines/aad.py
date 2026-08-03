@@ -27,10 +27,9 @@ class AAD:
         import scipy; self.scipy = scipy  # type: ignore  # noqa: I001
         import librosa; self.librosa = librosa  # type: ignore  # noqa: I001
         self.precision_ms = options.precision_ms
-        self.sr = options.sr
         self.verbose = options.verbose
-        self.hop_length = int((self.sr / 1000) * self.precision_ms) # if sr == 44100 and precision_ms == 1, hop_length = 44 samples
-        self.frame_length = int(self.hop_length * 1.5) # 150% of hop_length = 66 samples
+        if options.sr is not None:
+            self._populate_sr(options.sr)
         if self.verbose:
             env.plotly  # noqa: B018
             import plotly.graph_objects as go  # type: ignore
@@ -39,6 +38,11 @@ class AAD:
             register_plotly_resampler(mode='auto')
             self.go = go
             self.make_subplots = make_subplots
+
+    def _populate_sr(self, sr):
+        self.sr = sr
+        self.hop_length = int((self.sr / 1000) * self.precision_ms) # if sr == 44100 and precision_ms == 1, hop_length = 44 samples
+        self.frame_length = int(self.hop_length * 1.5) # 150% of hop_length = 66 samples
 
     def _get_rms(self, audio):
         env.numpy; import numpy as np  # type: ignore  # noqa: B018, I001
@@ -209,6 +213,7 @@ class AAD:
         audio_loader = AudioLoader(audio, channels=1)
         if self.sr == None:
             self.sr = audio_loader.samplerate()
+            self._populate_sr(self.sr)
         audio = audio_loader.audio_np
         sos = self.scipy.signal.butter(10, [200, 5000], btype='bandpass', fs=self.sr, output='sos')
         audio = self.scipy.signal.sosfilt(sos, audio).astype(np.float32)
