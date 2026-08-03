@@ -68,6 +68,14 @@ class AudioLoader:
         ])
         return json.loads(stdout_data.decode('utf-8'))
 
+    def __repr__(self):
+        features = [("path", self.audio_path)]
+        features.append(("samplerate", self.samplerate()))
+        features.append(("channels", self.channels()))
+        features.append(("streams", len(self)))
+        features_str = ", ".join(f"{name}={value}" for name, value in features)
+        return f"AudioFile({features_str})"
+
     @property
     def duration(self):
         return float(self.info['format']['duration'])
