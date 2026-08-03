@@ -74,7 +74,7 @@ class AudioLoader:
         features.append(("channels", self.channels()))
         features.append(("streams", len(self)))
         features_str = ", ".join(f"{name}={value}" for name, value in features)
-        return f"AudioFile({features_str})"
+        return f"AudioLoader({features_str})"
 
     @property
     def duration(self):
