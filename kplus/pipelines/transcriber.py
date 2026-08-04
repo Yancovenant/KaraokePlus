@@ -33,13 +33,18 @@ class Transcriber:
                 else torch.float32
             )
             device_map = f"cuda:{'1' if torch.cuda.device_count() > 1 else '0'}" if env.device.type == "cuda" else env.device.type
+            default_asr_kwargs = {
+                "max_inference_batch_size": kwargs.pop("max_inference_batch_size", -1),
+                "max_new_tokens": kwargs.pop("max_new_tokens", 8192),
+            }
             self.model = Qwen3ASRModel.from_pretrained(
                 "Qwen/Qwen3-ASR-1.7B",
                 dtype=dtype,
                 device_map=device_map,
                 attn_implementation="sdpa",
-                max_inference_batch_size=-1, # Batch size limit for inference. -1 means unlimited. Smaller values can help avoid OOM.
-                max_new_tokens=8192, # Maximum number of tokens to generate. Set a larger value for long audio input.
+                **default_asr_kwargs,
+                #max_inference_batch_size=-1, # Batch size limit for inference. -1 means unlimited. Smaller values can help avoid OOM.
+                #max_new_tokens=8192, # Maximum number of tokens to generate. Set a larger value for long audio input.
                 forced_aligner="Qwen/Qwen3-ForcedAligner-0.6B",
                 **kwargs,
                 forced_aligner_kwargs={"dtype": dtype,
