@@ -15,6 +15,17 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+QWEN_CONTEXT_PROMPT = context = """
+This is a highly dynamic song.
+1. Your job is to transcribe it at is exactly as the audio.
+2. The audio may contains extremly repetitive vocal chants. Do not summarize or skip repetitions. If a word is sung 15 times, you must output it exactly 15 times.
+3. The song may features non-standard vocalizations. Specifically, transcribe the chant as 'oheh'.
+4. The lyrics may rapidly code-switch between English, Japanese (e.g., '行こう'), Spanish (e.g., 'dale'), and French (e.g., 'allez').
+5. The audio may contain ad-libs, and dropped sung lyrics, you must match it exactly as the lyrics.
+
+This is the full lyrics transcription:
+"""
+
 class Transcriber:
     def __init__(self, verbose: bool = False):
         self.sr = 16000 # Whisper and qwen both used 16K sample rate
@@ -91,7 +102,8 @@ class Transcriber:
                         start, end = int(seg.start * self.sr), int(seg.end * self.sr)
                         audio_chunk_list.append((audio[start:end], self.sr))
                     logger.debug(f"Prepared {len(audio_chunk_list)} audio chunks for Qwen ASR model")
-                    batch_result =  self.model.transcribe(audio=audio_chunk_list, context=None, return_time_stamps=True,)
+                    
+                    batch_result =  self.model.transcribe(audio=audio_chunk_list, context=QWEN_CONTEXT_PROMPT + f"\n{reference}", return_time_stamps=True,)
                     logger.debug(f"Qwen ASR model returned {len(batch_result)} segments")
                     for seg, aseg in zip(batch_result, audio_segments):
                         main_bar.update(1)
