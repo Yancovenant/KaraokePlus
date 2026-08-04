@@ -5,6 +5,7 @@ import logging
 import re
 import string
 from collections import defaultdict
+from functools import lru_cache
 from types import SimpleNamespace
 from typing import TYPE_CHECKING
 
@@ -193,13 +194,18 @@ class ReferenceAligner:
     _PUNCTUATION_TRANSLATOR = str.maketrans('', '', string.punctuation)
 
     def _sequence_align(self, reference: str | list[str], hypothesis: str | list[str]):
-        env.sequence_align  # noqa: B018
-        from sequence_align.pairwise import needleman_wunsch_with_scores  # type: ignore
+        env.sequence_align, env.pypinyin, env.pykakasi, env.anyascii  # noqa: B018
+        from sequence_align.pairwise import needleman_wunsch_with_scores  # type: ignore  # noqa: I001
+        from kplus.tools.romaji_converter import RomajiPhonetic
+        @lru_cache(maxsize=2048)
+        def get_phonetic(word: str):
+            return RomajiPhonetic(word)
         def score_fn(a, b):
             if a == b: return 1.0 # Match exactly
             ratio = difflib.SequenceMatcher(None, a.lower(), b.lower()).ratio()
             if ratio >= 0.6: return 1.0
-            else: return -3.0 # Mismatched
+            if get_phonetic(a) == get_phonetic(b): return 1.0
+            return -3.0 # Mismatched
         if isinstance(reference, str): reference = [reference]
         if isinstance(hypothesis, str): hypothesis = [hypothesis]
         _ref, _hyp = needleman_wunsch_with_scores(
