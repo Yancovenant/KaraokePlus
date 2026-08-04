@@ -48,7 +48,7 @@ class Transcriber:
                 dtype=dtype,
                 device_map=device_map,
                 attn_implementation="sdpa",
-                max_inference_batch_size=8, # Batch size limit for inference. -1 means unlimited. Smaller values can help avoid OOM.
+                max_inference_batch_size=-1, # Batch size limit for inference. -1 means unlimited. Smaller values can help avoid OOM.
                 max_new_tokens=512,#4096, # Maximum number of tokens to generate. Set a larger value for long audio input.
                 forced_aligner="Qwen/Qwen3-ForcedAligner-0.6B",
                 forced_aligner_kwargs={"dtype": dtype,
@@ -103,7 +103,7 @@ class Transcriber:
                         audio_chunk_list.append((audio[start:end], self.sr))
                     logger.debug(f"Prepared {len(audio_chunk_list)} audio chunks for Qwen ASR model")
                     
-                    batch_result =  self.model.transcribe(audio=audio_chunk_list, context=QWEN_CONTEXT_PROMPT + f"\n{reference}", return_time_stamps=True,)
+                    batch_result =  self.model.transcribe(audio=audio_chunk_list, context=QWEN_CONTEXT_PROMPT, return_time_stamps=True,)
                     logger.debug(f"Qwen ASR model returned {len(batch_result)} segments")
                     for seg, aseg in zip(batch_result, audio_segments):
                         main_bar.update(1)
