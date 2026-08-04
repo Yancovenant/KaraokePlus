@@ -201,10 +201,12 @@ class ReferenceAligner:
         def get_phonetic(word: str):
             return RomajiPhonetic(word)
         def score_fn(a, b):
-            if a == b: return 1.0 # Match exactly
-            ratio = difflib.SequenceMatcher(None, a.lower(), b.lower()).ratio()
+            if a == b: return 2.0 # Match exactly
+            aphone = get_phonetic(a)
+            bphone = get_phonetic(b)
+            ratio = difflib.SequenceMatcher(None, aphone.latin, bphone.latin).ratio()
             if ratio >= 0.6: return 1.0
-            if get_phonetic(a) == get_phonetic(b): return 1.0
+            if aphone == bphone: return 1.0
             return -3.0 # Mismatched
         if isinstance(reference, str): reference = [reference]
         if isinstance(hypothesis, str): hypothesis = [hypothesis]
