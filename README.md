@@ -21,7 +21,7 @@ If this pipeline saves you compute time or engineering headaches, consider suppo
 <details>
   <summary>🇮🇩 <b>Support via QRIS</b> (Indonesia)</summary>
   <br/>
-  <img src="https://raw.githubusercontent.com/yancovenant/KaraokePlus/main/assets/qris-barcode.jpeg" width="250" alt="QRIS Donation Barcode">
+  <img src="assets/qris-barcode.jpeg" width="250" alt="QRIS Donation Barcode">
   <br/>
   <i>Scan using GoPay, OVO, DANA, ShopeePay, or any supported mobile banking app.</i>
 </details>
