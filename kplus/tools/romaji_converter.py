@@ -59,5 +59,5 @@ class RomajiPhonetic:
         return jellyfish.metaphone(self.latin)
 
     def __eq__(self, other):
-        return jellyfish.jaro_winkler_similarity(self.phonetic, other.phonetic) >= 0.5
+        return jellyfish.jaro_winkler_similarity(self.phonetic, other.phonetic) >= 0.75
     
