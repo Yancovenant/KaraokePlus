@@ -199,7 +199,7 @@ class ReferenceAligner:
             if a == b: return 1.0 # Match exactly
             ratio = difflib.SequenceMatcher(None, a.lower(), b.lower()).ratio()
             if ratio >= 0.6: return 1.0
-            else: return -2.0 # indel?
+            else: return -3.0 # Mismatched
         if isinstance(reference, str): reference = [reference]
         if isinstance(hypothesis, str): hypothesis = [hypothesis]
         _ref, _hyp = needleman_wunsch_with_scores(
