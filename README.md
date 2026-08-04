@@ -16,15 +16,15 @@ By utilizing a bifurcated architecture, Karaoke+ delivers studio-quality MDX aud
 
 If this pipeline saves you compute time or engineering headaches, consider supporting its continued development. 
 
-<!-- * **[Support via PayPal](https://paypal.me/iantirtaa)** (International) -->
+* **[Support via PayPal](https://paypal.me/iantirta)** (International)
 
-<!-- <details>
+<details>
   <summary>🇮🇩 <b>Support via QRIS</b> (Indonesia)</summary>
   <br/>
-  <img src="https://raw.githubusercontent.com/yourusername/KaraokePlus/main/assets/qris-barcode.png" width="250" alt="QRIS Donation Barcode">
+  <img src="https://raw.githubusercontent.com/yancovenant/KaraokePlus/main/assets/qris-barcode.jpeg" width="250" alt="QRIS Donation Barcode">
   <br/>
   <i>Scan using GoPay, OVO, DANA, ShopeePay, or any supported mobile banking app.</i>
-</details> -->
+</details>
 
 ---
 
