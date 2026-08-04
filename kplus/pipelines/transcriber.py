@@ -41,9 +41,11 @@ class Transcriber:
                 max_inference_batch_size=-1, # Batch size limit for inference. -1 means unlimited. Smaller values can help avoid OOM.
                 max_new_tokens=8192, # Maximum number of tokens to generate. Set a larger value for long audio input.
                 forced_aligner="Qwen/Qwen3-ForcedAligner-0.6B",
+                **kwargs,
                 forced_aligner_kwargs={"dtype": dtype,
                                         "device_map": device_map,
-                                        "attn_implementation": "sdpa",},)
+                                        "attn_implementation": "sdpa",
+                                        **kwargs},)
         else:
             env.stable_ts, env.faster_whisper  # noqa: B018
             import stable_whisper  # type: ignore
