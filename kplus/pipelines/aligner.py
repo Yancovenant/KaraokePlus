@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import difflib
 import logging
 import re
 import string
@@ -194,7 +195,11 @@ class ReferenceAligner:
     def _sequence_align(self, reference: str | list[str], hypothesis: str | list[str]):
         env.sequence_align  # noqa: B018
         from sequence_align.pairwise import needleman_wunsch_with_scores  # type: ignore
-        def score_fn(a, b): return 1.0 if a == b else -1.0
+        def score_fn(a, b):
+            if a == b: return 1.0 # Match exactly
+            ratio = difflib.SequenceMatcher(None, a.lower(), b.lower()).ratio()
+            if ratio >= 0.6: return 1.0
+            else: return -2.0 # indel?
         if isinstance(reference, str): reference = [reference]
         if isinstance(hypothesis, str): hypothesis = [hypothesis]
         _ref, _hyp = needleman_wunsch_with_scores(

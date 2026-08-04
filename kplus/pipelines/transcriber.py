@@ -15,16 +15,6 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-QWEN_CONTEXT_PROMPT = context = """
-This is a short clip of a highly dynamic song.
-1. Your job is to Transcribe EXACTLY what is sung in this specific audio clip. Do not hallucinate.
-2. The clip may contains extremly repetitive vocal chants. Do not summarize or skip repetitions. If a word is sung 15 times, you must output it exactly 15 times.
-3. The clip may features non-standard vocalizations. Specifically, transcribe the chant as 'oheh'.
-4. The lyrics may rapidly code-switch between English, Japanese (e.g., '行こう'), Spanish (e.g., 'dale'), and French (e.g., 'allez').
-5. The clip may contain ad-libs, and dropped sung lyrics, you must include it exactly as heard.
-
-This is the full lyrics transcription:
-"""
 
 class Transcriber:
     def __init__(self, verbose: bool = False):
