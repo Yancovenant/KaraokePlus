@@ -302,8 +302,19 @@ class ReferenceAligner:
                     if min_i - 1 > prev_max_i: min_i -= 1
                 line_to_segments[idx] = audio_segments[min_i:max_i + 1]
             else:
-                prev_segs = line_to_segments.get(idx - 1)
-                line_to_segments[idx] = [prev_segs[-1] if prev_segs else audio_segments[0]]
+                if idx == 0: start_i = 0
+                else:
+                    prev_segs = line_to_segments.get(idx - 1)
+                    start_i = seg_index_map[prev_segs[-1]] if prev_segs else 0
+                # Default to the very end of the song if there are no more anchored lines left
+                end_i = len(audio_segments) - 1
+                for fwd_idx in range(idx + 1, ref_lines_len):
+                    fwd_anchors = [w for w in lines_map[fwd_idx] if w.start is not None]
+                    if fwd_anchors:
+                        mid = (fwd_anchors[0].start + fwd_anchors[0].end) / 2
+                        end_i = min(range(len(audio_segments)), key=lambda i: abs(mid - seg_midpoints[i]))
+                        break
+                line_to_segments[idx] = audio_segments[start_i:end_i + 1]
         return line_to_segments
 
     def _2superlines(self,
