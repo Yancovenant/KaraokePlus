@@ -194,7 +194,7 @@ class ReferenceAligner:
     _PUNCTUATION_TRANSLATOR = str.maketrans('', '', string.punctuation)
 
     def _sequence_align(self, reference: str | list[str], hypothesis: str | list[str]):
-        env.sequence_align, env.pypinyin, env.pykakasi, env.anyascii  # noqa: B018
+        env.sequence_align, env.pypinyin, env.pykakasi, env.anyascii, env.jellyfish  # noqa: B018
         from sequence_align.pairwise import needleman_wunsch_with_scores  # type: ignore  # noqa: I001
         from kplus.tools.romaji_converter import RomajiPhonetic
         @lru_cache(maxsize=2048)
