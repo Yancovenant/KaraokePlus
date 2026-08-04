@@ -48,7 +48,7 @@ class Transcriber:
                 dtype=dtype,
                 device_map=device_map,
                 attn_implementation="sdpa",
-                max_inference_batch_size=-1, # Batch size limit for inference. -1 means unlimited. Smaller values can help avoid OOM.
+                max_inference_batch_size=8, # Batch size limit for inference. -1 means unlimited. Smaller values can help avoid OOM.
                 max_new_tokens=512,#4096, # Maximum number of tokens to generate. Set a larger value for long audio input.
                 forced_aligner="Qwen/Qwen3-ForcedAligner-0.6B",
                 forced_aligner_kwargs={"dtype": dtype,
