@@ -67,7 +67,8 @@ class Transcriber:
                    audio: AudioType,
                    audio_segments: list[AudioSegment] | None = None,
                    reference: str | None = None,
-                   sr: int | None = None) -> Result:
+                   sr: int | None = None,
+                   **kwargs) -> Result:
         audio_loader = AudioLoader(audio, samplerate=self.sr, channels=1)
         audio = audio_loader.audio_np
         if not audio_segments:
@@ -83,7 +84,7 @@ class Transcriber:
                     # time_batches = [{"start": seg.start, "end": seg.end} for seg in audio_segments]
                     batch_result = self.model.transcribe(audio, language=None, clip_timestamps=time_batches,
                                                         initial_prompt=reference, beam_size=self.beamsize, #batch_size=1, # need to be None
-                                                        repetition_penalty=1.2, condition_on_previous_text=False)
+                                                        repetition_penalty=1.2, condition_on_previous_text=False, **kwargs)
                     for res in batch_result:
                         main_bar.update(1)
                         seg_words = []
