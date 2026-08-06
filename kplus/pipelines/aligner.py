@@ -6,6 +6,7 @@ import re
 import string
 from collections import defaultdict
 from functools import lru_cache
+from itertools import chain
 from types import SimpleNamespace
 from typing import TYPE_CHECKING
 
@@ -18,10 +19,13 @@ from .utils import _process_audio
 
 if TYPE_CHECKING:
     import numpy as np  # type: ignore
-    import torch  # type: ignore
 
     from .utils import AudioType
 
+env.sequence_align, env.pypinyin, env.pykakasi, env.anyascii, env.jellyfish  # noqa: B018
+# Need to be below this line
+from kplus.tools.romaji_converter import RomajiPhonetic  # noqa: I001
+from sequence_align.pairwise import needleman_wunsch_with_scores  # type: ignore
 
 logger = logging.getLogger(__name__)
 
@@ -186,223 +190,29 @@ class AlignerAny:
     def get_reference_timestamp(self, hypothesis: Result, reference: str, audio_segments: list[AudioSegment]) -> tuple[Result, list[AudioSegment]]:
         return ReferenceAligner(verbose=self.verbose).get_reference_timestamp(hypothesis, reference, audio_segments)
 
+###
+# TImestamp aligner
+###
+class BasicList(list):
+    pass
+
+def score_fn(a, b):
+    if a == b: return 2.0 # Match exactly
+    aphone = ReferenceAligner.get_phonetic(a)
+    bphone = ReferenceAligner.get_phonetic(b)
+    ratio = difflib.SequenceMatcher(None, aphone.latin, bphone.latin).ratio()
+    if ratio >= 0.6: return 1.0
+    if aphone == bphone: return 1.0
+    return -3.0 # Mismatched
 
 class ReferenceAligner:
     def __init__(self, verbose: bool = False):
         self.verbose = verbose
-
-    _PUNCTUATION_TRANSLATOR = str.maketrans('', '', string.punctuation)
-
-    def _sequence_align(self, reference: str | list[str], hypothesis: str | list[str]):
-        env.sequence_align, env.pypinyin, env.pykakasi, env.anyascii, env.jellyfish  # noqa: B018
-        from sequence_align.pairwise import needleman_wunsch_with_scores  # type: ignore  # noqa: I001
-        from kplus.tools.romaji_converter import RomajiPhonetic
-        @lru_cache(maxsize=2048)
-        def get_phonetic(word: str):
-            return RomajiPhonetic(word)
-        def score_fn(a, b):
-            if a == b: return 2.0 # Match exactly
-            aphone = get_phonetic(a)
-            bphone = get_phonetic(b)
-            ratio = difflib.SequenceMatcher(None, aphone.latin, bphone.latin).ratio()
-            if ratio >= 0.6: return 1.0
-            if aphone == bphone: return 1.0
-            return -3.0 # Mismatched
-        if isinstance(reference, str): reference = [reference]
-        if isinstance(hypothesis, str): hypothesis = [hypothesis]
-        _ref, _hyp = needleman_wunsch_with_scores(
-            reference, hypothesis, gap="-", score_fn=score_fn, indel_score=-1.0
-        )
-        hits = subs = dels = ins = 0
-        aligned_map = []
-        r_idx = h_idx = 0
-        for i, (r_tok, h_tok) in enumerate(zip(_ref, _hyp)):
-            if r_tok == "-": # insertation
-                op="INST"; ins += 1
-                aligned_map.append(SimpleNamespace(ref_idx=None, hyp_idx=h_idx, type=op))
-                h_idx +=1; continue
-            elif h_tok == "-": # deletation
-                op="DELS"; dels += 1
-                aligned_map.append(SimpleNamespace(ref_idx=r_idx, hyp_idx=None, type=op))
-                r_idx +=1; continue
-            elif r_tok == h_tok: # hit
-                op="HITS"; hits += 1
-            else: # subtitusion
-                op="SUBS"; subs += 1
-            aligned_map.append(SimpleNamespace(
-                ref_idx=r_idx,
-                hyp_idx=h_idx,
-                type=op
-            ))
-            r_idx += 1; h_idx += 1
-
         if self.verbose:
-            env.rich  # noqa: B018
             from rich.console import Console  # type: ignore
-            console = Console()
-            console.rule("Needleman Wunsch Alignment")
-            console.print(
-                f"[bold bright_green]Hits:[/bold bright_green] {hits} | "
-                f"[bold bright_yellow]Subs:[/bold bright_yellow] {subs} | "
-                f"[bold bright_red]Dels:[/bold bright_red] {dels} | "
-                f"[bold bright_cyan]Ins:[/bold bright_cyan] {ins}\n"
-            )
-            colors = {"HITS": "grey70", "SUBS": "bold bright_yellow", "DELS": "bold bright_red", "INST": "bold bright_cyan",}
-            cols = [
-                (f"[{colors[m.type]}]{r:<{w}}[/]", f"[{colors[m.type]}]{h:<{w}}[/]", f"[{colors[m.type]}]{m.type:<{w}}[/]", w + 1)
-                for r, h, m in zip(_ref, _hyp, aligned_map)
-                for w in [max(len(str(r)), len(str(h)), len(m.type))]
-            ]
-            chunks, current_chunk, current_w = [], [], 0
-            max_w = console.width - 5
-            for *col, col_w in cols:
-                if current_chunk and current_w + col_w > max_w:
-                    chunks.append(current_chunk)
-                    current_chunk, current_w = [], 0
-                current_chunk.append(col)
-                current_w += col_w
-            if current_chunk:
-                chunks.append(current_chunk)
-            for chunk in chunks:
-                for label, row in zip(["REF", "HYP", "OP "], zip(*chunk)):
-                    console.print(f"{label}: " + " ".join(row))
-                console.print("\n")
-        return aligned_map
+            self.console = Console()
 
-    def _line2segment(self,
-        ref_lines_len   : int,                          # len(ref_lines)
-        lines_map       : dict[int, list[WordTiming]],  # dict of line index and its corresponding words
-        seg_index_map   : dict[AudioSegment, int],      # dictonary mapping, based on audio segment
-        seg_midpoints   : list[float],                  # list of float for midpoint of audiosegments
-        audio_segments  : list[AudioSegment]) -> dict[int, list[AudioSegment]]:
-        """ Map lyric lines based on index to the corresponding
-            audio segment
-        """
-        line_to_segments: dict[int, list[AudioSegment]] = {} # {index: list[AudioSegment]}
-        for idx in range(ref_lines_len):
-            line_words = lines_map[idx] # List[WordTiming]
-            anchors = [w for w in line_words if w.start is not None] # List[WordTiming] >> if x.start != None
-            if anchors:
-                matched_segs = [] # List[AudioSegment]
-                for w in anchors:
-                    mid = (w.start + w.end) / 2
-                    min_dist = float('inf')
-                    closest_seg = audio_segments[0]
-                    for i, seg in enumerate(audio_segments):
-                        if seg.start <= mid <= seg.end: closest_seg = seg; break
-                        dist = abs(mid - seg_midpoints[i]) # REVIEW: I think this will be able to be optimized
-                        if dist < min_dist: min_dist = dist; closest_seg = seg
-                    matched_segs.append(closest_seg)
-                observed = sorted(set(matched_segs), key=lambda s: s.start)
-                min_i = seg_index_map[observed[0]]
-                max_i = seg_index_map[observed[-1]]
-                if line_words[0].start is None:
-                    prev_segs = line_to_segments.get(idx - 1)
-                    prev_max_i = seg_index_map[prev_segs[-1]] if prev_segs else -1
-                    if min_i - 1 > prev_max_i: min_i -= 1
-                line_to_segments[idx] = audio_segments[min_i:max_i + 1]
-            else:
-                if idx == 0: start_i = 0
-                else:
-                    prev_segs = line_to_segments.get(idx - 1)
-                    start_i = seg_index_map[prev_segs[-1]] if prev_segs else 0
-                # Default to the very end of the song if there are no more anchored lines left
-                end_i = len(audio_segments) - 1
-                for fwd_idx in range(idx + 1, ref_lines_len):
-                    fwd_anchors = [w for w in lines_map[fwd_idx] if w.start is not None]
-                    if fwd_anchors:
-                        mid = (fwd_anchors[0].start + fwd_anchors[0].end) / 2
-                        end_i = min(range(len(audio_segments)), key=lambda i: abs(mid - seg_midpoints[i]))
-                        break
-                line_to_segments[idx] = audio_segments[start_i:end_i + 1]
-        return line_to_segments
-
-    def _2superlines(self,
-        sorted_indices  : list[int],                    # from sorted(lines_map.keys())
-        lines_map       : dict[int, list[WordTiming]],
-        line_to_segments: dict[int, list[AudioSegment]],
-        seg_index_map: dict[AudioSegment, int],
-    ) -> list[tuple[list[WordTiming], AudioSegment, int, int]]: # (words, segment, min_idx, max_idx)
-        """ Merge overlapping lines into 1 single audio segment and 1 single lines
-        """
-        super_phrases: list[tuple[list[WordTiming], AudioSegment, int, int]] = []
-        current_words = lines_map[sorted_indices[0]] # The 1st line_maps list[WordTiming]
-        current_segs = set(line_to_segments[sorted_indices[0]]) # The 1st list[AudioSegment] according to lines index
-        for idx in sorted_indices[1:]:
-            next_words = lines_map[idx] # The next list[WordTiming]
-            next_segs = set(line_to_segments[idx]) # the next list[AudioSegment]
-            if current_segs.isdisjoint(next_segs): # NO Overlapping, all this audio segments belong to the current segs
-                min_start = min(s.start for s in current_segs)
-                max_end = max(s.end for s in current_segs)
-                min_idx = min(seg_index_map[s] for s in current_segs)
-                max_idx = max(seg_index_map[s] for s in current_segs)
-                super_phrases.append((
-                    current_words, AudioSegment(start=min_start, end=max_end),
-                    min_idx, max_idx
-                ))
-                current_words = next_words
-                current_segs = next_segs
-            else: # Overlap
-                current_words.extend(next_words)
-                current_segs.update(next_segs)
-        min_start = min(s.start for s in current_segs)
-        max_end = max(s.end for s in current_segs)
-        min_idx = min(seg_index_map[s] for s in current_segs)
-        max_idx = max(seg_index_map[s] for s in current_segs)
-        super_phrases.append((
-            current_words, AudioSegment(start=min_start, end=max_end),
-            min_idx, max_idx
-        ))
-        return super_phrases
-
-    def _interpolate_deleted_words(self,
-        super_phrases: list[tuple[list[WordTiming], AudioSegment, int, int]], # (words, segment, min_idx, max_idx),
-    ) -> tuple[list, list[AudioSegment]]:
-        """ Interpolate any dropped words, and also map the new segment
-        """
-        final_segments, final_audio_segments = [], []
-        for words, segment, _, _ in super_phrases:
-            safe_start = segment.start
-            safe_end = segment.end
-            n = len(words)
-            i = 0
-            while i < n:
-                if words[i].start is None:
-                    block_start = i # Check inside this words list
-                    while i < n and words[i].start is None:
-                        i += 1
-                    block_end = i
-                    prev_end = safe_start
-                    if block_start > 0:
-                        logger.debug(f"{'':<4} Found leading end: {words[block_start - 1].word}-> {words[block_start - 1].end}")
-                        prev_end = words[block_start - 1].end
-                    next_start = safe_end
-                    if block_end < n:
-                        logger.debug(f"{'':<4} Found leading end: {words[block_end].word}-> {words[block_end].end}")
-                        next_start = words[block_end].start
-
-                    gap = next_start - prev_end
-                    time_per_word = gap / (block_end - block_start)
-                    curr_time = prev_end
-                    for j in range(block_start, block_end):
-                        logger.debug(f"{'':<8} Interpolate: [None - None] to [{curr_time:.2f}s - {curr_time + time_per_word:.2f}s]")
-                        words[j].start = curr_time
-                        words[j].end = curr_time + time_per_word
-                        curr_time += time_per_word
-                        words[j].source = "interpolated"
-                else:
-                    i += 1
-            final_segments.append(Segment(words=words))
-            final_audio_segments.append(segment)
-        return final_segments, final_audio_segments
-
-    @classmethod
-    def normalize(self, s: str) -> str:
-        s = s.translate(self._PUNCTUATION_TRANSLATOR).lower().strip()
-        s = re.sub(r"[<\[][^>\]]*[>\]]", "", s) # Kaldi
-        return s
-    
-    def get_reference_timestamp(self, hypothesis: Result, reference: str, audio_segments: list[AudioSegment]) -> tuple[Result, list[AudioSegment]]:
+    def prepare_alignments(self, hypothesis: Result, reference: str,) -> tuple[list[str], list[WordTiming], list[WordTiming]]:
         ref_lines = [line.strip() for line in reference.split("\n") if line.strip() and not line.startswith('[')]
         ref_tokens = [ # List of WordTiming [(Word),(Word),(Word)]
             (token:=WordTiming(word=word, start=None, end=None, score=None),
@@ -411,92 +221,402 @@ class ReferenceAligner:
             for word in line.split()
         ]
         hyp_tokens = [ # List of WordTiming [(Word),(Word),(Word)]
-            WordTiming(word=word.word, start=word.start, end=word.end, score=word.score)
+            (token:=WordTiming(word=word.word, start=word.start, end=word.end, score=word.score),
+                setattr(token, "language", segment.language))[0]
             for segment in hypothesis.segments
             for word in segment.words if word.score > 0.1
         ]
+        return ref_lines, ref_tokens, hyp_tokens
+
+    _PUNCTUATION_TRANSLATOR = str.maketrans('', '', string.punctuation)
+
+    def normalize(self, s: str) -> str:
+        s = s.translate(self._PUNCTUATION_TRANSLATOR).lower().strip()
+        s = re.sub(r"[<\[][^>\]]*[>\]]", "", s) # Kaldi
+        return s
+
+    @classmethod
+    @lru_cache(maxsize=2048)
+    def get_phonetic(cls, word: str):
+        return RomajiPhonetic(word)
+
+    def _sequence_align(self, ref_tokens: list[WordTiming], hyp_tokens: list[WordTiming]) -> list:
         ref_clean = [self.normalize(t.word) for t in ref_tokens]
         hyp_clean = [self.normalize(t.word) for t in hyp_tokens]
-        aligned_map = self._sequence_align(ref_clean, hyp_clean)
-        for match in aligned_map:
-            if match.type in ["HITS", "SUBS"]:
-                lyric_token = ref_tokens[match.ref_idx]
-                transcript_token = hyp_tokens[match.hyp_idx]
-                lyric_token.start = transcript_token.start
-                lyric_token.end = transcript_token.end
-                lyric_token.score = transcript_token.score
-                lyric_token.source = "asr"
-        lines_map: dict[int, list[WordTiming]] = defaultdict(list) # {line_idx: List[WordTiming]}
-        for token in ref_tokens: lines_map[token.line_idx].append(token)
-        seg_midpoints: list[float] = [(s.start + s.end) / 2 for s in audio_segments] # List[float, float, float]
-        seg_index_map = {seg: i for i, seg in enumerate(audio_segments)} # {AudioSegment: index}
-        line_to_segments: dict[int, list[AudioSegment]] = self._line2segment(len(ref_lines), lines_map, seg_index_map, seg_midpoints, audio_segments)
+        _ref, _hyp = needleman_wunsch_with_scores(ref_clean, hyp_clean, gap="-", score_fn=score_fn, indel_score=-1.0)
+        stats = {"M": 0, "S": 0, "D": 0, "I": 0}
+        aligned_map = []
+        r_idx = h_idx = 0
+        for r_tok, h_tok in zip(_ref, _hyp):
+            op = "I" if r_tok == "-" else ("D" if h_tok == "-" else ("M" if r_tok == h_tok else "S"))
+            stats[op] += 1
+            aligned_map.append(SimpleNamespace(
+                ref_idx=None if op == "I" else r_idx,
+                hyp_idx=None if op == "D" else h_idx,
+                op=op
+            ))
+            r_idx += (op != "I")
+            h_idx += (op != "D")
 
-        sorted_indices = sorted(lines_map.keys())
-        # (words, segment, min_idx, max_idx)
-        super_phrases: list[tuple[list[WordTiming], AudioSegment, int, int]] = self._2superlines(sorted_indices, lines_map, line_to_segments, seg_index_map)
-        final_segments, final_audio_segments = self._interpolate_deleted_words(super_phrases)
+        N = stats["M"] + stats["S"] + stats["D"] or 1
+        errors = stats["S"] + stats["D"] + stats["I"]
+        if errors/N > 0.5:
+            logger.warning(f"Lyric Alignment may be inaccurate due to error rate of more than 50%: wer: {errors/N:.1%}")
         if self.verbose:
-            env.rich; from rich.console import Console; from rich.table import Table  # type: ignore  # noqa: B018, I001
-            console = Console()
-            console.rule("[bold bright_cyan]Reference Timestamps (Final State)[/]")
-            for line_idx in sorted_indices:
-                line_tokens = lines_map[line_idx]
-                segs = line_to_segments.get(line_idx, [])
-                if segs:
-                    sorted_segs = sorted(segs, key=lambda s: s.start)
-                    seg_indices_str = "<>".join(
-                        str(seg_index_map[s]) for s in sorted_segs
-                    )
-                    audio_header = (
-                        f"[bold grey70]{sorted_segs[0].h_start} -> {sorted_segs[-1].h_end}"
-                        f" <= merged from [{seg_indices_str}][/]"
-                    )
-                else:
-                    audio_header = "[bold grey70]No Audio Segments[/]"
-                console.print(f"[bold bright_magenta]L{line_idx:02d}:[/] Audio: {audio_header}")
-                words, stamps, durs = [], [], []
-                for t in line_tokens:
-                    source = getattr(t, "source", "asr")
-                    if source == "asr": color = "bright_green"
-                    elif source == "interpolated": color = "bright_yellow"
-                    else: color = "bright_red"
-                    ts = f"[{t.h_start}]" if t.start is not None else "[--:--.--]"
-                    dur = f"({t.duration:.2f}s)" if t.start is not None else "(-.--s)"
-                    col_w = max(len(t.word), len(ts), len(dur))
-                    words.append(f"[bold bright_white]{t.word:<{col_w}}[/]")
-                    stamps.append(f"[{color}]{ts:<{col_w}}[/]")
-                    durs.append(f"[dim {color}]{dur:<{col_w}}[/]")
-                console.print("[bold cyan]TEXT:[/] " + " ".join(words))
-                console.print("[bold cyan]TS:  [/] " + " ".join(stamps))
-                console.print("[bold cyan]DUR: [/] " + " ".join(durs))
-                console.print("\n")
-            table = Table(title="Final Merged Super Phrases", title_style="bold bright_cyan", header_style="bold dim", show_lines=True)
-            table.add_column("IDX", justify="right", style="dim")
-            table.add_column("Time Range", style="bright_green", justify="center")
-            table.add_column("Dur", justify="right", style="bright_yellow")
-            table.add_column("Phrase Transcript")
-            prev_max_idx = -1
-            for i, (words, seg, min_idx, max_idx) in enumerate(super_phrases):
-                # Detect and render dropped audio segments between phrases
-                if prev_max_idx != -1 and min_idx > prev_max_idx + 1:
-                    dropped_count = min_idx - prev_max_idx - 1
-                    drop_first = audio_segments[prev_max_idx + 1]
-                    drop_last = audio_segments[min_idx - 1]
-                    table.add_row(
-                        "[bright_red]--[/]",
-                        f"{drop_first.h_start} -> {drop_last.h_end}",
-                        f"{drop_last.end - drop_first.start:.2f}s",
-                        f"[bold bright_red]⚠ Dropped {dropped_count} segment(s)[/]",
-                    )
-                table.add_row(
-                    str(i),
-                    f"{seg.h_start} -> {seg.h_end}",
-                    f"{seg.duration:.2f}s",
-                    " ".join(w.word for w in words),
-                )
-                prev_max_idx = max_idx
-            console.print(table)
-            console.print("\n")
-        return Result(segments=final_segments), final_audio_segments
+            from rich.panel import Panel  # type: ignore
+            C = {"M": "green", "S": "yellow", "D": "red", "I": "cyan"}
+            aligned = [(f"[{C[m.op]}]{r.ljust(max(len(r), len(h)))}[/]",
+                        f"[{C[m.op]}]{h.ljust(max(len(r), len(h)))}[/]",
+                        f"[{C[m.op]}]{m.op.ljust(max(len(r), len(h)))}[/]")
+                        for r, h, m in zip(_ref, _hyp, aligned_map)]
+            texts = []
+            for i in range(0, len(aligned), 10):
+                r_c, h_c, o_c = zip(*aligned[i:i+10])
+                texts.append(f"[white bold]REF |[/] {' | '.join(r_c)}\n"
+                             f"[white bold]HYP |[/] {' | '.join(h_c)}\n"
+                             f"[white bold]OP  |[/] {' | '.join(o_c)}")
+            subtitle = (f"[bold]WER: {errors/N:.1%}[/] | "
+                        f"[green]M: {stats['M']/N:.1%}[/] | "
+                        f"[yellow]S: {stats['S']/N:.1%}[/] | "
+                        f"[red]D: {stats['D']/N:.1%}[/] | "
+                        f"[cyan]I: {stats['I']/N:.1%}[/]")
+            self.console.print(Panel("\n\n".join(texts), title="[bold]Alignment Needleman[/]", subtitle=subtitle, expand=False))
+        return aligned_map
 
+    def _prepare_audiosegment_mask(self, audio_segments: list[AudioSegment], fpms: float = 1.0) -> np.ndarray:
+        env.numpy; import numpy as np # type: ignore  # noqa: B018, I001
+        max_dur = audio_segments[-1].end
+        total_frames = int(round(max_dur * fpms, 3) * 1000) + 1
+        audio_mask = np.full(total_frames, -1, dtype=np.int32) # int
+        for i, seg in enumerate(audio_segments):
+            start = int(round(seg.start * fpms, 3) * 1000)
+            end = int(round(seg.end * fpms, 3) * 1000)
+            start_frame = max(0, min(start, total_frames))
+            end_frame = max(0, min(end, total_frames))
+            assert end_frame > start_frame, f"Invalid audio segment {i}: {seg.start} -> {seg.end}"
+            audio_mask[start_frame:end_frame] = i
+        return audio_mask
+
+    def _get_audiosegment_ids(self, audio_mask_ms: np.ndarray, line_words: list[WordTiming], fpms: float = 1.0):
+        env.numpy; import numpy as np # type: ignore  # noqa: B018, I001
+        anchors = [w for w in line_words if w.start is not None]
+        matched_segs = []
+        if anchors:
+            for w in anchors:
+                start = int(round(w.start * fpms, 3) * 1000)
+                end = int(round(w.end * fpms, 3) * 1000)
+                start_frame = max(0, min(start, audio_mask_ms.size - 1))
+                end_frame = max(0, min(end, audio_mask_ms.size))
+                word_mask = audio_mask_ms[start_frame:end_frame]
+                audio_seg_id = word_mask[word_mask >= 0]
+                audio_seg_id = np.unique(audio_seg_id).tolist()
+                matched_segs.extend(audio_seg_id)
+                w.audio_seg_id = audio_seg_id
+        return matched_segs
+
+    def _interpolate_segments_lines(self, lines_map, audio_mask_ms, audio_segments):
+        assert sorted(lines_map.keys()) == list(range(len(lines_map)))
+        new_lines_map: dict[int, BasicList[WordTiming]] = {} # {line_idx: List[WordTiming]}
+        for i, line_words in lines_map.items():
+            matched_segs = self._get_audiosegment_ids(audio_mask_ms, line_words)
+            line_words.audio_segment_ids = sorted(set(matched_segs))
+            new_lines_map[i] = line_words
+        assert sorted(new_lines_map.keys()) == list(range(len(new_lines_map)))
+        for i, line_words in new_lines_map.items():
+            if not line_words.audio_segment_ids:
+                prev_aseg, next_aseg = None, None
+                prev_gap, next_gap = 0,0
+                for j in range(i - 1, -1, -1):
+                    if (prev_aseg:=new_lines_map[j].audio_segment_ids):
+                        break
+                    prev_gap += 1
+                for j in range(i + 1, len(new_lines_map)):
+                    if (next_aseg:=new_lines_map[j].audio_segment_ids):
+                        break
+                    next_gap += 1
+                if not prev_aseg: prev_aseg = [0]
+                if not next_aseg: next_aseg = [len(audio_segments) - 1]
+                start_idx = i - prev_gap
+                end_idx = i + next_gap
+                prev_audio_idx, next_audio_idx = max(prev_aseg), min(next_aseg)
+                assert prev_audio_idx <= next_audio_idx, (f"Invalid dropped segment range: {prev_audio_idx} -> {next_audio_idx}")
+                dropped_segments = [new_lines_map[k] for k in range(start_idx, end_idx + 1)]
+                interpolate_audio_segment_ids = [k for k in range(prev_audio_idx, next_audio_idx + 1)]
+                for drop in dropped_segments: drop.audio_segment_ids = interpolate_audio_segment_ids
+        return new_lines_map
+
+    def _update_ts_from_interpolation(self, line_words, step, total, anchor_point, direction = 1):
+        taken = 0
+        if direction > 0:
+            for i in range(0, total):
+                line_words[i].end = anchor_point + taken + step
+                line_words[i].start = line_words[i].end - step
+                taken += step
+        else:
+            for i in range(len(line_words)-total, len(line_words)):
+                line_words[i].end = anchor_point + taken + step
+                line_words[i].start = line_words[i].end - step
+                taken += step
+
+    def _interpolate_on_based_anchors(self, line_words, anchor_words, anchor, anchor_segment_id, anchor_point, segment_pos_ts, total_words, audio_segments, is_first_idx):
+        if anchor_words is None:
+            # either first or last line idx
+            if anchor and anchor_point:
+                step = abs(anchor_point - segment_pos_ts) / max(1, total_words)
+                self._update_ts_from_interpolation(line_words, step, total_words, min(anchor_point, segment_pos_ts), direction = 1 if is_first_idx else -1)
+            else: # everything dropped
+                if len(line_words.audio_segment_ids) == len(audio_segments):
+                    # transcript error, fully drop
+                    for w in line_words:
+                        w.start = audio_segments[0].start
+                        w.end = audio_segments[-1].end
+                else:
+                    # since `line_words.audio_segment_ids` already interpolated to the next
+                    # anchored segment, if the `line_words` is fully drop
+                    # no matter the gap, we cannot know of this?
+                    # interpolate this into the end maybe
+                    if is_first_idx:
+                        step = (audio_segments[max(line_words.audio_segment_ids)].end - audio_segments[0].start) / len(line_words)
+                        self._update_ts_from_interpolation(line_words, step, len(line_words), audio_segments[0].start)
+                    else:
+                        step = (audio_segments[-1].end - audio_segments[min(line_words.audio_segment_ids)].start) / len(line_words)
+                        self._update_ts_from_interpolation(line_words, step, len(line_words), audio_segments[min(line_words.audio_segment_ids)].start)
+        else:
+            anchor_words_segment_id = max(anchor_words.audio_segment_ids) # prev
+            if not is_first_idx:
+                anchor_words_segment_id = min(anchor_words.audio_segment_ids) # next
+            anchor_words_segment = audio_segments[anchor_words_segment_id]
+            if anchor_segment_id == anchor_words_segment_id:
+                if anchor and anchor_point:
+                    # this means, in this lines there is anchor in this line words
+                    # also anchor seg == this seg, i guess we can safely interpolate this
+                    step = abs(anchor_point - segment_pos_ts) / max(1, total_words)
+                    self._update_ts_from_interpolation(line_words, step, total_words, min(anchor_point, segment_pos_ts), direction = 1 if is_first_idx else -1)
+                else:
+                    # Every of this line words is dropped.
+                    anch_start = anchor_words_segment.start if is_first_idx else audio_segments[max(line_words.audio_segment_ids)].start
+                    anch_end = audio_segments[max(line_words.audio_segment_ids)].end if is_first_idx else anchor_words_segment.end
+                    step = (anch_end - anch_start) / len(line_words)
+                    self._update_ts_from_interpolation(line_words, step, len(line_words), anch_start)
+            else:
+                # if current segment and anchor segment is different
+                # means the current segment should be > prev segment? or < next segment
+                if anchor and anchor_point:
+                    gap_to_anchor_segment = abs(segment_pos_ts - (anchor_words_segment.end if is_first_idx else anchor_words_segment.start))
+                    if gap_to_anchor_segment >= 2.0: # 2s
+                        # if gap of audio is more than 2s, it doesnt make sense for this line words interpolated to the previous or next segment
+                        # as our audio segment already mostly leaving only silences.
+                        step = abs(anchor_point - segment_pos_ts) / max(1, total_words)
+                        self._update_ts_from_interpolation(line_words, step, total_words, min(anchor_point, segment_pos_ts), direction = 1 if is_first_idx else -1)
+                    else:
+                        # This would be edge cases where the line words is either using
+                        # previous, both or current segment
+                        anchor_words_segment_point = anchor_words_segment.start if is_first_idx else anchor_words_segment.end
+                        step = abs(anchor_point - anchor_words_segment_point) / max(1, total_words)
+                        self._update_ts_from_interpolation(line_words, step, total_words, min(anchor_point, anchor_words_segment_point), direction = 1 if is_first_idx else -1)
+                        if self.verbose: self.console.print(f">> using segment anchor, gap less than 2s, anchor={anchor_point}, anchor_seg={anchor_words_segment_point}, total={total_words}, step={step}, start={min(anchor_point, anchor_words_segment_point)}, isfirst={is_first_idx}, ")
+                        line_words.audio_segment_ids.append(anchor_words_segment_id)
+                else:
+                    # everything dropped again?
+                    # because if a `line_words` fully dropped, its already interpolated to the previous and next overlapping anchor segment.
+                    raise ValueError("Not sure why even this step get triggered, need more data and edge cases")
+
+
+    def _interpolate_word_first(self, lines_map, line_words, anchor, line_idx, gap_from_start, current_segment_start_id, audio_segments):
+        # first word is dropped
+        # Resolution:
+        # Check next words, keep the gap
+        # Check unused audio mask
+        # Check gap to previous line_words end time, previous line_words unused audio segment end time
+        current_segment_start = audio_segments[current_segment_start_id]
+        current_anchor_word_start = min(anchor, key=lambda x: x.start).start if anchor else None
+        prev_line_words = lines_map.get(line_idx - 1) if line_idx > 0 else None
+        if prev_line_words is not None:
+            prev_segment_id = max(prev_line_words.audio_segment_ids)
+            assert current_segment_start_id >= prev_segment_id, f"not sure why ({line_idx}) word segment id is less than the next idx: prev:{prev_segment_id}, cur={current_segment_start_id}"
+        self._interpolate_on_based_anchors(line_words, prev_line_words, anchor, current_segment_start_id, current_anchor_word_start, current_segment_start.start, gap_from_start, audio_segments, is_first_idx=True)
+
+    def _interpolate_word_last(self, lines_map, line_words, anchor, line_idx, gap_from_end, current_segment_end_id, audio_segments):
+        # last word is dropped
+        # Resolution:
+        # Check previous words, keep the gap
+        # Check unused audio mask
+        # Check gap to next line_words, next line_words unused start time
+        current_segment_end = audio_segments[current_segment_end_id]
+        current_anchor_word_end = max(anchor, key=lambda x: x.end).end if anchor else None
+        next_line_words = lines_map.get(line_idx + 1) if line_idx < len(lines_map) - 1 else None
+        if next_line_words is not None:
+            next_segment_id = min(next_line_words.audio_segment_ids)
+            assert current_segment_end_id <= next_segment_id, f"not sure why ({line_idx}) word segment id is more than the next idx: next={next_segment_id}, cur={current_segment_end_id}"
+        self._interpolate_on_based_anchors(line_words, next_line_words, anchor, current_segment_end_id, current_anchor_word_end, current_segment_end.end, gap_from_end, audio_segments, is_first_idx=False)
+
+    def _interpolate_word_middle(self, line_words):
+        for i, w in enumerate(line_words):
+            if w.start is None:
+                assert i != 0, "Word first should be interpolated previously"
+                assert i < len(line_words) - 1, "Word last should be interpolated previously"
+                prev_gap, next_gap = 0, 0
+                prev_word, next_word = None, None
+                for j in range(i - 1, -1, -1):
+                    if (prev_word:=line_words[j]).start is not None:
+                        break
+                    prev_gap += 1
+                for j in range(i + 1, len(line_words)):
+                    if (next_word:=line_words[j]).start is not None:
+                        break
+                    next_gap += 1
+                assert (prev_word.start is not None) == (next_word.start is not None), "Dropped word already is interpolated, not sure why this doesnt have any anchor word"
+                start_idx = i - prev_gap
+                end_idx = i + next_gap
+                dropped_words = [line_words[k] for k in range(start_idx, end_idx + 1)]
+                step = (next_word.start - prev_word.end) / max(1, len(dropped_words))
+                self._update_ts_from_interpolation(dropped_words, step, len(dropped_words), prev_word.end)
+
+    def _interpolate_words_lines(self, line_idx, line_words, lines_map, audio_segments):
+        anchor = []
+        gap_from_start = float("inf")
+        gap_from_end = -1
+        # 0 means first and last is not None
+        # >1 means the next step
+        for i, w in enumerate(line_words):
+            if w.start is not None:
+                anchor.append(w)
+                gap_from_end = len(line_words) - 1 - i
+                gap_from_start = min(i, gap_from_start)
+        word_first = line_words[0]
+        word_last = line_words[-1]
+        current_segment_start_id = min(line_words.audio_segment_ids)
+        current_segment_end_id = max(line_words.audio_segment_ids)
+        if word_first.start is None:
+            self._interpolate_word_first(lines_map, line_words, anchor, line_idx, gap_from_start, current_segment_start_id, audio_segments)
+        if word_last.start is None:
+            self._interpolate_word_last(lines_map, line_words, anchor, line_idx, gap_from_end, current_segment_end_id, audio_segments)
+        if any(w.start is None for w in line_words):
+            self._interpolate_word_middle(line_words)
+
+    def _normalize_audio_segments(self, audio_segments):
+        for aseg in audio_segments:
+            aseg.start = float(round(aseg.start, 3))
+            aseg.end = float(round(aseg.end, 3))
+        
+    def _map_to_audio_segment(self, ref_tokens: list[WordTiming], audio_segments: list[AudioSegment]):
+        assert audio_segments, "audio_segments is required"
+        self._normalize_audio_segments(audio_segments)
+        audio_segments = sorted(audio_segments, key=lambda x: x.start)
+        audio_mask_ms = self._prepare_audiosegment_mask(audio_segments, 1.0)
+        lines_map: dict[int, BasicList[WordTiming]] = defaultdict(BasicList) # {line_idx: List[WordTiming]}
+        for token in ref_tokens: lines_map[token.line_idx].append(token)
+        lines_map = self._interpolate_segments_lines(lines_map, audio_mask_ms, audio_segments)
+        for idx, line_words in lines_map.items():
+            any_drop = any(w.start is None for w in line_words)
+            if any_drop:
+                self._interpolate_words_lines(idx, line_words, lines_map, audio_segments)
+        return lines_map
+
+    def _validate_line_to_audio(self, line_words, audio_seg_ids, audio_mask, audio_segments):
+        env.numpy; import numpy as np # type: ignore  # noqa: B018, I001
+        matched_segs = self._get_audiosegment_ids(audio_mask, line_words)
+        assert set(matched_segs) == audio_seg_ids, f"Missmatch: {set(matched_segs)} to {audio_seg_ids}"
+        min_start = min(line_words, key=lambda x: x.start).start
+        max_end = max(line_words, key=lambda x: x.end).end
+        min_audio_start = audio_segments[min(audio_seg_ids)].start
+        max_audio_end = audio_segments[max(audio_seg_ids)].end
+        assert (np.isclose(min_start, min_audio_start, atol=5e-3) or min_start >= min_audio_start), f"Word timing is too early, word={min_start} to audio={min_audio_start}"
+        assert (np.isclose(max_end, max_audio_end, atol=5e-3) or max_end <= max_audio_end), f"Word timing is too long, word={max_end} to audio={max_audio_end}"
+        assert any(w.language is not None for w in line_words), f"WordLines require minimum 1 language, {line_words}"
+        for w in line_words:
+            assert w.line_idx is not None, f"Word object changed as it doesnt have `line_idx`: {w}"
+            assert np.isfinite(w.start), w
+            assert np.isfinite(w.end), w
+
+
+    def _cluster_lines(self, lines_map, audio_segments):
+        lines_map = dict(sorted(lines_map.items()))
+        clusters = []
+        current_lines = []
+        current_audio_seg_ids = set()
+        for i, line_words in lines_map.items():
+            audio_seg_ids = set(line_words.audio_segment_ids)
+            if not current_lines or not current_audio_seg_ids.isdisjoint(audio_seg_ids):
+                current_lines.append(line_words)
+                current_audio_seg_ids.update(audio_seg_ids)
+            else:
+                clusters.append((current_lines, current_audio_seg_ids))
+                current_lines = [line_words]
+                current_audio_seg_ids = audio_seg_ids
+        if current_lines:
+            clusters.append((current_lines, current_audio_seg_ids))
+        # for validation
+        audio_mask_ms = self._prepare_audiosegment_mask(audio_segments, 1.0)
+        new_segments = []
+        new_audio_segments = []
+        for line_words, audio_seg_ids in clusters:
+            line_words = list(chain.from_iterable(line_words))
+            self._validate_line_to_audio(line_words, audio_seg_ids, audio_mask_ms, audio_segments)
+            lang_list = [w.language for w in line_words if hasattr(w, "language")]
+            new_segments.append(Segment(words=line_words, language=list(set(lang_list))))
+            min_audio_start = audio_segments[min(audio_seg_ids)].start
+            max_audio_end = audio_segments[max(audio_seg_ids)].end
+            new_audio_segments.append(AudioSegment(start=float(round(min_audio_start, 3)), end=float(round(max_audio_end, 3))))
+        assert len(new_segments) == len(new_audio_segments)
+        if self.verbose:
+            from rich import box  # type: ignore
+            from rich.panel import Panel  # type: ignore
+            from rich.table import Table  # type: ignore
+            table = Table(title="Final Reference Timestamp", show_lines=True, box=box.MINIMAL,)
+            table.add_column("IDX", style="cyan")
+            table.add_column("Line Words", "blue")
+            table.add_column("Language Hypothesis", "grey")
+            table.add_column("Word Segment", style="magenta")
+            table.add_column("New Audio Segment", style="green")
+            table.add_column("Ori Audio Segment", style="green")
+            prev_max_audio_id = -1
+            for idx, ((seg, aseg), (line_words, audio_seg_ids)) in enumerate(zip(zip(new_segments, new_audio_segments), clusters)):
+                min_audio_id, max_audio_id, = min(audio_seg_ids), max(audio_seg_ids)
+                dropped_segment_between, dropped_segment_after = [], []
+                for i in range(prev_max_audio_id + 1, min_audio_id): dropped_segment_between.append(audio_segments[i])
+                prev_max_audio_id = max_audio_id
+                if dropped_segment_between:
+                    for drop in dropped_segment_between:
+                        table.add_row("None", "None", "None", "None", "None",
+                                        f"[red][{drop.h_start}-{drop.h_end}]\nDur: ({drop.duration:.3f})\nStatus: Dropped[/]")
+                ori_lines = []
+                for i in range(min_audio_id, max_audio_id + 1):
+                    audio_seg = audio_segments[i]
+                    if i in audio_seg_ids:
+                        ori_lines.append(f"[{audio_seg.h_start}-{audio_seg.h_end}]")
+                    else:
+                        ori_lines.append(f"[red][{audio_seg.h_start}-{audio_seg.h_end}][/]")
+                table.add_row(str(idx), seg.text, ",".join(seg.language),
+                    f"[{seg.h_start}-{seg.h_end}]\nDur: ({seg.duration:.3f})",
+                    f"[{aseg.h_start}-{aseg.h_end}]\nDur: ({aseg.duration:.3f})",
+                    "\n".join(ori_lines))
+                if idx == len(clusters) - 1 and prev_max_audio_id < len(audio_segments) - 1:
+                    for i in range(prev_max_audio_id + 1, len(audio_segments)): dropped_segment_after.append(audio_segments[i])
+                if dropped_segment_after:
+                    for drop in dropped_segment_after:
+                        table.add_row("None", "None", "None", "None", "None",
+                                f"[red][{drop.h_start}-{drop.h_end}]\nDur: ({drop.duration:.3f})\nStatus: Dropped[/]")
+            panel = Panel(table)
+            self.console.print(panel)
+
+        return new_segments, new_audio_segments
+
+    def get_reference_timestamp(self,
+        hypothesis: Result, reference: str,
+        audio_segments: list[AudioSegment]
+    ) -> tuple[Result, list[AudioSegment]]:
+        ref_lines, ref_tokens, hyp_tokens = self.prepare_alignments(hypothesis, reference)
+        aligned_map = self._sequence_align(ref_tokens, hyp_tokens)
+        for m in aligned_map:
+            if m.op in ["M", "S"]:
+                lyric_token = ref_tokens[m.ref_idx]
+                transcript_token = hyp_tokens[m.hyp_idx]
+                lyric_token.start = float(round(transcript_token.start, 3))
+                lyric_token.end = float(round(transcript_token.end, 3))
+                lyric_token.score = float(transcript_token.score)
+                lyric_token.language = str(transcript_token.language)
+                lyric_token.source = "asr"
+        lines_map = self._map_to_audio_segment(ref_tokens, audio_segments)
+        final_segments, new_audio_segments = self._cluster_lines(lines_map, audio_segments)
+        return Result(segments=final_segments), new_audio_segments
