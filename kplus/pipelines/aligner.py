@@ -571,7 +571,7 @@ class ReferenceAligner:
         for line_words, audio_seg_ids in clusters:
             line_words = list(chain.from_iterable(line_words))
             self._validate_line_to_audio(line_words, audio_seg_ids, audio_mask_ms, audio_segments)
-            lang_list = [w.language for w in line_words if hasattr(w, "language")]
+            lang_list = [w.language for w in line_words if getattr(w, "language", None) is not None]
             new_segments.append(Segment(words=line_words, language=list(set(lang_list))))
             min_audio_start = audio_segments[min(audio_seg_ids)].start
             max_audio_end = audio_segments[max(audio_seg_ids)].end
@@ -605,7 +605,8 @@ class ReferenceAligner:
                         ori_lines.append(f"[{audio_seg.h_start}-{audio_seg.h_end}]")
                     else:
                         ori_lines.append(f"[red][{audio_seg.h_start}-{audio_seg.h_end}][/]")
-                table.add_row(str(idx), seg.text, ",".join(seg.language),
+                langs = ",".join(str(l) for l in seg.language) if getattr(seg, 'language', None) else "Unknown"
+                table.add_row(str(idx), seg.text, langs,
                     f"[{seg.h_start}-{seg.h_end}]\nDur: ({seg.duration:.3f})",
                     f"[{aseg.h_start}-{aseg.h_end}]\nDur: ({aseg.duration:.3f})",
                     "\n".join(ori_lines))
