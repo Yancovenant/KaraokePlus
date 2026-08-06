@@ -436,7 +436,18 @@ class ReferenceAligner:
                         if self.verbose: self.console.print(f">> using segment anchor, gap less than 2s, anchor={anchor_point}, anchor_seg={anchor_words_segment_point}, total={total_words}, step={step}, start={min(anchor_point, anchor_words_segment_point)}, isfirst={is_first_idx}, ")
                         min_audio_seg_id = min(line_words.audio_segment_ids)
                         max_audio_seg_id = anchor_words_segment_id
-                        assert max(line_words.audio_segment_ids) < max_audio_seg_id, f"Current linewords max: {max(line_words.audio_segment_ids)} to {anchor_words_segment_id}"
+                        assert max(line_words.audio_segment_ids) < max_audio_seg_id, (
+                            f"Missmatch between current line_words max audio seg and anchor segment IDs!\n"
+                            f"line_words.audio_segment_ids:     {line_words.audio_segment_ids}\n"
+                            f"Maximum:                          {max(line_words.audio_segment_ids)}\n"
+                            f"anchor_words.audio_segment_ids:   {anchor_words.audio_segment_ids}\n\n"
+                            f"Line Text: '{' '.join(w.word for w in line_words)}'\n\n"
+                            f"Word Timestamps:\n" + 
+                            "\n".join(f" - {w.word:<10} : {w.h_start} ➔ {w.h_end} | LineIdx: {w.line_idx} | Score: {w.score}" for w in line_words) + "\n\n"
+                            f"Involved Audio Segments:\n" + 
+                            "\n".join(f" - Seg {idx:<2} : {audio_segments[idx].h_start} ➔ {audio_segments[idx].h_end}" 
+                                    for idx in sorted(set(line_words.audio_segment_ids) | set(anchor_words.audio_segment_ids)))
+                        )
                         line_words.audio_segment_ids = list(range(min_audio_seg_id, max_audio_seg_id + 1))
                 else:
                     # everything dropped again?
