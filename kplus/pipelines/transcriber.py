@@ -26,13 +26,13 @@ class Transcriber:
             env.torchvision, env.qwen_asr  # noqa: B018
             from qwen_asr import Qwen3ASRModel  # type: ignore # noqa: I001
             import torch # type: ignore
-            dtype = (
+            dtype = kwargs.pop("dtype") or (
                 torch.bfloat16
                 if torch.cuda.is_bf16_supported()
                 and torch.cuda.get_device_capability()[0] >= 8
                 else torch.float32
             )
-            device_map = f"cuda:{'1' if torch.cuda.device_count() > 1 else '0'}" if env.device.type == "cuda" else env.device.type
+            device_map = kwargs.pop("device_map") or f"cuda:{'1' if torch.cuda.device_count() > 1 else '0'}" if env.device.type == "cuda" else env.device.type
             default_asr_kwargs = {
                 "max_inference_batch_size": kwargs.pop("max_inference_batch_size", -1),
                 "max_new_tokens": kwargs.pop("max_new_tokens", 8192),
