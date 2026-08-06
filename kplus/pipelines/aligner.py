@@ -146,7 +146,7 @@ class AlignerAny:
                                 language=language, **options) # Auto lang later on.
                             align_results = self.model.refine(
                                 audio_slice, align_results, steps="se",
-                                precision=0.02, verbose=None, **options)
+                                precision=0.02, **options)
                             seg_words = []
                             for new_res in align_results.segments:
                                 for word in new_res.words:
