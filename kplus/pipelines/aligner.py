@@ -41,6 +41,7 @@ class AlignerAny:
         self.is_whisper = model.__module__.startswith('faster_whisper.')
         self.is_qwen = model.__module__.startswith('qwen_asr.')
         self.token_step = kwargs.pop("token_step", 0)
+        self.regroup = kwargs.pop("regroup", False)
         return kwargs
 
     def get_default_model(self):
@@ -142,7 +143,7 @@ class AlignerAny:
                             lang_chunk_list.append(language) # Fallback currently to "en"
                         elif self.is_whisper:
                             align_results = self.model.align(
-                                audio_slice, res.text, token_step=self.token_step,
+                                audio_slice, res.text, token_step=self.token_step, regroup=self.regroup,
                                 language=language, **options) # Auto lang later on.
                             align_results = self.model.refine(
                                 audio_slice, align_results, steps="se",
