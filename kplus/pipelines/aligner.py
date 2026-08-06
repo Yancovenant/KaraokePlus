@@ -521,8 +521,10 @@ class ReferenceAligner:
         env.numpy; import numpy as np # type: ignore  # noqa: B018, I001
         matched_segs = self._get_audiosegment_ids(audio_mask, line_words)
         assert set(matched_segs) == audio_seg_ids, (
-            f"Missmatch: {set(matched_segs)} to {audio_seg_ids}"
-            f"This happens on {line_words}"
+            f"Missmatch: {set(matched_segs)} to {audio_seg_ids}\n"
+            f"This happens on: \n{' '.join(w.word for w in line_words)}\n"
+            f"{'\n'.join(f'{w.h_start} - {w.h_end}' for w in line_words)}\n"
+            f"{'\n'.join(audio_segments[idx] for idx in audio_seg_ids)}"
         )
         min_start = min(line_words, key=lambda x: x.start).start
         max_end = max(line_words, key=lambda x: x.end).end
