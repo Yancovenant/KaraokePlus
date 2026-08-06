@@ -475,9 +475,9 @@ class ReferenceAligner:
                 dropped_words = [line_words[k] for k in range(start_idx, end_idx + 1)]
                 step = (next_word.start - prev_word.end) / max(1, len(dropped_words))
                 self._update_ts_from_interpolation(dropped_words, step, len(dropped_words), prev_word.end)
-        min_audio_seg_id = min(line_words.audio_segments_id)
-        max_audio_seg_id = max(line_words.audio_segments_id)
-        line_words.audio_segments_id = list(range(min_audio_seg_id, max_audio_seg_id + 1))
+        min_audio_seg_id = min(line_words.audio_segment_ids)
+        max_audio_seg_id = max(line_words.audio_segment_ids)
+        line_words.audio_segment_ids = list(range(min_audio_seg_id, max_audio_seg_id + 1))
 
     def _interpolate_words_lines(self, line_idx, line_words, lines_map, audio_segments):
         anchor = []
