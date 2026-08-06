@@ -99,7 +99,8 @@ class AlignerAny:
               audio: AudioType,
               sr: int,
               result: Result,
-              audio_segments: list[AudioSegment]) -> Result:
+              audio_segments: list[AudioSegment],
+              **kwargs) -> Result:
         if model is None:
             import copy
             self.get_default_model()
@@ -216,7 +217,8 @@ class ReferenceAligner:
         ref_lines = [line.strip() for line in reference.split("\n") if line.strip() and not line.startswith('[')]
         ref_tokens = [ # List of WordTiming [(Word),(Word),(Word)]
             (token:=WordTiming(word=word, start=None, end=None, score=None),
-                setattr(token, "line_idx", line_idx))[0]
+                setattr(token, "line_idx", line_idx),
+                setattr(token, "language", None))[0]
             for line_idx, line in enumerate(ref_lines)
             for word in line.split()
         ]

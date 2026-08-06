@@ -242,7 +242,7 @@ class WordTiming(TimingMixin):
 @dataclass(slots=True)
 class Segment(TimingMixin):
     words: list[WordTiming]
-    language: str | None = None
+    language: str | list[str] | None = None
     ass_event: str | None = None
 
     @property
