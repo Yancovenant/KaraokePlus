@@ -29,7 +29,7 @@ class SongDownloader:
 
     def _fetch_lyrics_api(self, endpoint: str, params: dict) -> str | None:
         try:
-            res = self.session.get(f"https://lrclib.net/api/{endpoint}", params=params, timeout=10)
+            res = self.session.get(f"https://lrclib.net/api/{endpoint}", params=params, timeout=30)
             if res.status_code == 200:
                 data = res.json()
                 if isinstance(data, list) and data: return data[0].get("plainLyrics")
