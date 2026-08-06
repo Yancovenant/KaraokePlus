@@ -35,11 +35,12 @@ class AlignerAny:
         self.is_qwen = False
         self.is_whisper = False
 
-    def populate_model(self, model):
+    def populate_model(self, model, **kwargs):
         self.sr = 16000 # qwen and whisper
         self.model = model
         self.is_whisper = model.__module__.startswith('faster_whisper.')
         self.is_qwen = model.__module__.startswith('qwen_asr.')
+        self.token_step = kwargs.pop("token_step", 0)
 
     def get_default_model(self):
         env.torchaudio; import torchaudio  # type: ignore # noqa: B018, I001
@@ -106,7 +107,7 @@ class AlignerAny:
             self.get_default_model()
             is_default_model = True
         else:
-            self.populate_model(model)
+            self.populate_model(model, **kwargs)
             is_default_model = False
         audio = _process_audio(audio, sr, self.sr)
         results = []
@@ -140,7 +141,7 @@ class AlignerAny:
                             lang_chunk_list.append(language) # Fallback currently to "en"
                         elif self.is_whisper:
                             align_results = self.model.align(
-                                audio_slice, res.text,
+                                audio_slice, res.text, token_step=self.token_step,
                                 language=language, **kwargs) # Auto lang later on.
                             align_results = self.model.refine(
                                 audio_slice, align_results, steps="se",
