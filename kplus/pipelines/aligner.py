@@ -521,10 +521,16 @@ class ReferenceAligner:
         env.numpy; import numpy as np # type: ignore  # noqa: B018, I001
         matched_segs = self._get_audiosegment_ids(audio_mask, line_words)
         assert set(matched_segs) == audio_seg_ids, (
-            f"Missmatch: {set(matched_segs)} to {audio_seg_ids}\n"
-            f"This happens on: \n{' '.join(w.word for w in line_words)}\n"
-            f"{'\n'.join(f'{w.h_start} - {w.h_end}' for w in line_words)}\n"
-            f"{'\n'.join(audio_segments[idx] for idx in audio_seg_ids)}"
+            f"Missmatch between physical timestamps and tracked segment IDs!\n"
+            f"Physical Mask Result: {set(matched_segs)}\n"
+            f"Tracked in Memory:    {audio_seg_ids}\n"
+            f"Difference:           {set(matched_segs).symmetric_difference(audio_seg_ids)}\n\n"
+            f"Line Text: '{' '.join(w.word for w in line_words)}'\n\n"
+            f"Word Timestamps:\n" + 
+            "\n".join(f" - {w.word:<10} : {w.h_start} ➔ {w.h_end}" for w in line_words) + "\n\n"
+            f"Involved Audio Segments:\n" + 
+            "\n".join(f" - Seg {idx:<2} : {audio_segments[idx].h_start} ➔ {audio_segments[idx].h_end}" 
+                      for idx in sorted(set(matched_segs) | audio_seg_ids))
         )
         min_start = min(line_words, key=lambda x: x.start).start
         max_end = max(line_words, key=lambda x: x.end).end
