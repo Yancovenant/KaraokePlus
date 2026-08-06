@@ -434,8 +434,8 @@ class ReferenceAligner:
                         step = abs(anchor_point - anchor_words_segment_point) / max(1, total_words)
                         self._update_ts_from_interpolation(line_words, step, total_words, min(anchor_point, anchor_words_segment_point), direction = 1 if is_first_idx else -1)
                         if self.verbose: self.console.print(f">> using segment anchor, gap less than 2s, anchor={anchor_point}, anchor_seg={anchor_words_segment_point}, total={total_words}, step={step}, start={min(anchor_point, anchor_words_segment_point)}, isfirst={is_first_idx}, ")
-                        min_audio_seg_id = min(line_words.audio_segment_ids, anchor_words_segment_id)
-                        max_audio_seg_id = max(anchor_words_segment_id, line_words.audio_segment_ids)
+                        min_audio_seg_id = min(min(line_words.audio_segment_ids), anchor_words_segment_id)
+                        max_audio_seg_id = max(anchor_words_segment_id, max(line_words.audio_segment_ids))
                         line_words.audio_segment_ids = list(range(min_audio_seg_id, max_audio_seg_id + 1))
                 else:
                     # everything dropped again?
