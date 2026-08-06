@@ -527,7 +527,7 @@ class ReferenceAligner:
             f"Difference:           {set(matched_segs).symmetric_difference(audio_seg_ids)}\n\n"
             f"Line Text: '{' '.join(w.word for w in line_words)}'\n\n"
             f"Word Timestamps:\n" + 
-            "\n".join(f" - {w.word:<10} : {w.h_start} ➔ {w.h_end}" for w in line_words) + "\n\n"
+            "\n".join(f" - {w.word:<10} : {w.h_start} ➔ {w.h_end} | LineIdx: {w.line_idx} | Score: {w.score}" for w in line_words) + "\n\n"
             f"Involved Audio Segments:\n" + 
             "\n".join(f" - Seg {idx:<2} : {audio_segments[idx].h_start} ➔ {audio_segments[idx].h_end}" 
                       for idx in sorted(set(matched_segs) | audio_seg_ids))
