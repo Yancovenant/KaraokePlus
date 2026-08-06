@@ -41,6 +41,7 @@ class AlignerAny:
         self.is_whisper = model.__module__.startswith('faster_whisper.')
         self.is_qwen = model.__module__.startswith('qwen_asr.')
         self.token_step = kwargs.pop("token_step", 0)
+        return kwargs
 
     def get_default_model(self):
         env.torchaudio; import torchaudio  # type: ignore # noqa: B018, I001
@@ -107,7 +108,7 @@ class AlignerAny:
             self.get_default_model()
             is_default_model = True
         else:
-            self.populate_model(model, **kwargs)
+            options = self.populate_model(model, **kwargs)
             is_default_model = False
         audio = _process_audio(audio, sr, self.sr)
         results = []
@@ -142,10 +143,10 @@ class AlignerAny:
                         elif self.is_whisper:
                             align_results = self.model.align(
                                 audio_slice, res.text, token_step=self.token_step,
-                                language=language, **kwargs) # Auto lang later on.
+                                language=language, **options) # Auto lang later on.
                             align_results = self.model.refine(
                                 audio_slice, align_results, steps="se",
-                                precision=0.02, verbose=None, **kwargs)
+                                precision=0.02, verbose=None, **options)
                             seg_words = []
                             for new_res in align_results.segments:
                                 for word in new_res.words:
