@@ -436,7 +436,7 @@ class ReferenceAligner:
                         if self.verbose: self.console.print(f">> using segment anchor, gap less than 2s, anchor={anchor_point}, anchor_seg={anchor_words_segment_point}, total={total_words}, step={step}, start={min(anchor_point, anchor_words_segment_point)}, isfirst={is_first_idx}, ")
                         min_audio_seg_id = min(line_words.audio_segment_ids)
                         max_audio_seg_id = anchor_words_segment_id
-                        assert max(line_words.audio_segment_ids) < max_audio_seg_id
+                        assert max(line_words.audio_segment_ids) < max_audio_seg_id, f"Current linewords max: {max(line_words.audio_segment_ids)} to {anchor_words_segment_id}"
                         line_words.audio_segment_ids = list(range(min_audio_seg_id, max_audio_seg_id + 1))
                 else:
                     # everything dropped again?
