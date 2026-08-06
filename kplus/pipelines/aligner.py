@@ -113,6 +113,7 @@ class AlignerAny:
         desc = "Qwen" if self.is_qwen else ("Whisper" if self.is_whisper else "MMS_FA") + " Aligning..."
         with MainProgress(total = len(audio_segments), desc=desc, unit="chunk") as main_bar:
             try:
+                prev_lang = None
                 if self.is_qwen:
                     audio_chunk_list, text_chunk_list, lang_chunk_list, saved_safe_start = [], [], [], []
                 for res, seg in zip(result.segments, audio_segments):
@@ -123,16 +124,27 @@ class AlignerAny:
                         end_sample = int(safe_end * self.sr)
                         audio_slice = audio[start_sample:end_sample]
                         assert audio_slice.shape[0] > 0
+                        if isinstance(res.language, list):
+                            if "en" in res.language:
+                                language = "en"
+                            else:
+                                language = res.language[0] # first index?
+                        else:
+                            language = res.language
+                        if language is None: language = prev_lang if prev_lang is not None else "en"
+                        prev_lang = language
                         if self.is_qwen:
                             saved_safe_start.append(safe_start)
                             audio_chunk_list.append((audio_slice, self.sr))
                             text_chunk_list.append(res.text)
-                            lang_chunk_list.append(res.language or "en") # Fallback currently to "en"
+                            lang_chunk_list.append(language) # Fallback currently to "en"
                         elif self.is_whisper:
                             align_results = self.model.align(
                                 audio_slice, res.text,
-                                language=res.language or "en", **kwargs) # Auto lang later on.
-                            align_results = self.model.refine(audio_slice, align_results, steps="se", precision=0.02, verbose=None)
+                                language=language, **kwargs) # Auto lang later on.
+                            align_results = self.model.refine(
+                                audio_slice, align_results, steps="se",
+                                precision=0.02, verbose=None, **kwargs)
                             seg_words = []
                             for new_res in align_results.segments:
                                 for word in new_res.words:
