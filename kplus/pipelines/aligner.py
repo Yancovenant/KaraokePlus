@@ -129,7 +129,9 @@ class AlignerAny:
                             text_chunk_list.append(res.text)
                             lang_chunk_list.append(res.language or "en") # Fallback currently to "en"
                         elif self.is_whisper:
-                            align_results = self.model.align(audio_slice, res.text, verbose=None, language=res.language or "en") # Auto lang later on.
+                            align_results = self.model.align(
+                                audio_slice, res.text,
+                                language=res.language or "en", **kwargs) # Auto lang later on.
                             align_results = self.model.refine(audio_slice, align_results, steps="se", precision=0.02, verbose=None)
                             seg_words = []
                             for new_res in align_results.segments:
@@ -518,7 +520,10 @@ class ReferenceAligner:
     def _validate_line_to_audio(self, line_words, audio_seg_ids, audio_mask, audio_segments):
         env.numpy; import numpy as np # type: ignore  # noqa: B018, I001
         matched_segs = self._get_audiosegment_ids(audio_mask, line_words)
-        assert set(matched_segs) == audio_seg_ids, f"Missmatch: {set(matched_segs)} to {audio_seg_ids}"
+        assert set(matched_segs) == audio_seg_ids, (
+            f"Missmatch: {set(matched_segs)} to {audio_seg_ids}"
+            f"This happens on {line_words}"
+        )
         min_start = min(line_words, key=lambda x: x.start).start
         max_end = max(line_words, key=lambda x: x.end).end
         min_audio_start = audio_segments[min(audio_seg_ids)].start
