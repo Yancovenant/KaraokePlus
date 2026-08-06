@@ -441,6 +441,8 @@ class ReferenceAligner:
                             f"line_words.audio_segment_ids:     {line_words.audio_segment_ids}\n"
                             f"Maximum:                          {max(line_words.audio_segment_ids)}\n"
                             f"anchor_words.audio_segment_ids:   {anchor_words.audio_segment_ids}\n\n"
+                            f"anchor id:                        {anchor_words_segment_id}\n"
+                            f"Direction:                        {'first' if is_first_idx else 'last'}\n"
                             f"Line Text: '{' '.join(w.word for w in line_words)}'\n\n"
                             f"Word Timestamps:\n" + 
                             "\n".join(f" - {w.word:<10} : {w.h_start} ➔ {w.h_end} | LineIdx: {w.line_idx} | Score: {w.score}" for w in line_words) + "\n\n"
