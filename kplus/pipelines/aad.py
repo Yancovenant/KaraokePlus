@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 from dataclasses import dataclass
+from types import SimpleNamespace
 from typing import TYPE_CHECKING
 
 from kplus.environment import env
@@ -257,4 +258,7 @@ class AAD:
                 height=675, margin={"l": 20, "r": 20, "t": 40, "b": 20},showlegend=False
             )
             self.fig.show()
-        return final_mask
+        return SimpleNamespace(
+            final_mask=final_mask, flux_mask=flux_mask, onsets=onsets, raw_valleys=raw_valleys,
+            rms_times=rms_times, rms_smoothed=rms_smoothed, rms_mask=rms_mask,
+        )
