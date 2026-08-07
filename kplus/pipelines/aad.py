@@ -45,7 +45,7 @@ class AAD:
         self.hop_length = int((self.sr / 1000) * self.precision_ms) # if sr == 44100 and precision_ms == 1, hop_length = 44 samples
         self.frame_length = int(self.hop_length * 1.5) # 150% of hop_length = 66 samples
 
-    def _get_rms(self, audio):
+    def _get_rms(self, audio, row=2):
         env.numpy; import numpy as np  # type: ignore  # noqa: B018, I001
         from scipy.ndimage import uniform_filter1d  # type: ignore
         rms = self.librosa.feature.rms(y=audio, frame_length=self.frame_length, hop_length=self.hop_length)[0]
@@ -63,26 +63,26 @@ class AAD:
                 x=times, y=rms_mask * np.max(rms_smoothed),
                 name="Mask (Active Audio)", fill="tozeroy",
                 line={"color": "red", "width": 1, "shape": "hv"}, # 'hv' draws sharp 90-degree square waves
-            ), row=2, col=1)
+            ), row=row, col=1)
             self.fig.add_trace(self.go.Scatter(
                 x=times, y=rms_smoothed, name="RMS Smooth", fill="tozeroy",
                     line={"color": "#ffaa00", "width": 2}
-            ), row=2, col=1)
-            self.fig.add_hline(y=rms_threshold, line_dash="dot", line_color="magenta", row=2, col=1,
+            ), row=row, col=1)
+            self.fig.add_hline(y=rms_threshold, line_dash="dot", line_color="magenta", row=row, col=1,
                 annotation_text="RMS Threshold", annotation_position="top right")
         return times, rms_smoothed, rms_mask
 
-    def _get_valleys(self, rms_smoothed, rms_times):
+    def _get_valleys(self, rms_smoothed, rms_times, row=2):
         inverted_rms = -rms_smoothed
         raw_valleys = self.scipy.signal.find_peaks(inverted_rms, prominence=0.01)[0]
         if self.verbose:
             self.fig.add_trace(self.go.Scattergl(
                 x=rms_times[raw_valleys], y=rms_smoothed[raw_valleys],
                 name="Valleys/Peaks", mode="markers", marker={'color': "red", 'size': 8, 'symbol': "circle"}
-            ), row=2, col=1)
+            ), row=row, col=1)
         return raw_valleys
 
-    def _get_flux(self, audio, rms_smoothed, rms_times, rms_mask):
+    def _get_flux(self, audio, rms_smoothed, rms_times, rms_mask, row=2):
         import numpy as np  # type: ignore
         from scipy.ndimage import uniform_filter1d  # type: ignore
         flux = self.librosa.onset.onset_strength(y=audio, sr=self.sr, hop_length=self.hop_length, lag=1)
@@ -105,20 +105,20 @@ class AAD:
                 x=times, y=mask_flux * np.max(flux_smoothed),
                 name="Mask (Spectral Flux)", fill="tozeroy",
                 line={"color": "cyan", "width": 1, "shape": "hv"}, # 'hv' draws sharp 90-degree square waves
-            ), row=2, col=1)
+            ), row=row, col=1)
             self.fig.add_trace(self.go.Scattergl(
                 x=times, y=flux_smoothed, name="Flux Smoothed",
                 line={"color":"#00ffcc", "width": 3},
-            ), row=2, col=1)
+            ), row=row, col=1)
             self.fig.add_trace(self.go.Scattergl(
                 x=times[onsets], y=flux_smoothed[onsets],
                 name="Onsets", mode="markers", marker={'color': "black", 'size': 4, 'symbol': "circle"}
-            ), row=2, col=1)
+            ), row=row, col=1)
             self.fig.add_hline(y=flux_threshold, line_dash="dot", line_color="cyan", row=2, col=1,
                 annotation_text="Flux Threshold", annotation_position="top right")
         return mask_flux, onsets
 
-    def _get_final_mask(self, rms_mask, flux_mask, rms_times, rms_smoothed, onsets, raw_valleys):
+    def _get_final_mask(self, rms_mask, flux_mask, rms_times, rms_smoothed, onsets, raw_valleys, row=3):
         import numpy as np  # type: ignore
         from scipy.ndimage import binary_closing, binary_opening  # type: ignore
         merge_gap_frames = max(1, int(140 / self.precision_ms)) # 140ms gap
@@ -205,7 +205,7 @@ class AAD:
                 x=rms_times, y=final_mask * np.max(rms_smoothed),
                 name="Mask (Combined)", fill="tozeroy",
                 line={"color": "rgba(0, 255, 170, 0.5)", "width": 1, "shape": "hv"}, # 'hv' draws sharp 90-degree square waves
-            ), row=3, col=1)
+            ), row=row, col=1)
         return final_mask
 
     def get_audio_segments(self, audio: AudioType) -> tuple[np.ndarray, list[AudioSegment]]:
@@ -244,8 +244,16 @@ class AAD:
         return audio, audio_segments
 
     def get_final_mask(self, audio_np):
-        rms_times, rms_smoothed, rms_mask = self._get_rms(audio_np)
-        raw_valleys = self._get_valleys(rms_smoothed, rms_times)
-        flux_mask, onsets = self._get_flux(audio_np, rms_smoothed, rms_times, rms_mask)
-        final_mask = self._get_final_mask(rms_mask, flux_mask, rms_times, rms_smoothed, onsets, raw_valleys)
+        if self.verbose:
+            self.fig = self.make_subplots(rows=3, cols=1, shared_xaxes=True,
+                vertical_spacing=0.05, subplot_titles=("RMS", "Flux", "Final"))
+        rms_times, rms_smoothed, rms_mask = self._get_rms(audio_np, row=1)
+        raw_valleys = self._get_valleys(rms_smoothed, rms_times, row=1)
+        flux_mask, onsets = self._get_flux(audio_np, rms_smoothed, rms_times, rms_mask, row=2)
+        final_mask = self._get_final_mask(rms_mask, flux_mask, rms_times, rms_smoothed, onsets, raw_valleys, row=3)
+        if self.verbose:
+            self.fig.update_layout(template="plotly_dark", hovermode="x unified",
+                height=675, margin={"l": 20, "r": 20, "t": 40, "b": 20},showlegend=False
+            )
+            self.fig.show()
         return final_mask
