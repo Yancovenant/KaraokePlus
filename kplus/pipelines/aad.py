@@ -242,3 +242,10 @@ class AAD:
             end_t = rms_times[end_frame]
             audio_segments.append(AudioSegment(start=start_t, end=end_t))
         return audio, audio_segments
+
+    def get_final_mask(self, audio_np):
+        rms_times, rms_smoothed, rms_mask = self._get_rms(audio_np)
+        raw_valleys = self._get_valleys(rms_smoothed, rms_times)
+        flux_mask, onsets = self._get_flux(audio_np, rms_smoothed, rms_times, rms_mask)
+        final_mask = self._get_final_mask(rms_mask, flux_mask, rms_times, rms_smoothed, onsets, raw_valleys)
+        return final_mask
