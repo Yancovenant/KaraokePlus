@@ -48,6 +48,31 @@ class AAD:
         self.hop_length = int((self.sr / 1000) * self.precision_ms) # if sr == 44100 and precision_ms == 1, hop_length = 44 samples
         self.frame_length = int(self.hop_length * 1.5) # 150% of hop_length = 66 samples
 
+    def _merge_gaps(self, mask: np.ndarray, merge_gap_frame: int) -> np.ndarray:
+        """Fill False gaps shorter than `merge_gap_frame` that lie between two True blocks."""
+        out = mask.copy()
+        is_false = ~out # Flipped
+        diffs_silence = np.diff(np.concatenate(([0], is_false.astype(int), [0])))
+        gap_starts = np.where(diffs_silence == 1)[0]
+        gap_ends = np.where(diffs_silence == -1)[0]
+        for s, e in zip(gap_starts, gap_ends):
+            gap_length = e - s
+            if gap_length <= merge_gap_frame:
+                out[s:e] = True
+        return out
+
+    def _delete_mask(self, mask: np.ndarray, min_width_frame: int) -> np.ndarray:
+        """Delete True blocks shorter than `min_width_frame`."""
+        out = mask.copy()
+        diffs = np.diff(np.concatenate(([0], out.astype(int), [0])))
+        starts = np.where(diffs == 1)[0]
+        ends = np.where(diffs == -1)[0]
+        for s, e in zip(starts, ends):
+            mask_length = e - s
+            if mask_length <= min_width_frame:
+                out[s:e] = False
+        return out
+
     def _get_rms(self, audio, row=2):
         env.numpy; import numpy as np  # type: ignore  # noqa: B018, I001
         from scipy.ndimage import uniform_filter1d  # type: ignore
@@ -123,7 +148,6 @@ class AAD:
 
     def _get_final_mask(self, rms_mask, flux_mask, rms_times, rms_smoothed, onsets, raw_valleys, row=3):
         import numpy as np  # type: ignore
-        from scipy.ndimage import binary_closing, binary_opening  # type: ignore
         merge_gap_frames = max(1, int(140 / self.precision_ms)) # 140ms gap
         min_width_frames = max(1, int(100 / self.precision_ms)) # 100ms width
         raw_mask = rms_mask | flux_mask
@@ -144,8 +168,8 @@ class AAD:
                 end_point = min(next_valley, edge + max_forward_frames)
                 raw_mask[edge : end_point] = True
 
-        merged_mask = binary_closing(raw_mask, structure=np.ones(merge_gap_frames))
-        final_mask = binary_opening(merged_mask, structure=np.ones(min_width_frames))
+        merged_mask = self._merge_gaps(raw_mask, merge_gap_frames)
+        final_mask = self._delete_mask(merged_mask, min_width_frames)
         max_block_frames = int(10000 / self.precision_ms)
         gap_frames = max(1, int(0.1 / self.precision_ms))
         flux_tolerance_frames = int(50 / self.precision_ms)
