@@ -52,11 +52,10 @@ class AAD:
         """Fill False gaps shorter than `merge_gap_frame` that lie between two True blocks."""
         env.numpy; import numpy as np  # type: ignore  # noqa: B018, I001
         out = mask.copy()
-        is_false = ~out # Flipped
-        diffs_silence = np.diff(np.concatenate(([0], is_false.astype(int), [0])))
-        gap_starts = np.where(diffs_silence == 1)[0]
-        gap_ends = np.where(diffs_silence == -1)[0]
-        for s, e in zip(gap_starts, gap_ends):
+        diffs = np.diff(np.concatenate(([0], out.astype(int), [0])))
+        starts = np.where(diffs == 1)[0]
+        ends   = np.where(diffs == -1)[0] 
+        for s, e in zip(ends[:-1], starts[1:]): # i.e. the end of one True block, the start of the next True block
             gap_length = e - s
             if gap_length <= merge_gap_frame:
                 out[s:e] = True
