@@ -50,6 +50,7 @@ class AAD:
 
     def _merge_gaps(self, mask: np.ndarray, merge_gap_frame: int) -> np.ndarray:
         """Fill False gaps shorter than `merge_gap_frame` that lie between two True blocks."""
+        env.numpy; import numpy as np  # type: ignore  # noqa: B018, I001
         out = mask.copy()
         is_false = ~out # Flipped
         diffs_silence = np.diff(np.concatenate(([0], is_false.astype(int), [0])))
@@ -63,6 +64,7 @@ class AAD:
 
     def _delete_mask(self, mask: np.ndarray, min_width_frame: int) -> np.ndarray:
         """Delete True blocks shorter than `min_width_frame`."""
+        env.numpy; import numpy as np  # type: ignore  # noqa: B018, I001
         out = mask.copy()
         diffs = np.diff(np.concatenate(([0], out.astype(int), [0])))
         starts = np.where(diffs == 1)[0]
