@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 class AAD:
     """ Audio Activity Detection via RMS/DB 
     """
-    def __init__(self, options):
+    def __init__(self, options, resample=True):
         env.librosa, env.scipy # noqa: B018
         import scipy; self.scipy = scipy  # type: ignore  # noqa: I001
         import librosa; self.librosa = librosa  # type: ignore  # noqa: I001
@@ -35,8 +35,9 @@ class AAD:
             env.plotly, env.plotly_resampler  # noqa: B018
             import plotly.graph_objects as go  # type: ignore
             from plotly.subplots import make_subplots  # type: ignore
-            from plotly_resampler import register_plotly_resampler  # type: ignore
-            register_plotly_resampler(mode='auto')
+            if resample:
+                from plotly_resampler import register_plotly_resampler  # type: ignore
+                register_plotly_resampler(mode='auto')
             self.go = go
             self.make_subplots = make_subplots
 
