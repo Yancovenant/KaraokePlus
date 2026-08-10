@@ -91,6 +91,7 @@ class AlignerAny:
         healed_words = []
         matcher = difflib.SequenceMatcher(None, ori_word, new_word) # should this converted to a number for faster performance? like jiwer does it
         for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+            print(tag, i1, i2)
             if tag == 'equal' or tag == 'replace':
                 healed_words.extend(new_res.words[j1:j2])
             elif tag == 'delete':
