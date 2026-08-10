@@ -222,6 +222,7 @@ class TimingMixin:
         return self._to_hms(self.end)
 
 
+
 @dataclass(slots=True)
 class AudioSegment(TimingMixin):
     start: float
@@ -265,9 +266,7 @@ class WordTiming(TimingMixin):
     @start.setter
     def start(self, val):
         if val != self._start:
-            old_val = f"{self._start:.3f}" if self._start is not None else "None"
-            new_val = f"{val:.3f}" if val is not None else "None"
-            print(f"{self.word} | Start time change > {old_val} to {new_val}")
+            print(f'{"Start":<5}: [{self.h_start} -> {self._to_hms(val)}] "{self.word}"')
         self._start = val
 
     @property
@@ -277,9 +276,7 @@ class WordTiming(TimingMixin):
     @end.setter
     def end(self, val):
         if val != self._end:
-            old_val = f"{self._end:.3f}" if self._end is not None else "None"
-            new_val = f"{val:.3f}" if val is not None else "None"
-            print(f"{self.word} | End time change > {old_val} to {new_val}")
+            print(f'{"End":<5}: [{self.h_end} -> {self._to_hms(val)}] "{self.word}"')
         self._end = val
 
 @dataclass(slots=True)
