@@ -1,16 +1,21 @@
 from __future__ import annotations
 
+import json
+import os
 import subprocess
+import tempfile
+from contextlib import contextmanager
 from dataclasses import dataclass
 from functools import cached_property
 from itertools import groupby
-import json
 from pathlib import Path
 from typing import TYPE_CHECKING, TypeAlias
-from contextlib import contextmanager
+
 import kplus
-import os
-import tempfile
+
+kplus.env.sequence_align, kplus.env.pypinyin, kplus.env.pykakasi, kplus.env.anyascii, kplus.env.jellyfish  # noqa: B018
+# Need to be below this line
+from kplus.tools.romaji_converter import RomajiPhonetic
 
 
 if TYPE_CHECKING:
@@ -248,6 +253,10 @@ class Segment(TimingMixin):
     @property
     def text(self) -> str:
         return " ".join([w.word for w in self.words])
+
+    @property
+    def latin(self) -> str:
+        return " ".join([RomajiPhonetic(w.word).latin for w in self.words])
 
     @property
     def start(self) -> float:
