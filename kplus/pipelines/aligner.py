@@ -84,7 +84,22 @@ class AlignerAny:
         return SimpleNamespace(
             tokens=tokens, char_spans=char_spans, ratio=ratio
         )
-    
+
+    def _fix_whisper(self, new_res, res: Segment) -> None:
+        ori_word = [RomajiPhonetic(w.word).latin for w in res.words]
+        new_word = [RomajiPhonetic(w.word).latin for w in new_res.words]
+        healed_words = []
+        matcher = difflib.SequenceMatcher(None, ori_word, new_word) # should this converted to a number for faster performance? like jiwer does it
+        for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+            if tag == 'equal' or tag == 'replace':
+                healed_words.extend(new_res.words[j1:j2])
+            elif tag == 'delete':
+                logger.warning(f"  -> Whisper deleting words {i1} - {i2}")
+                for missing_idx in range(i1, i2):
+                    healed_words.append(res.words[missing_idx]) 
+            elif tag == 'insert':
+                logger.warning(f"  -> Dropping Whisper hallucination: {[w.word for w in new_res.words[j1:j2]]}")
+
     def align(self,
               model,
               audio: AudioType,
@@ -138,6 +153,11 @@ class AlignerAny:
                                 precision=0.02, **options)
                             seg_words = []
                             for new_res in align_results.segments:
+                                # Fix whisper hallucination
+                                if len(new_res.words) != len(res.words):
+                                    logger.warning(f"Words length missmatch for whisper force align {len(new_res.words)} -> {len(res.words)}")
+                                    self._fix_whisper(new_res, res)
+                                assert len(new_res.words) != len(res.words), "Word missmatch"
                                 for word in new_res.words:
                                     seg_words.append(WordTiming(
                                         start=float(safe_start + word.start),

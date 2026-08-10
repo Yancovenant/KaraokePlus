@@ -11,28 +11,21 @@ import kplus.init
 from kplus.pipelines.utils import *
 
 
-def test_word_timing():
-    word = WordTiming(start=2, end=2, word="OK")
-    inspect(word)
+def test_load_old_pickle_wordtiming():
+    old_picke_dict = {'word': 'hello','start': 1.23,'end': 4.56,'score': None}
+    word = WordTiming.__new__(WordTiming)
+    assert word.start is None and word.score is None and word.end is None
+    word.__setstate__(old_picke_dict)
+    assert word.start == 1.23 and word.end == 4.56
+
+def test_crud_wordtiming():
+    word = WordTiming(start=2, end=3, word="OK")
     word.start = 3
-    word.end = 5
-    inspect(word)
-    print(word)
-    print(round(word.start))
-    old_pickled_state = {
-        'word': 'hello',
-        'start': 1.23,
-        'end': 4.56,
-        'score': 0.99
-    }
-    print("--- Starting Test ---")
-    test_obj = WordTiming.__new__(WordTiming)
-    test_obj.__setstate__(old_pickled_state)
-    print("\n--- Verifying Data ---")
-    print(f"Expected start: 1.23, Got: {test_obj.start}")
-    print(f"Expected end: 4.56, Got: {test_obj.end}")
-    print("\n--- Testing Setters ---")
-    test_obj.start = 2.00
+    assert word._start == word.start
+
+def test_word_timing():
+    test_load_old_pickle_wordtiming()
+    test_crud_wordtiming()
 
 
 if __name__ == "__main__":
