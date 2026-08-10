@@ -5,7 +5,7 @@ import os
 import subprocess
 import tempfile
 from contextlib import contextmanager
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, InitVar
 from functools import cached_property
 from itertools import groupby
 from pathlib import Path
@@ -242,9 +242,14 @@ class WordTiming(TimingMixin):
     _end: float = field(repr=False)
     score: float | None = None
 
-    def __post_init__(self):
-        self._start = self.start
-        self._end = self.end
+    start: InitVar[float | None] = None
+    end: InitVar[float | None] = None
+
+    def __post_init__(self, start, end):
+        if start is not None:
+            self._start = start
+        if end is not None:
+            self._end = end
 
     @property
     def start(self):
@@ -253,7 +258,9 @@ class WordTiming(TimingMixin):
     @start.setter
     def start(self, val):
         if val != self._start:
-            print(f"{self.word} | Start time change > {self._start:.3f} to {val:.3f}")
+            old_val = f"{self._start:.3f}" if self._start is not None else "None"
+            new_val = f"{val:.3f}" if val is not None else "None"
+            print(f"{self.word} | Start time change > {old_val} to {new_val}")
         self._start = val
 
     @property
@@ -263,7 +270,9 @@ class WordTiming(TimingMixin):
     @end.setter
     def end(self, val):
         if val != self._end:
-            print(f"{self.word} | End time change > {self._end:.3f} to {val:.3f}")
+            old_val = f"{self._end:.3f}" if self._end is not None else "None"
+            new_val = f"{val:.3f}" if val is not None else "None"
+            print(f"{self.word} | End time change > {old_val} to {new_val}")
         self._end = val
 
 @dataclass(slots=True)
