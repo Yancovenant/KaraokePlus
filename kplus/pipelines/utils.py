@@ -5,7 +5,7 @@ import os
 import subprocess
 import tempfile
 from contextlib import contextmanager
-from dataclasses import dataclass, field, InitVar
+from dataclasses import InitVar, dataclass, field
 from functools import cached_property
 from itertools import groupby
 from pathlib import Path
@@ -238,18 +238,12 @@ class AudioSegment(TimingMixin):
 @dataclass
 class WordTiming(TimingMixin):
     word: str
-    _start: float = field(repr=False)
-    _end: float = field(repr=False)
+    _start: float = field(init=False, default=None, repr=False)
+    _end: float = field(init=False, default=None, repr=False)
     score: float | None = None
 
-    start: InitVar[float | None] = None
-    end: InitVar[float | None] = None
-
-    def __post_init__(self, start, end):
-        if start is not None:
-            self._start = start
-        if end is not None:
-            self._end = end
+    start: float | None = None
+    end:  float | None = None
 
     @property
     def start(self):
@@ -393,3 +387,5 @@ def sec2ass(s: (float, int)) -> str:
     m, s = divmod(s, 60)
     h, m = divmod(m, 60)
     return f'{h:0>1.0f}:{m:0>2.0f}:{s:0>2.2f}'
+
+
