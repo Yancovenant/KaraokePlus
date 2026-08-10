@@ -265,7 +265,7 @@ class WordTiming(TimingMixin):
 
     @start.setter
     def start(self, val):
-        if val != self._start:
+        if val != self._start and self._end is not None:
             print(f'{"Start":<5}: [{self.h_start} -> {self._to_hms(val)}] "{self.word}"')
         self._start = val
 
@@ -275,7 +275,7 @@ class WordTiming(TimingMixin):
 
     @end.setter
     def end(self, val):
-        if val != self._end:
+        if val != self._end and self._end is not None:
             print(f'{"End":<5}: [{self.h_end} -> {self._to_hms(val)}] "{self.word}"')
         self._end = val
 
