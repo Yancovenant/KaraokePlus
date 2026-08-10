@@ -5,7 +5,7 @@ import os
 import subprocess
 import tempfile
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import cached_property
 from itertools import groupby
 from pathlib import Path
@@ -238,9 +238,13 @@ class AudioSegment(TimingMixin):
 @dataclass
 class WordTiming(TimingMixin):
     word: str
-    _start: float | None = None
-    _end: float | None = None
+    _start: float = field(repr=False)
+    _end: float = field(repr=False)
     score: float | None = None
+
+    def __post_init__(self):
+        self._start = self.start
+        self._end = self.end
 
     @property
     def start(self):
