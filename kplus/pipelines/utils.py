@@ -10,6 +10,7 @@ from functools import cached_property
 from itertools import groupby
 from pathlib import Path
 from typing import TYPE_CHECKING, TypeAlias
+import warnings
 
 import kplus
 
@@ -244,6 +245,18 @@ class WordTiming(TimingMixin):
 
     start: float | None = None
     end:  float | None = None
+
+    def __setstate__(self, state):
+        """Intercepts the object when it is being loaded from cache/pickle."""
+        if 'start' in state and '_start' not in state:
+            warnings.warn(
+                f"Legacy WordTiming object loaded for word '{state.get('word')}'. This object is deprecated and requires re-initialization.",
+                DeprecationWarning,
+                stacklevel=2
+            )
+            state['_start'] = state.pop('start', None)
+            state['_end'] = state.pop('end', None)
+        self.__dict__.update(state)
 
     @property
     def start(self):

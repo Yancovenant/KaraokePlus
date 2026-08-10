@@ -1,6 +1,9 @@
 # Security
 cookies.txt
 
+#pkl
+*.pkl
+
 # Test Images
 *.jpg
 *.png

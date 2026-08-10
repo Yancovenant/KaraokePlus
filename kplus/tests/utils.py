@@ -18,7 +18,21 @@ def test_word_timing():
     word.end = 5
     inspect(word)
     print(word)
-    
+    print(round(word.start))
+    old_pickled_state = {
+        'word': 'hello',
+        'start': 1.23,
+        'end': 4.56,
+        'score': 0.99
+    }
+    print("--- Starting Test ---")
+    test_obj = WordTiming.__new__(WordTiming)
+    test_obj.__setstate__(old_pickled_state)
+    print("\n--- Verifying Data ---")
+    print(f"Expected start: 1.23, Got: {test_obj.start}")
+    print(f"Expected end: 4.56, Got: {test_obj.end}")
+    print("\n--- Testing Setters ---")
+    test_obj.start = 2.00
 
 
 if __name__ == "__main__":
