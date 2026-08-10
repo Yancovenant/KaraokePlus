@@ -58,22 +58,10 @@ class AlignerAny:
 
     def default_tokenize(self, text) -> list[SimpleNamespace]:
         tokens = []
-        chunks = re.split(r'([\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]+)', text)
-        for chunk in chunks:
-            if not chunk: continue
-            if (self.RE_JP.search(chunk) or
-                self.RE_CHINESE.search(chunk) or
-                self.RE_KR.search(chunk)):
-                tokens.extend(SimpleNamespace(
-                    original=char, token=token
-                ) for char in chunk if (token:=self.RE_LATIN.sub('', char.lower())))
-            else:
-                prev_token = None
-                for w in chunk.split():
-                    if w in ".,!?" and prev_token: prev_token.original += w; continue
-                    if token := self.RE_LATIN.sub('', w.lower()):
-                        tokens.append(prev_token:=SimpleNamespace(
-                        original=w, token=token))
+        for chunk in text.split():
+            if not chunk.strip(): continue
+            romaji = RomajiPhonetic(chunk)
+            tokens.append(original=romaji.orig, token=romaji.latin)
         return tokens
 
     def default_align(self, audio_slice: np.ndarray, res: Segment) -> SimpleNamespace:
@@ -172,9 +160,11 @@ class AlignerAny:
                                 last_char_span = current_char_spans[-1]
                                 local_start = int(ratio * first_char_span[0].start) / self.sr
                                 local_end = int(ratio * last_char_span[-1].end) / self.sr
+                                total_score = sum(c[0].score for c in current_char_spans) / len(current_char_spans)
                                 rw = copy.copy(res.words[i])
                                 rw.start = local_start + safe_start
                                 rw.end = local_end + safe_start
+                                rw.score = float(total_score)
                                 seg_words.append(rw)
                             results.append(Segment(words=seg_words))
                             main_bar.update(1)
