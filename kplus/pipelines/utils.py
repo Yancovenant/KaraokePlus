@@ -17,7 +17,6 @@ kplus.env.sequence_align, kplus.env.pypinyin, kplus.env.pykakasi, kplus.env.anya
 # Need to be below this line
 from kplus.tools.romaji_converter import RomajiPhonetic
 
-
 if TYPE_CHECKING:
     import numpy as np, torch # type: ignore  # noqa: I001
     AudioType : TypeAlias = "torch.Tensor | np.ndarray | str"

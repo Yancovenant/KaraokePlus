@@ -127,11 +127,11 @@ class AlignerAny:
                         if self.is_qwen:
                             saved_safe_start.append(safe_start)
                             audio_chunk_list.append((audio_slice, self.sr))
-                            text_chunk_list.append(res.text)
+                            text_chunk_list.append(res.latin)
                             lang_chunk_list.append(language) # Fallback currently to "en"
                         elif self.is_whisper:
                             align_results = self.model.align(
-                                audio_slice, res.text, token_step=self.token_step, regroup=self.regroup,
+                                audio_slice, res.latin, token_step=self.token_step, regroup=self.regroup,
                                 language=language, **options) # Auto lang later on.
                             align_results = self.model.refine(
                                 audio_slice, align_results, steps="se",
