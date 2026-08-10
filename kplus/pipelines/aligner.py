@@ -85,7 +85,7 @@ class AlignerAny:
             tokens=tokens, char_spans=char_spans, ratio=ratio
         )
 
-    def _fix_whisper(self, new_res, res: Segment) -> None:
+    def _fix_whisper(self, new_res, res: Segment):
         ori_word = [RomajiPhonetic(w.word).latin for w in res.words]
         new_word = [RomajiPhonetic(w.word.strip()).latin for w in new_res.words]
         healed_words = []
@@ -160,7 +160,7 @@ class AlignerAny:
                                 if len(new_res.words) != len(res.words):
                                     logger.warning(f"Words length missmatch for whisper force align {len(new_res.words)} -> {len(res.words)}")
                                     new_res = self._fix_whisper(new_res, res)
-                                assert len(new_res.words) == len(res.words), f"Word missmatch {new_res.text}"
+                                assert len(new_res.words) == len(res.words), f"Word missmatch {new_res.text} | {len(new_res.words)} | {len(res.words)}"
                                 for word in new_res.words:
                                     seg_words.append(WordTiming(
                                         start=float(safe_start + word.start),
