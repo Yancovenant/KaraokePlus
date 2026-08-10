@@ -99,6 +99,7 @@ class AlignerAny:
                     healed_words.append(res.words[missing_idx]) 
             elif tag == 'insert':
                 logger.warning(f"  -> Dropping Whisper hallucination: {[w.word for w in new_res.words[j1:j2]]}")
+        new_res.words = healed_words
 
     def align(self,
               model,
