@@ -100,6 +100,7 @@ class AlignerAny:
             elif tag == 'insert':
                 logger.warning(f"  -> Dropping Whisper hallucination: {[w.word for w in new_res.words[j1:j2]]}")
         new_res.words = healed_words
+        return new_res
 
     def align(self,
               model,
@@ -157,7 +158,7 @@ class AlignerAny:
                                 # Fix whisper hallucination
                                 if len(new_res.words) != len(res.words):
                                     logger.warning(f"Words length missmatch for whisper force align {len(new_res.words)} -> {len(res.words)}")
-                                    self._fix_whisper(new_res, res)
+                                    new_res = self._fix_whisper(new_res, res)
                                 assert len(new_res.words) != len(res.words), "Word missmatch"
                                 for word in new_res.words:
                                     seg_words.append(WordTiming(
