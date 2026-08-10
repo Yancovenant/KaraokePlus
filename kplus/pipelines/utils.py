@@ -238,10 +238,29 @@ class AudioSegment(TimingMixin):
 @dataclass
 class WordTiming(TimingMixin):
     word: str
-    start: float | None = None
-    end: float | None = None
+    _start: float | None = None
+    _end: float | None = None
     score: float | None = None
 
+    @property
+    def start(self):
+        return self._start
+
+    @start.setter
+    def start(self, val):
+        if val != self._start:
+            print(f"{self.word} | Start time change > {self._start:.3f} to {val:.3f}")
+        self._start = val
+
+    @property
+    def end(self):
+        return self._end
+
+    @end.setter
+    def end(self, val):
+        if val != self._end:
+            print(f"{self.word} | End time change > {self._end:.3f} to {val:.3f}")
+        self._end = val
 
 @dataclass(slots=True)
 class Segment(TimingMixin):
