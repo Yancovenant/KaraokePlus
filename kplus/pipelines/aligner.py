@@ -61,7 +61,7 @@ class AlignerAny:
         for chunk in text.split():
             if not chunk.strip(): continue
             romaji = RomajiPhonetic(chunk)
-            tokens.append(original=romaji.orig, token=romaji.latin)
+            tokens.append(SimpleNamespace(original=romaji.orig, token=romaji.latin))
         return tokens
 
     def default_align(self, audio_slice: np.ndarray, res: Segment) -> SimpleNamespace:
