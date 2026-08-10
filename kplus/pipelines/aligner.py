@@ -87,7 +87,7 @@ class AlignerAny:
 
     def _fix_whisper(self, new_res, res: Segment) -> None:
         ori_word = [RomajiPhonetic(w.word).latin for w in res.words]
-        new_word = [RomajiPhonetic(w.word).latin for w in new_res.words]
+        new_word = [RomajiPhonetic(w.word.strip()).latin for w in new_res.words]
         healed_words = []
         matcher = difflib.SequenceMatcher(None, ori_word, new_word) # should this converted to a number for faster performance? like jiwer does it
         for tag, i1, i2, j1, j2 in matcher.get_opcodes():
@@ -159,13 +159,13 @@ class AlignerAny:
                                 if len(new_res.words) != len(res.words):
                                     logger.warning(f"Words length missmatch for whisper force align {len(new_res.words)} -> {len(res.words)}")
                                     new_res = self._fix_whisper(new_res, res)
-                                assert len(new_res.words) == len(res.words), "Word missmatch"
+                                assert len(new_res.words) == len(res.words), f"Word missmatch {new_res.text}"
                                 for word in new_res.words:
                                     seg_words.append(WordTiming(
                                         start=float(safe_start + word.start),
                                         end=float(safe_start + word.end),
                                         score=float(word.probability),
-                                        word=str(word.word)
+                                        word=str(word.word.strip())
                                     ))
                             results.append(Segment(words=seg_words))
                             main_bar.update(1)
