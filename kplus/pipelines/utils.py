@@ -281,7 +281,7 @@ class WordTiming(TimingMixin):
 
     @property
     def latin(self):
-        return RomajiPhonetic(self.word).latin
+        return RomajiPhonetic(self.word.strip()).latin
 
 @dataclass(slots=True)
 class Segment(TimingMixin):
