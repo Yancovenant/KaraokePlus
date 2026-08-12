@@ -279,6 +279,10 @@ class WordTiming(TimingMixin):
             print(f'{"End":<5}: [{self.h_end} -> {self._to_hms(val)}] "{self.word}"')
         self._end = val
 
+    @property
+    def latin(self):
+        return RomajiPhonetic(self.word)
+
 @dataclass(slots=True)
 class Segment(TimingMixin):
     words: list[WordTiming]
@@ -291,7 +295,7 @@ class Segment(TimingMixin):
 
     @property
     def latin(self) -> str:
-        return " ".join([RomajiPhonetic(w.word).latin for w in self.words])
+        return " ".join(w.latin for w in self.words)
 
     @property
     def start(self) -> float:
