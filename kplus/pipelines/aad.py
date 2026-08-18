@@ -145,7 +145,7 @@ class AAD:
             ), row=row, col=1)
             self.fig.add_hline(y=flux_threshold, line_dash="dot", line_color="cyan", row=2, col=1,
                 annotation_text="Flux Threshold", annotation_position="top right")
-        return mask_flux, onsets, flux_smoothed
+        return mask_flux, onsets, flux_smoothed, flux
 
     def _get_final_mask(self, rms_mask, flux_mask, rms_times, rms_smoothed, onsets, raw_valleys, row=3):
         import numpy as np  # type: ignore
@@ -253,7 +253,7 @@ class AAD:
                     subplot_titles=("Raw Waveform", "RMS", "Segmented"))
         rms_times, rms_smoothed, rms_mask = self._get_rms(audio)
         raw_valleys = self._get_valleys(rms_smoothed, rms_times)
-        flux_mask, onsets, flux_smoothed = self._get_flux(audio, rms_smoothed, rms_times, rms_mask)
+        flux_mask, onsets, flux_smoothed, flux = self._get_flux(audio, rms_smoothed, rms_times, rms_mask)
         final_mask = self._get_final_mask(rms_mask, flux_mask, rms_times, rms_smoothed, onsets, raw_valleys)
         if self.verbose:
             self.fig.update_layout(template="plotly_dark", hovermode="x unified",
@@ -277,7 +277,7 @@ class AAD:
                 vertical_spacing=0.05, subplot_titles=("RMS", "Flux", "Final"))
         rms_times, rms_smoothed, rms_mask = self._get_rms(audio_np, row=1)
         raw_valleys = self._get_valleys(rms_smoothed, rms_times, row=1)
-        flux_mask, onsets, flux_smoothed = self._get_flux(audio_np, rms_smoothed, rms_times, rms_mask, row=2)
+        flux_mask, onsets, flux_smoothed, flux = self._get_flux(audio_np, rms_smoothed, rms_times, rms_mask, row=2)
         final_mask = self._get_final_mask(rms_mask, flux_mask, rms_times, rms_smoothed, onsets, raw_valleys, row=3)
         if self.verbose:
             self.fig.update_layout(template="plotly_dark", hovermode="x unified",
@@ -287,4 +287,5 @@ class AAD:
         return SimpleNamespace(
             final_mask=final_mask, flux_mask=flux_mask, onsets=onsets, raw_valleys=raw_valleys,
             rms_times=rms_times, rms_smoothed=rms_smoothed, rms_mask=rms_mask, flux_smoothed=flux_smoothed,
+            flux=flux,
         )
