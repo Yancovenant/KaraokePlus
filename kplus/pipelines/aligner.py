@@ -127,8 +127,8 @@ class AlignerAny:
                     audio_chunk_list, text_chunk_list, lang_chunk_list, saved_safe_start = [], [], [], []
                 for res, seg in zip(result.segments, audio_segments):
                     if seg.start <= ((res.end + res.start) / 2) <= seg.end:
-                        safe_start = max(min(res.start, seg.start), res.start - 1.0)
-                        safe_end = min(max(res.end, seg.end), res.end + 1.0)
+                        safe_start = max(0, max(min(res.start, seg.start), res.start - 1.0) - 0.5)
+                        safe_end = min(len(audio), min(max(res.end, seg.end), res.end + 1.0) + 0.5)
                         start_sample = int(safe_start * self.sr)
                         end_sample = int(safe_end * self.sr)
                         audio_slice = audio[start_sample:end_sample]
