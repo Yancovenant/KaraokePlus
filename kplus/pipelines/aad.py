@@ -30,8 +30,11 @@ class AAD:
         self.precision_ms = options.precision_ms
         self.verbose = options.verbose
         self.sr = None
+        overlap = 0.75
+        if (overlap:=options.overlap) is not None:
+            assert 0 <= overlap < 1, "Overlap cannot be negative or more than 1"
         if options.sr is not None:
-            self._populate_sr(options.sr)
+            self._populate_sr(options.sr, overlap)
         if self.verbose:
             env.plotly  # noqa: B018
             import plotly.graph_objects as go  # type: ignore
@@ -43,10 +46,10 @@ class AAD:
             self.go = go
             self.make_subplots = make_subplots
 
-    def _populate_sr(self, sr):
+    def _populate_sr(self, sr, overlap):
         self.sr = sr
         self.hop_length = int((self.sr / 1000) * self.precision_ms) # if sr == 44100 and precision_ms == 1, hop_length = 44 samples
-        self.frame_length = int(self.hop_length * 1.5) # 150% of hop_length = 66 samples
+        self.frame_length = int(round(self.hop_length / (1 - overlap))) # 150% of hop_length = 66 samples
 
     def _merge_gaps(self, mask: np.ndarray, merge_gap_frame: int) -> np.ndarray:
         """Fill False gaps shorter than `merge_gap_frame` that lie between two True blocks."""
