@@ -31,8 +31,9 @@ class AAD:
         self.verbose = options.verbose
         self.sr = None
         overlap = 0.75
-        if (overlap:=options.overlap) is not None:
+        if getattr(options, "overlap", None) is not None:
             assert 0 <= overlap < 1, "Overlap cannot be negative or more than 1"
+            overlap = options.overlap
         if options.sr is not None:
             self._populate_sr(options.sr, overlap)
         if self.verbose:
