@@ -78,10 +78,16 @@ class Karaoke(Command):
         audio_loader = AudioLoader(sep_info.vocs_path, samplerate=16000, channels=1)
         audio_np = audio_loader.audio_np
 
-        # Step 3 Transcribe
+        # Step 3 Transcribe Using Whisper
         trans_class = Transcriber(verbose=True)
-        trans_class.load_model("qwen")
-        trans_result =  trans_class.transcribe(audio_np, audio_segments, info.lyrics)
+        trans_class.load_model("large-v3", beamsize=10, max_threads=2)
+        trans_result =  trans_class.transcribe(audio_np, audio_segments, info.lyrics,
+                                           multilingual=True, patience=2.5, regroup=False,
+                                           language_detection_threshold=0.9, compression_ratio_threshold=2.0,
+                                           log_prob_threshold=-1.0, no_speech_threshold=0.6, best_of=5,
+                                           vad_filter=False, temperature=(0.0, 0.2, 0.4, 0.6, 0.8, 1.0),)
+        del trans_class.model, trans_class
+        env.clean()
         logger.info(f"Finished Transcribing -- {len(trans_result.segments)} segments")
         ref_segments, new_audio_segments = ReferenceAligner(verbose=True).get_reference_timestamp(
             trans_result, info.lyrics, audio_segments
@@ -101,18 +107,22 @@ class Karaoke(Command):
 
     
     def _align_many(self, trans_class, audio_np, ref_segments, audio_segments):
-        # qwen...
-        model = trans_class.model
-        fa_res_qwen = AlignerAny().align(model, audio_np, None, ref_segments, audio_segments)
-        del model, trans_class.model, trans_class
-        env.clean()
-        # Whisper
-        trans_class = Transcriber(verbose=True)
-        model = trans_class.load_model("tiny", beamsize=10, max_threads=2)
-        fa_res_whisper = AlignerAny().align(model, audio_np, None, ref_segments, audio_segments)
-        del model, trans_class.model, trans_class
-        env.clean()
-        # MMS FA
-        fa_res_def = AlignerAny().align(None, audio_np, None, ref_segments, audio_segments)
-        env.clean()
+        torch = env.torch
+        logger.debug(f"Multi align ref_segs: {len(ref_segments.segments)}, new audio: {len(audio_segments)}")
+        with torch.inference_mode():
+            trans_class = Transcriber(verbose=True)
+            #qwen
+            model = trans_class.load_model("qwen", max_inference_batch_size=1, dtype=torch.float16)
+            fa_res_qwen = AlignerAny().align(model, audio_np, None, ref_segments, audio_segments)
+            del model, trans_class.model
+            env.clean()
+            # Whisper
+            model = trans_class.load_model("large-v3", beamsize=10, max_threads=2)
+            fa_res_whisper = AlignerAny().align(model, audio_np, None, ref_segments, audio_segments, verbose=True, token_step=0, regroup=False)
+            del model, trans_class.model, trans_class
+            env.clean()
+            # MMS FA
+            fa_res_def = AlignerAny().align(None, audio_np, None, ref_segments, audio_segments)
+            env.clean()
+        logger.debug(f"len of qwen: {len(fa_res_qwen.segments)}, whisper: {len(fa_res_whisper.segments)}, mmsfa: {len(fa_res_def.segments)}")
         return (fa_res_qwen, fa_res_whisper, fa_res_def)
