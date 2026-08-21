@@ -4,4 +4,4 @@ from .visualizer import VisualizeWaveform
 from .aligner import *
 from .aad import *
 from .transcriber import *
-from .refiner import Refiner
+from .refiner import TimestampRefiner
