@@ -51,6 +51,7 @@ class TimestampRefiner:
         max_end_align_segs = max(align_segs, key=lambda x: x.end).end
         min_start = min(min_start_align_segs, ori_seg.start, aseg.start)
         max_end = max(max_end_align_segs, ori_seg.end, aseg.end)
+        max_end = min(max_end, aseg.end)
         audio_chunk = self.slice_audio(audio_np, min_start, max_end)
         assert audio_chunk.shape[0] > 0, f"Audio shouldnt be 0 duration, {min_start}-{max_end}"
         return min_start, audio_chunk
