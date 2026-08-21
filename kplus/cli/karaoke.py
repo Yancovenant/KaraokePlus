@@ -90,9 +90,9 @@ class Karaoke(Command):
         ai_align_result = self._align_many(trans_class, audio_np, ref_segments, new_audio_segments)
         logger.info(f"Finished Alignment -- {len(ai_align_result)} AI Aligner, with {(len(seg) for ai_segs in ai_align_result for seg in ai_segs.segments)}")
         # Already cleaned
-        refiner_class = TimestampRefiner(verbose=False, precision_ms=10, sr=16000, resample=False) #0.5ms
+        refiner_class = TimestampRefiner(verbose=False, precision_ms=10, sr=sep_info.sr, resample=False) #0.5ms
         refine_result = refiner_class.refine(
-            *ai_align_result, audio=audio_np, ori=ref_segments, audio_segments=new_audio_segments)
+            *ai_align_result, audio=sep_info.vocs_path, ori=ref_segments, audio_segments=new_audio_segments)
         refine_result.to_lyrics_segment().populate_ass()
         logger.info(f"Finished Refinement and populating ass -- {len(refine_result.segments)} segments")
 
