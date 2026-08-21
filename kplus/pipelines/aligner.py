@@ -569,7 +569,11 @@ class ReferenceAligner:
         max_end = max(line_words, key=lambda x: x.end).end
         min_audio_start = audio_segments[min(audio_seg_ids)].start
         max_audio_end = audio_segments[max(audio_seg_ids)].end
-        assert (np.isclose(min_start, min_audio_start, atol=5e-3) or min_start >= min_audio_start), f"Word timing is too early, word={min_start} to audio={min_audio_start}"
+        assert (np.isclose(min_start, min_audio_start, atol=5e-3) or min_start >= min_audio_start), (
+            f"Word timing is too early:, \n"
+            f"LineWords: {line_words}\n"
+            f"word={min_start} to audio={min_audio_start}"
+        )
         assert (np.isclose(max_end, max_audio_end, atol=5e-3) or max_end <= max_audio_end), f"Word timing is too long, word={max_end} to audio={max_audio_end}"
         assert any(w.language is not None for w in line_words), f"WordLines require minimum 1 language, {line_words}"
         for w in line_words:
