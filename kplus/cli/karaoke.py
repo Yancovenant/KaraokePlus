@@ -67,7 +67,7 @@ class Karaoke(Command):
         logger.info(f">> SR: {sep_info.sr}")
 
         # Step 2 get audio segment
-        aad_opts = SimpleNamespace(verbose=False, precision_ms=0.5, sr=sep_info.sr)
+        aad_opts = SimpleNamespace(verbose=False, precision_ms=0.5, sr=sep_info.sr, overlap=0.75)
         _,audio_segments = AAD(aad_opts).get_audio_segments(sep_info.vocs_path)
         logger.info(f"Finished Getting Audio Segments -- {len(audio_segments)} segments")
         for aseg in audio_segments:
