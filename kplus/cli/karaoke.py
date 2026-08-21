@@ -93,7 +93,7 @@ class Karaoke(Command):
             trans_result, info.lyrics, audio_segments
         )
 
-        ai_align_result = self._align_many(trans_class, audio_np, ref_segments, new_audio_segments)
+        ai_align_result = self._align_many(audio_np, ref_segments, new_audio_segments)
         logger.info(f"Finished Alignment -- {len(ai_align_result)} AI Aligner, with {(len(seg) for ai_segs in ai_align_result for seg in ai_segs.segments)}")
         # Already cleaned
         refiner_class = TimestampRefiner(verbose=False, precision_ms=10, sr=sep_info.sr, resample=False) #0.5ms
@@ -106,7 +106,7 @@ class Karaoke(Command):
         Render(with_ass=True).render(video_filepath=filepath, inst_path=sep_info.inst_path, duration=info.duration, result=refine_result)
 
     
-    def _align_many(self, trans_class, audio_np, ref_segments, audio_segments):
+    def _align_many(self, audio_np, ref_segments, audio_segments):
         torch = env.torch
         logger.debug(f"Multi align ref_segs: {len(ref_segments.segments)}, new audio: {len(audio_segments)}")
         with torch.inference_mode():
