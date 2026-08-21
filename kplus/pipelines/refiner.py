@@ -285,7 +285,7 @@ class TimestampRefiner:
         self._validate(refined_segment)
         return refined_segment
 
-    def refine(self, audio: AudioType, ori: Result, audio_segments: list[AudioSegment], *align_result) -> Result:
+    def refine(self, *align_result, audio: AudioType, ori: Result, audio_segments: list[AudioSegment]) -> Result:
         librosa = env.librosa
         audio_loader = AudioLoader(audio, samplerate=self.sr, channels=1)
         audio_np = audio_loader.audio_np
