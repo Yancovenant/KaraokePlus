@@ -77,6 +77,23 @@ class Rich:
         from rich.logging import RichHandler
         return RichHandler
 
+    # Progress
+    @property
+    def _progress(self):
+        from rich import progress
+        return progress
+
+    def make_progress(self):
+        return self._progress.Progress(
+            self._progress.SpinnerColumn(),
+            self._progress.TextColumn("[progress.description]{task.description}"),
+            self._progress.BarColumn(),
+            self._progress.TextColumn("{task.percentage:>5.1f}%"),
+            self._progress.DownloadColumn(),
+            self._progress.TransferSpeedColumn(),
+            self._progress.TimeRemainingColumn(),
+        )
+
 rich = Rich()
 import sys as _sys
 from gettext import gettext as _, ngettext
@@ -161,8 +178,8 @@ class RichHelpFormatter(argparse.HelpFormatter):
             parts = [heading]
             item_parts = []
             action_table = rich.Table.grid(
-                rich.Column(width=self.formatter._action_max_length, style="b dim"),
-                rich.Column(ratio=1, style="color(15)"), expand=True, padding=(0, 1)
+                rich.Column(width=self.formatter._action_max_length, style="b dim", no_wrap=True),
+                rich.Column(ratio=1, style="color(15)", justify="all"), expand=True, padding=(0, 1)
             )
             for func, args in self.items:
                 res = func(*args)
@@ -186,7 +203,7 @@ class RichHelpFormatter(argparse.HelpFormatter):
     
     def _format_usage(self, usage, actions, groups, prefix):
         usage_row, action_usage = [], None
-        usage_table = rich.Table.grid(rich.Column(width=self._action_max_length, style="b color(15)"), rich.Column(ratio=1, style="color(14)"), expand=True, padding=(0, 1))
+        usage_table = rich.Table.grid(rich.Column(width=self._action_max_length, style="b color(15)"), rich.Column(ratio=1, style="color(14)", justify="left"), expand=True, padding=(0, 1))
         if prefix is None: prefix = _('Usage: ')
         usage_row.append(prefix)
         if usage is not None: usage = usage % dict(prog=self._prog)
@@ -198,8 +215,12 @@ class RichHelpFormatter(argparse.HelpFormatter):
             for action in actions:
                 if action.option_strings: optionals.append(action)
                 else: positionals.append(action)
-            _format = self._format_actions_usage
-            action_usage = _format(optionals + positionals, groups)
+            try:
+                # manage different version of argparse
+                action_usage = self._format_actions_usage(optionals + positionals, groups)
+            except AttributeError:
+                parts, pos_start = self._get_actions_usage_parts(actions, groups)
+                action_usage = " ".join([*parts])
         if usage is not None and "kplus-bin" in usage:
             usage = "kplus-bin" + f" [color(11)]{usage.strip("kplus-bin ")}[/]"
         usage_row.append(usage)

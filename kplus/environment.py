@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import sys
 import kplus
 import socket
@@ -11,6 +13,7 @@ import gc
 import importlib
 import signal
 import shutil
+import random
 
 from functools import cached_property
 from pathlib import Path
@@ -30,35 +33,79 @@ class environment:
         self.print_banner()
         
     def print_banner(self):
-        info_lines = [f"{k:<11}: {v}" for k, v in self.sys_info.items()]
-        max_info_len = max(len(line) + 11 for line in info_lines)
-        max_len = max(max_info_len, len(kplus.Release.description) + 10, 40)
-        banner_parts = ['*' * max_len,
-                        kplus.Release.description.center(max_len, " "),
-                        f" version: {kplus.Release.version} ".center(max_len, " "),
-                        " INFORMATION ".center(max_len, "-"),
-                        *info_lines,
-                        '*' * max_len]
-        print("\n".join(banner_parts))
+        self.rich
+        from rich.table import Table, Column
+        from rich.panel import Panel
+        from rich.align import Align
+        from rich.text import Text
+        from rich.console import Console, Group
+        from .ansii_logo import all_logos
+        
+        console = Console()
+        def apply_color_layers(raw_logo: str) -> str:
+            """Applies a dynamic top-down gradient to ASCII text based on its height."""
+            themes = [
+                ["cyan", "bright_cyan", "blue", "magenta"],                  # Synthwave
+                ["bright_yellow", "yellow", "orange3", "dark_orange"],       # Sunset
+                ["bright_green", "green", "spring_green2", "sea_green2"],    # Neon Matrix
+                ["bright_magenta", "magenta", "purple", "deep_pink2"]        # Vaporwave
+            ]
+            palette = random.choice(themes)
+            # Remove leading/trailing empty newlines so the gradient calculates correctly
+            lines = raw_logo.strip("\n").split("\n")
+            colored_lines = []
+            for i, line in enumerate(lines):
+                # Calculate which color layer this row belongs to
+                color_index = int((i / len(lines)) * len(palette))
+                if color_index >= len(palette):
+                    color_index = len(palette) - 1
+                color = palette[color_index]
+                colored_lines.append(f"[{color}]{line}[/]")
+            return "\n".join(colored_lines)
+
+        logo = random.choice(all_logos)
+        logo = apply_color_layers(logo)
+        info_table = Table.grid(Column(), Column(ratio=1), expand=True, padding=(0, 0))
+        info_table.add_row(Text("Author", style="b color(15)"), Text(": " + kplus.Release.author))
+        info_table.add_row(Text("Version", style="b color(15)"), Text(": " + kplus.Release.version))
+        for k, v in self.sys_info.items():
+            emoji2title = {
+                "Session": "🔑", "Platform": "💻",
+                "OS": "🐧", "Environment": "",
+                "Python": "🐍", "System": ""
+            }
+            info_table.add_row(Text(f"{k}", style="b color(15)"), Text(": " + v, no_wrap=True))
+        main_panel = Panel(
+            Group(logo, Text(""), info_table),
+            border_style="color(14)",
+            title=Text("Karaoke+", style="b"),
+            subtitle=Text("Ready", style="dim"),
+            expand=True, padding=1
+        )
+        console.print(main_panel)
+        console.print()
+        
     
     @cached_property
     def sys_info(self) -> dict:
         env_mapping = {"colab": self.is_colab,
-                                     "kaggle": self.is_kaggle,
-                                     "docker": self.is_docker,
-                                     "local": self.is_local}
+            "kaggle": self.is_kaggle, "docker": self.is_docker,
+            "local": self.is_local
+        }
         environment = next((env for env, active in env_mapping.items() if active), "unknown")
         host = socket.gethostname()
         mac_node = str(uuid.getnode())
         unique_string = f"{host}-{mac_node}".encode("utf-8")
         short_hash = hashlib.sha256(unique_string).hexdigest()[:12].upper()
-        return {"Session": f"{host}-{short_hash}",
-                     "Platform": platform.platform(),
-                     "OS": os.name,
-                     "Environment": environment,
-                     "Python": sys.version.split()[0],
-                    # "Torch": self.device.type
-               }
+        return {
+            "Session": f"{host}-{short_hash}",
+            "Platform": platform.platform(),
+            "System": platform.system().lower(),
+            "OS": os.name,
+            "Environment": environment,
+            "Python": sys.version.split()[0],
+            # "Torch": self.device.type
+        }
                      
     @cached_property
     def uv(self) -> list[str]:
