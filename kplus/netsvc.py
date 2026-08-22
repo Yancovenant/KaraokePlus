@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import logging
 import logging.handlers
 import os
@@ -10,6 +12,16 @@ from kplus.tools.rich import rich
 
 logger = logging.getLogger(__name__)
 
+from typing import TYPE_CHECKING, Iterable
+
+if TYPE_CHECKING:
+    Text = rich.Text
+    Console = rich._console.Console
+    ConsoleRenderable = rich._console.ConsoleRenderable
+    from rich._log_render import FormatTimeCallable
+    from rich.text import TextType
+    Group = rich.Group
+    from rich.traceback import Traceback
 
 class WatchedFileHandler(logging.handlers.WatchedFileHandler):
     def __init__(self, filename):
@@ -31,20 +43,20 @@ class RichLoggingHandler(rich.RichHandler):
         self.time_format = kwargs.get("log_time_format", "[%x %X]")
         self.omit_repeated_times = kwargs.get("omit_repeated_times", True)
         self.level_width = kwargs.get("level_width", None)
-        self._last_time: Optional[Text] = None
+        self._last_time: Text | None = None
         
     def _log_rich_render(self,
-        console: "Console",
-        renderables: Iterable["ConsoleRenderable"],
-        log_time: Optional[datetime] = None,
-        time_format: Optional[Union[str, FormatTimeCallable]] = None,
+        console: Console,
+        renderables: Iterable[ConsoleRenderable],
+        log_time: datetime | None = None,
+        time_format: str | FormatTimeCallable | None = None,
         level: TextType = "",
-        path: Optional[str] = None,
-        line_no: Optional[int] = None,
-        link_path: Optional[str] = None,
+        path: str | None = None,
+        line_no: int | None = None,
+        link_path: str | None = None,
         pid: int = 0,
-        name: Optional[str] = None,
-    ) -> "Group":
+        name: str | None = None,
+    ) -> Group:
         title = rich.Text(overflow="ellipsis", no_wrap=True)
         if self.show_time:
             log_time = log_time or console.get_datetime()
@@ -80,9 +92,9 @@ class RichLoggingHandler(rich.RichHandler):
         self,
         *,
         record: LogRecord,
-        traceback: Optional[Traceback],
-        message_renderable: "ConsoleRenderable",
-    ) -> "ConsoleRenderable":
+        traceback: Traceback | None,
+        message_renderable: ConsoleRenderable,
+    ) -> ConsoleRenderable:
         # TODO: Should this be monkey patch instead on the module level
         # of rich._log_render
         path = os.path.basename(record.pathname)
