@@ -54,19 +54,17 @@ class YTDLPEnvironment:
     
     @staticmethod
     def _detect_browser() -> str | None:
-        browsers = ["chrome", "chromium", "firefox", "edge",
-                    "brave", "opera", "vivaldi",]
-        for browser in browsers:
-            executable_names = {
-                "chrome": ["google-chrome", "google-chrome-stable", "chrome"],
-                "chromium": ["chromium", "chromium-browser"],
-                "firefox": ["firefox"],
-                "edge": ["microsoft-edge", "microsoft-edge-stable"],
-                "brave": ["brave-browser", "brave"],
-                "opera": ["opera"],
-                "vivaldi": ["vivaldi"],
-            }[browser]
-            for executable in executable_names:
+        browsers = {
+            "chrome": ["google-chrome", "google-chrome-stable", "chrome"],
+            "chromium": ["chromium", "chromium-browser"],
+            "firefox": ["firefox"],
+            "edge": ["microsoft-edge", "microsoft-edge-stable"],
+            "brave": ["brave-browser", "brave"],
+            "opera": ["opera"],
+            "vivaldi": ["vivaldi"],
+        }
+        for browser, executables in browsers.items():
+            for executable in executables:
                 if shutil.which(executable):
                     logger.debug("Possible browser detected: %s",browser,)
                     return browser
@@ -76,34 +74,25 @@ class YTDLPEnvironment:
     def detect(cls, cookie_file: str | None = None, max_attempts: int = 4) -> YTDLPEnvironment:
         """ Automatically detect authentication and device environment settings
         """
-        cookie_path = cls._detect_cookie(cookie_file)
-        browser = cls._detect_browser()
         return cls(
-            cookie_file=cookie_path,
-            browser=browser,
+            cookie_file=cls._detect_cookie(cookie_file),
+            browser=cls._detect_browser(),
             max_attempts=max_attempts
         )
 
+    @property
+    def authentication_method(self) -> str:
+        if self.cookie_file: return "cookie-file"
+        if self.browser: return f"browser:{self.browser}"
+        return "anonymous"
 
-class SongDownloader:
-    """ Youtube Aware downloader
-    """
-    def __init__(self, **kwargs):
-        self.session = env.requests.Session()
-        self.session.headers.update({
-            'User-Agent': (
-                'Mozilla/5.0 (X11; Linux x86_64) '
-                'AppleWebKit/537.36 '
-                '(KHTML, like Gecko) '
-                'Chrome/120.0.0.0 Safari/537.36'
-            )
-        })
-        self.YDLEnvironment: YTDLPEnvironment = kwargs.pop("YDLEnvironment", YTDLPEnvironment.detect(kwargs.pop("cookie_file", None), kwargs.pop("max_attempts", 4)))
-        self.without_lyrics = kwargs.pop("without_lyrics", False)
-        if kwargs:
-            logger.debug("Song Downloader Unused Kwargs %s", (kwargs,))
+class YTDLPManager:
+    FORMAT = "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best"
 
-    def _build_extractor_args(self) -> dict:
+    def __init__(self, environment: YTDLPEnvironment):
+        self.environment = environment
+
+    def build_extractor_args(self) -> dict:
         """
             Build current YouTube extractor configuration.
     
@@ -112,13 +101,15 @@ class SongDownloader:
             - Let the PO-token provider handle current token generation.
             - mweb is the preferred client for current PO-token provider setups.
         """
-        youtube_args = {"player_client": ["android", "web"],}
+        youtube_args = {"player_client": list(self.environment.player_clients),}
         # pot here
         return {"youtube": youtube_args}
 
-    def _build_ydl_opts(self, output_template: str, progress_hook, *, simulate: bool = False) -> dict:
+    def build_options(
+        self, output_template: str, progress_hook, *, simulate: bool = False
+    ) -> dict:
         opts = {
-            'format': 'bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
+            'format': self.FORMAT,
             'merge_output_format': 'mp4',
             "outtmpl": output_template,
             "noplaylist": True,
@@ -149,6 +140,25 @@ class SongDownloader:
         if (proxy:=self.YDLEnvironment.proxy):
             opts["proxy"] = proxy
         return opts
+
+class SongDownloader:
+    """ Youtube Aware downloader
+    """
+    def __init__(self, **kwargs):
+        self.session = env.requests.Session()
+        self.session.headers.update({
+            'User-Agent': (
+                'Mozilla/5.0 (X11; Linux x86_64) '
+                'AppleWebKit/537.36 '
+                '(KHTML, like Gecko) '
+                'Chrome/120.0.0.0 Safari/537.36'
+            )
+        })
+        self.YDLEnvironment: YTDLPEnvironment = kwargs.pop("YDLEnvironment", YTDLPEnvironment.detect(kwargs.pop("cookie_file", None), kwargs.pop("max_attempts", 4)))
+        self.without_lyrics = kwargs.pop("without_lyrics", False)
+        if kwargs:
+            logger.debug("Song Downloader Unused Kwargs %s", (kwargs,))
+
 
     @staticmethod
     def _classify_error(error: Exception) -> str:
