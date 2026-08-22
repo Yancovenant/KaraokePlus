@@ -31,11 +31,11 @@ class Separate(Command):
                                 and improves SDR by up to 0.2 points.""")
         group.add_argument("--visualize", action="store_true", dest="visualize", help="Visualize the separated stems into 5 different graphic, (Waveform, Mel Spectogram, Harmonic vs Percussive, Pitch Tracking (F0), Chromagram)")
         group.add_argument("--modelname", help="Model to use")
-        opt, unknown = self.parser.parse_known_args(args)
+        opt = self.parser.parse_args(args)
         if not opt.filepath:
             self.parser.print_help()
             sys.exit()
-        config.parse_config(unknown, setup_logging=True)
+        config.parse_config(opt, setup_logging=True)
         info = get_track_file(opt.filepath, True)
         filepath = Path(info.filename)
         separation_model = SeparatorMixin.get_model(opt)

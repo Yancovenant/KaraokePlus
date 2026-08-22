@@ -57,7 +57,8 @@ class environment:
                      "OS": os.name,
                      "Environment": environment,
                      "Python": sys.version.split()[0],
-                     "Torch": self.device.type}
+                    # "Torch": self.device.type
+               }
                      
     @cached_property
     def uv(self) -> list[str]:

@@ -13,8 +13,17 @@ from urllib.parse import urlparse
 
 from kplus.environment import env
 from kplus.tools.progress import MainProgress, SubProgress
+from kplus.tools.rich import rich
 
 logger = logging.getLogger(__name__)
+
+class LyricsError(Exception):
+    """Raised when lyrics cannot be resolved with sufficient confidence."""
+
+
+class YTDLPError(Exception):
+    """Raised when yt-dlp cannot complete the requested operation."""
+    
 
 @dataclass
 class YTDLPEnvironment:
@@ -24,8 +33,15 @@ class YTDLPEnvironment:
     retry_sleep: float = 2.0
     max_attempts: int = 4
 
+    # Keep this configurable because YouTube extractor clients
+    # can change over time.
+    player_clients: tuple[str, ...] = (
+        "android",
+        "web",
+    )
+
     @staticmethod
-    def _detect_cookie(cookie_file: str | None = None) -> str | None:
+    def _detect_cookie(cookie_file: str | None = None) -> Path | None:
         cookie_path = None
         if cookie_file is not None:
             cookie_path = Path(cookie_file)
@@ -216,8 +232,8 @@ class SongDownloader:
                     lyrics = None
                     if not self.without_lyrics:
                         main_bar.pbar.set_description("Fetching Lyrics")
-                        if not (lyrics := self.fetch_lyrics(title, artist, duration)):
-                            raise ValueError("!!! Lyrics not found, cannot continue")
+                        if not (lyrics := LyricsFetcher(session=self.session).fetch_lyrics(title, artist, duration)):
+                            raise LyricsError("!!! Lyrics not found, cannot continue")
                         main_bar.update(1)
                     main_bar.pbar.set_description("Downloading..")
                     download_opts = self._build_ydl_opts(output_template, SubProgress(),)
@@ -234,7 +250,7 @@ class SongDownloader:
                     main_bar.update(1)
                     logger.info("Download successful: %s", filename,)
                     return SimpleNamespace(title=title, artist=artist, duration=duration, lyrics=lyrics, filename=filename)
-            except ValueError:
+            except LyricsError:
                 # Lyrics error not ytdlp problem
                 raise
             except Exception as exc:
@@ -274,6 +290,87 @@ class SongDownloader:
             f"{self.YDLEnvironment.max_attempts} attempts: "
             f"{last_error}"
         ) from last_error
+
+
+class LyricsError(Exception):
+    """ Return error if lyrics not found
+    """
+
+
+YOUTUBE_TITLE_NOISE = re.compile(
+    r"""(?ix)
+    \b(
+        official
+        | official\s+audio
+        | official\s+video
+        | official\s+music\s+video
+        | music\s+video
+        | lyrics?
+        | lyric\s+video
+        | lirik
+        | video
+        | audio
+        | visualizer
+        | performance
+        | live
+        | live\s+performance
+        | mv
+        | hd
+        | 4k
+        | 8k
+        | remastered
+        | remaster
+        | karaoke
+        | instrumental
+        | cover
+        | sped\s*up
+        | slowed\s*(?:\+\s*reverb)?
+        | nightcore
+    )\b
+    """,
+)
+
+class LyricsFetcher:
+    def __init__(self, **kwargs):
+        self.session = kwargs.pop("session")
+        
+    def _fetch_lyrics_api(self, endpoint: str, params: dict) -> str | None:
+        try:
+            res = self.session.get(f"https://lrclib.net/api/{endpoint}", params=params, timeout=30)
+            if res.status_code == 200:
+                data = res.json()
+                from rich import inspect
+                #inspect(data)
+        except Exception as e:
+            logger.warning(f"Lyrics API error ({endpoint}): {e}")
+            raise
+        return None
+        
+    def fetch_lyrics(self, title: str, artist: str, duration: float) -> str:
+        title = title.strip()
+        title = YOUTUBE_TITLE_NOISE.sub("", title)
+        title = re.sub(r"\([^)]*\)", " ", title)
+        title = re.sub(r"\[[^\]]*\]", " ", title)
+        # Remove common YouTube translation separators.
+        title = re.sub(r"\s*(//|///|\||｜)\s*.*$", "", title)
+        # Normalize Whitespace
+        title = re.sub(r"\s+", " ", title)
+        match = re.match(r"^\s*(?P<artist>.+?)\s+[-–—]\s+(?P<title>.+?)\s*$",
+                         title,)
+        if match:
+            artist_part = match.group("artist").strip()
+            title_part = match.group("title").strip()
+            artist = artist_part if artist_part else artist
+            title = title_part if title_part else title
+        logger.debug(f">> Getting Lyrics for {title} - {artist} ({duration})")
+        to_searchs = [
+            {"track_name": title, "artist_name": artist},
+            {"track_name": title},
+            {"q": f"{artist} {title}"},
+            {"q": title},
+        ]
+        for param in to_searchs:
+            if l:=self._fetch_lyrics_api("search", param): return l
 
 class SongDownloader2:
     def __init__(self, without_lyrics: bool = False):

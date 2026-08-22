@@ -1,8 +1,8 @@
 import textwrap
 import kplus
 
-from .command import PROG_NAME, Command, commands
-
+from .command import PROG_NAME, Command, commands, load_internal_commands
+from kplus.tools.rich import rich
 
 class Help(Command):
     """ Display the list of available commands """
@@ -18,11 +18,28 @@ class Help(Command):
         Use '{prog_name} <command> --help' for other individual commands options.
     """)
     def run(self, args):
+        load_internal_commands()
         padding = max(len(cmd_name) for cmd_name in commands) + 2
-        name_desc = [(cmd_name, (cmd.__doc__ or "").strip())
-                     for cmd_name, cmd in sorted(commands.items())]
-        command_list = "\n".join(f"    {name:<{padding}}{desc}" for name, desc in name_desc)
-        print(Help.template.format(  # noqa: T201
-            prog_name=PROG_NAME,
-            version=kplus.Release.version,
-            command_list=command_list,))
+        header = rich.Table.grid(rich.Column(style="b color(15)"), rich.Column(ratio=1), expand=True, padding=(0, 1))
+        header.add_row("Version", f": [b color(14)]Karaoke+ {kplus.Release.version}[/]")
+        header.add_row("", "")
+        header.add_row("Usage", f": [color(14)]{PROG_NAME}[/] [b color(11)]<command>[/] [dim][...][/]")
+        header.add_row("", "")
+        header.add_row("Available commands", ":")
+        com_list_text = []
+        cmd_body = rich.Table.grid(rich.Column(style="b color(11)"), rich.Column(ratio=1, style="dim"), expand=True, padding=(0, 1))
+        for cmd_name, cmd in sorted(commands.items()):
+            cmd_body.add_row(f" • {cmd_name.ljust(padding)}:", f"{(cmd.__doc__ or '').strip()}")
+        footer = rich.Table.grid(rich.Column(ratio=1), expand=True)
+        footer.add_row("")
+        footer.add_row(f"[dim]💡 Use [color(14)]'{PROG_NAME} separate --help'[/] for regular separate options.[/]")
+        footer.add_row(f"[dim]💡 Use [color(14)]'{PROG_NAME} <command> --help'[/] for other individual commands options.[/]")
+        rich.print(
+            rich.Panel(
+                rich.Group(header,
+                    cmd_body, footer
+                ),
+                title="Help",
+                padding=1, border_style="color(10)"
+            )
+        )

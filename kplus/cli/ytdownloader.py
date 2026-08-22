@@ -11,17 +11,20 @@ logger = logging.getLogger(__name__)
 
 class YTDownloader(Command):
     """ Download given youtube url """
+
+    epilog = "Doenloaddd"
+    
     def run(self, args):
-        self.parser.add_argument("--url", dest="url", help="Youtube Watch/Share URL")
-        self.parser.add_argument("--without_lyrics", dest="without_lyrics", action="store_true",
+        self.parser.add_argument("url", help="Youtube Watch/Share URL")
+        self.parser.add_argument("--without-lyrics", dest="without_lyrics", action="store_true",
                                  help="Wheter to download youtube video and also include to get the lyrics for it or not (Default: False)")
-        self.parser.add_argument("--output", dest="output", help="Output path that the downloaded file would be saved at, (Default: Temporary)")
-        self.parser.add_argument("--cookie-file", help="", default="cookies.txt")
-        opt, unknown = self.parser.parse_known_args(args)
+        self.parser.add_argument("-o", "--output", dest="output", help="Output path that the downloaded file would be saved at, (Default: Temporary)")
+        self.parser.add_argument("-c", "--cookie-file", help="", default="cookies.txt")
+        opt = self.parser.parse_args(args)
         if not opt.url:
             self.parser.print_help()
             sys.exit()
-        config.parse_config(unknown, setup_logging=True)
+        config.parse_config(opt, setup_logging=True)
         info = SongDownloader(**vars(opt)).download(opt.url, opt.output)
         safe_title = "".join([c for c in info.title if c.isalpha() or c.isdigit() or c in ' _-']).strip()
         dir_path = Path(config["data_dir"]) / f"{info.artist}"

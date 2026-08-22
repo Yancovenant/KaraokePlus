@@ -4,6 +4,7 @@ import errno
 import functools
 import logging
 import optparse
+import argparse
 import glob
 import os
 import sys
@@ -62,8 +63,41 @@ class configmanager:
         self.parser = self._build_cli()
         self._load_default_options()
         self._parse_config()
-        
-    def _build_cli(self):
+
+    def add_argument(self, opt_group, *opts, **attrs):
+        my_default = attrs.pop('my_default', None)
+        cli_loadable = attrs.pop('cli_loadable', True)
+        env_name = attrs.pop("env_name", None)
+        file_loadable = attrs.pop('file_loadable', True)
+        nargs_ = attrs.get('nargs')
+        if nargs_ == '?':
+            const = attrs.pop('const', None)
+            attrs['nargs'] = 1
+        if attrs.get("action") not in ["store_true",
+            "store_false", "version"]:
+            attrs.setdefault('metavar', attrs.get('type', 'string').upper())
+        option = opt_group.add_argument(*opts, **attrs)
+        option.action = attrs.get("action", None)
+        option.my_default = my_default
+        option.cli_loadable = cli_loadable
+        option.env_name = env_name or ""
+        option.file_loadable = file_loadable
+        option.nargs_ = nargs_
+        is_new_option = False
+        if option.dest and option.dest not in self.options_index:
+            self.options_index[option.dest] = option
+            is_new_option = True
+        if option.nargs_ == '?':
+            option.const = const
+            for opt in option.option_strings:
+                self.optional_options[opt] = option
+        if env_name is None and is_new_option and option.file_loadable:
+            # generate an env_name for file_loadable settings that are in the index
+            option.env_name = "KPLUS_" + option.dest.upper()
+        elif env_name and not is_new_option:
+            raise ValueError(f"cannot set env_name to an option that is not indexed: {option}")
+
+    def _build_cli_old(self):
         MyOption = type('MyOption', (_MyOption,), {'config': self})
         version = "%s %s" % (kplus.Release.description, kplus.Release.version)
         parser = optparse.OptionParser(version=version, option_class=MyOption)
@@ -79,6 +113,20 @@ class configmanager:
                          choices=levels, my_default='info',
                          help='specify the level of the logging. Accepted values: %s.' % (levels,))
         parser.add_option_group(group)
+        return parser
+        
+    def _build_cli(self):
+        parser = argparse.ArgumentParser(add_help=False)
+        group = parser.add_argument_group("Testing Options")
+        self.add_argument(group, "--test", dest="test", action="store_true", my_default=False, help="Run the script in a test mode, won't actually upload or update status")
+        group = parser.add_argument_group("Logging Options")
+        self.add_argument(group, "--logfile", dest="logfile", my_default='',
+                         help="file where the server log will be stored")
+        levels = ['info', 'warn', 'test', 'critical', 'error',
+                  'debug', 'notset']
+        self.add_argument(group, '--log-level', dest='log_level',
+                         choices=levels, my_default='info',
+                         help='specify the level of the logging. Accepted values: %s.' % (levels,))
         return parser
         
     def _load_default_options(self):
@@ -104,16 +152,19 @@ class configmanager:
         return opt
 
     def _parse_config(self, args=None):
-        for arg_no, arg in enumerate(args or ()):
-            if option := self.optional_options.get(arg):
-                if arg_no == len(args) - 1 or args[arg_no + 1].startswith('-'):
-                    args[arg_no] += '=' + self.format(option.dest, option.const)
-                    self._log(logging.DEBUG, "changed %s for %s", arg, args[arg_no])
-        opt, unknown_args = self.parser.parse_args(args or [])
-        if unknown_args:
-            self.parser.error(f"unrecognized parameters: {' '.join(unknown_args)}")
+        if isinstance(args, argparse.Namespace):
+            opt = args
+        else:
+            for arg_no, arg in enumerate(args or ()):
+                if option := self.optional_options.get(arg):
+                    if arg_no == len(args) - 1 or args[arg_no + 1].startswith('-'):
+                        args[arg_no] += '=' + self.format(option.dest, option.const)
+                        self._log(logging.DEBUG, "changed %s for %s", arg, args[arg_no])
+            opt, unknown_args = self.parser.parse_known_args(args or [])
+            if unknown_args:
+                self.parser.error(f"unrecognized parameters: {' '.join(unknown_args)}")
         for option_name in list(vars(opt).keys()):
-            if not self.options_index[option_name].cli_loadable:
+            if option_name in self.options_index and not self.options_index[option_name].cli_loadable:
                 delattr(opt, option_name)
         self._load_env_options()
         self._load_cli_options(opt)
@@ -133,7 +184,8 @@ class configmanager:
             option_name for option_name, option
             in self.options_index.items()
             if option.cli_loadable
-            if option.action != 'append']
+            if option.action != 'append'
+        ]
         for arg in keys:
             if getattr(opt, arg, None) is not None:
                 self._cli_options[arg] = getattr(opt, arg)

@@ -7,6 +7,8 @@ import argparse
 from inspect import cleandoc
 
 import kplus.init # intialize
+from kplus.tools.config import config
+from kplus.tools.rich import RichArgumentParser, RichHelpFormatter
 
 COMMAND_NAME_RE = re.compile(r'^[a-z][a-z0-9_]*$', re.I)
 PROG_NAME = Path(sys.argv[0]).name
@@ -17,6 +19,7 @@ class Command:
     name = None
     description = None
     epilog = None
+    usage = None
     _parser = None
     def __init_subclass__(cls):
         cls.name = cls.name or cls.__name__.lower()
@@ -38,10 +41,12 @@ class Command:
     @property
     def parser(self):
         if not self._parser:
-            self._parser = argparse.ArgumentParser(
-                formatter_class=argparse.RawDescriptionHelpFormatter,
+            self._parser = RichArgumentParser(
+                formatter_class=RichHelpFormatter,
                 prog=self.prog,
                 description=cleandoc(self.description or self.__doc__ or ""),
+                parents=[config.parser],
+                usage=cleandoc(self.usage) if self.usage else None,
                 epilog=cleandoc(self.epilog or ""),
             )
         return self._parser
@@ -50,6 +55,12 @@ class Command:
     def is_valid_name(cls, name):
         return re.match(COMMAND_NAME_RE, name)
 
+def load_internal_commands():
+    """ Load ``commands`` from ``kplus.cli.__path__`` """
+    for p in kplus.cli.__path__:
+        for m in Path(p).iterdir():
+            if m.suffix != ".py": continue
+            __import__(f"kplus.cli.{m.stem}")
 
 def find_command(name: str) -> Command | None:
     """ Get command by name. """
