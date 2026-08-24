@@ -10,20 +10,15 @@ from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
 from urllib.parse import urlparse
+from difflib import SequenceMatcher
 
 from kplus.environment import env
 from kplus.tools.progress import MainProgress, SubProgress
 from kplus.tools.rich import rich
+from kplus.tools.romaji_converter import RomajiPhonetic
 
 logger = logging.getLogger(__name__)
 
-class LyricsError(Exception):
-    """Raised when lyrics cannot be resolved with sufficient confidence."""
-
-
-class YTDLPError(Exception):
-    """Raised when yt-dlp cannot complete the requested operation."""
-    
 
 @dataclass
 class YTDLPEnvironment:
@@ -236,38 +231,6 @@ class YTDLPManager:
         )
 
 
-YOUTUBE_NOISE_RE = re.compile(
-    r"""(?ix)
-    \b(
-        official
-        | official\s+audio
-        | official\s+video
-        | official\s+music\s+video
-        | music\s+video
-        | lyrics?
-        | lyric\s+video
-        | lirik
-        | video
-        | audio
-        | visualizer
-        | performance
-        | live
-        | live\s+performance
-        | mv
-        | hd
-        | 4k
-        | 8k
-        | remastered
-        | remaster
-        | karaoke
-        | instrumental
-        | cover
-        | sped\s*up
-        | slowed\s*(?:\+\s*reverb)?
-        | nightcore
-    )\b
-    """,
-)
 
 @dataclass
 class LyricsCandidate:
@@ -278,6 +241,11 @@ class LyricsCandidate:
     duration: float
     plain_lyrics: str | None
     synced_lyrics: str | None
+
+    title_score: float = 0.0
+    artist_score: float = 0.0
+    duration_score: float = 0.0
+    total_score: float = 0.0
     
     @classmethod
     def from_api(cls, data: dict) -> LyricsCandidate:
@@ -322,44 +290,12 @@ class LyricsFetcher:
 
     @staticmethod
     def normalize_youtube_title(title: str) -> str:
-        title = title.strip()
-        # Remove translations such as:
-        # Song Name // English Translation
-        title = re.sub(r"\s*(?:///|//|｜|\|)\s*.*$", "", title)
-        # Remove bracketed metadata.
-        title = re.sub(r"\([^)]*\)", " ", title)
-        title = re.sub(r"\[[^\]]*\]", " ", title)
-        # Remove known YouTube metadata.
-        title = YOUTUBE_NOISE_RE.sub(" ", title)
-        title = re.sub(r"\s+", " ", title)
-        return title.strip(" -–—")
         
     def parse_metadata(self, youtube_title: str, youtube_artist: str | None) -> tuple[str, str]:
         cleaned = self.normalize_youtube_title(youtube_title)
         artist = (youtube_artist or "").strip()
         title = cleaned
-        match = re.match(
-            r"^(?P<ArtistOrTitle>.+?)\s*[-–—]\s*(?P<TitleOrArtist>.+?)$",
-            cleaned, re.VERBOSE,
-        )
-        if match:
-            ext_artist_or_title = match.group("ArtistOrTitle").strip()
-            ext_title_or_artist = match.group("TitleOrArtist").strip()
-            if ext_artist_or_title and not ext_title_or_artist:
-                # First part exist, it must be title
-                title = ext_artist_or_title
-            if ext_title_or_artist and not ext_artist_or_title:
-                # Only 1 single part again, must be title
-                title = ext_title_or_artist
-            if ext_artist_or_title and ext_title_or_artist:
-                if ext_artist_or_title.lower() in artist.lower():
-                    artist = ext_artist_or_title
-                    title = ext_title_or_artist
-                elif ext_title_or_artist.lower() in artist.lower():
-                    artist = ext_title_or_artist
-                    title = ext_artist_or_title
-        return title, artist
-
+        
     def _get_exact(self, title: str, artist: str, duration: float) -> LyricsCandidate | None:
         if not title or not artist: return None
         data = self._request("get", {
@@ -396,6 +332,51 @@ class LyricsFetcher:
         # Last resort.
         if title: searches.append({"q": title})
         return searches
+
+    @staticmethod
+    def normalize_text(value: str | None) -> str:
+        return RomajiPhonetic(value).latin
+        
+    def _similarity(self, left: str, right: str,) -> float:
+        left = self.normalize_text(left)
+        right = self.normalize_text(right)
+        if not left or not right: return 0.0
+        if left == right: return 1.0
+        return SequenceMatcher(None, left, right).ratio()
+        
+    def _token_score(self, source: str, candidate: str) -> float:
+        source_tokens = set(self.normalize_text(source).split())
+        candidate_tokens = set(self.normalize_text(candidate).split())
+        if not source_tokens: return 0.0
+        intersection = (source_tokens & candidate_tokens)
+        return len(intersection) / len(source_tokens)
+    
+    @staticmethod
+    def _duration_score(source: float, candidate: float) -> float:
+        if not source or not candidate: return 0.0
+        difference = abs(float(source) - float(candidate))
+        if difference <= 2: return 1.0
+        if difference <= 5: return 0.8
+        if difference <= 10: return 0.5
+        if difference <= 20: return 0.2
+        return 0.0
+    
+    def _score(self, candidate: LyricsCandidate,
+        title: str, artist: str, duration: float,
+    ) -> float:
+        candidate.title_score = self._similarity(title, candidate.title)
+        candidate.artist_score = self._similarity(artist, candidate.artist)
+        token_score = self._token_score(title, candidate.title)
+        candidate.duration_score = self._duration_score(duration, candidate.duration)
+        # Title is the most important signal.
+        candidate.total_score = (
+            candidate.title_score * 45
+            + token_score * 20
+            + candidate.artist_score * 25
+            + candidate.duration_score * 10
+        )
+        return candidate.total_score
+
         
     def fetch_lyrics(self, youtube_title: str, youtube_artist: str, duration: float) -> str | None:
         title, artist = self.parse_metadata(youtube_title, youtube_artist)
@@ -450,6 +431,24 @@ class LyricsFetcher:
             )
             return None
         return best.lyrics
+
+    def _display_candidates(self, candidates: list[LyricsCandidate]) -> None:
+        if not candidates: return
+        table = rich.Table(title="LRCLIB Candidates", show_lines=False)
+        table.add_column("#", justify="right",)
+        table.add_column("Score", justify="right")
+        table.add_column("Artist",)
+        table.add_column("Title")
+        table.add_column("Duration", justify="right",)
+        for index, candidate in enumerate(candidates):
+            table.add_row(
+                str(index),
+                f"{candidate.total_score:.1f}",
+                candidate.artist,
+                candidate.title,
+                f"{candidate.duration:.0f}s",
+            )
+        rich.print(table)
 
 
 

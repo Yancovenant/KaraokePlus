@@ -41,14 +41,23 @@ class Command:
     @property
     def parser(self):
         if not self._parser:
-            self._parser = RichArgumentParser(
-                formatter_class=RichHelpFormatter,
-                prog=self.prog,
-                description=cleandoc(self.description or self.__doc__ or ""),
-                parents=[config.parser],
-                usage=cleandoc(self.usage) if self.usage else None,
-                epilog=cleandoc(self.epilog or ""),
-            )
+            if True: # Using Rich Handler
+                self._parser = RichArgumentParser(
+                    formatter_class=RichHelpFormatter,
+                    prog=self.prog,
+                    description=cleandoc(self.description or self.__doc__ or ""),
+                    parents=[config.parser],
+                    usage=cleandoc(self.usage) if self.usage else None,
+                    epilog=cleandoc(self.epilog or ""),
+                )
+            else:
+                self._parser = argparse.ArgumentParser(
+                    formatter_class=argparse.RawDescriptionHelpFormatter,
+                    prog=self.prog,
+                    parents=[config.parser],
+                    description=cleandoc(self.description or self.__doc__ or ""),
+                    epilog=cleandoc(self.epilog or ""),
+                )
         return self._parser
 
     @classmethod

@@ -29,6 +29,7 @@ class WatchedFileHandler(logging.handlers.WatchedFileHandler):
         super().__init__(filename)
         # Unfix bpo-26789, in case the fix is present
         self._builtin_open = None
+        
     def _open(self):
         return open(self.baseFilename, self.mode, encoding=self.encoding, errors=self.errors)
 
@@ -115,14 +116,24 @@ class RichLoggingHandler(rich.RichHandler):
         )
         return log_renderable
 
+    def render_message(self, record, message, **kwargs):
+        if isinstance(message, rich.RichRenderable):
+            return message
+        return super().render_message(record, message, **kwargs)
 
+class RichLoggingFormatter(logging.Formatter):
+    def format(self, record, **kwargs):
+        if isinstance(record.msg, rich.RichRenderable):
+            return record.msg
+        return super().format(record, **kwargs)
+        
 class LogRecord(logging.LogRecord):
     def __init__(self, name, level, pathname, lineno, msg, args, exc_info, func=None, sinfo=None, **kwargs):
         super().__init__(name, level, pathname, lineno, msg, args, exc_info, func=func, sinfo=sinfo, **kwargs)
         self.perf_info = "" # maybe add this later
         self.pid = os.getpid()
-        
 
+        
 def setup_logger():
     if logging.getLogRecordFactory() is LogRecord:
         return
@@ -151,7 +162,7 @@ def setup_logger():
             show_path=True, show_time=True, show_level=True,
             omit_repeated_times=False,
         )
-        handler.setFormatter(logging.Formatter(rich_format))
+        handler.setFormatter(RichLoggingFormatter(rich_format))
     logging.getLogger().addHandler(handler)
     pseudo_config = PSEUDOCONFIG_MAPPER.get(config['log_level'], [])
     logging_configurations = DEFAULT_LOG_CONFIGURATION + pseudo_config

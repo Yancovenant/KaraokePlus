@@ -21,7 +21,8 @@ from kplus.tools.romaji_converter import RomajiPhonetic
 if TYPE_CHECKING:
     import numpy as np, torch # type: ignore  # noqa: I001
     AudioType : TypeAlias = "torch.Tensor | np.ndarray | str"
-
+    AudioTensor : TypeAlias = "torch.Tensor"
+        
 
 @contextmanager
 def temp_filenames(count: int, delete=True):
@@ -63,7 +64,7 @@ def convert_audio_channels(wav, channels=2):
 
 class AudioLoader:
     def __init__(self, audio: AudioType, **kwargs):
-        self.audio_path = "None"
+        self.audio_path : str | None = None
         self._process_audio(audio, **kwargs)
 
     @cached_property

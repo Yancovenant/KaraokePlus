@@ -14,14 +14,54 @@ import importlib
 import signal
 import shutil
 import random
+import warnings
 
 from functools import cached_property
 from pathlib import Path
 
-from kplus.tools.progress import MainProgress
+#from kplus.tools.progress import MainProgress
 
 
 logger = logging.getLogger(__name__)
+
+try:
+    # available since python 3.13
+    from warnings import deprecated
+except ImportError:
+    # simplified version
+    class deprecated:
+        def __init__(
+            self,
+            message: str,
+            /,
+            *,
+            category: type[Warning] | None = DeprecationWarning,
+            stacklevel: int = 1,
+        ) -> None:
+            if not isinstance(message, str):
+                raise TypeError(
+                    f"Expected an object of type str for 'message', not {message.__class__.__name__!r}",
+                )
+            self.message = message
+            self.category = category
+            self.stacklevel = stacklevel
+
+        def __call__(self, obj, /):
+            message = self.message
+            category = self.category
+            stacklevel = self.stacklevel
+            if category is None:
+                obj.__deprecated__ = message
+                return obj
+            if callable(obj):
+                @wraps(obj)
+                def wrapper(*args, **kwargs):
+                    warnings.warn(message, category=category, stacklevel=stacklevel + 1)
+                    return obj(*args, **kwargs)
+
+                obj.__deprecated__ = wrapper.__deprecated__ = message
+                return wrapper
+            raise TypeError(f"@deprecated decorator cannot be applied to {obj!r}")
 
 
 class environment:
@@ -277,9 +317,15 @@ class environment:
         signal.signal(signal.SIGTERM, self._signal_handler)
     
     def setup_environment(self):
-        self.tqdm  # noqa: B018
+        self.rich  # noqa: B018
         self._setup_signal()
-    
+        from rich.traceback import install
+        install()
+
+    @property
+    def verbose(self) -> int:
+        #TODO connect this with config later on
+        return 1
 
 def make_cached_pkg_wrap_methods(attr, owner_class):
     def getter(self):
