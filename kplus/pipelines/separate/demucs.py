@@ -4,6 +4,7 @@ import logging
 import random
 import typing as t
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 
 from kplus import env
 from kplus.tools import filter_known_kwargs, rich, safepath
@@ -64,8 +65,9 @@ class DemucsSeparator(SeparatorMixin):
             'bits_per_sample': 16,
         }
         outfilename = safepath(inputpath)
-        inst_path = (outdir / f"[S={self.shifts}|O={self.overlap}|SZ={self.segment}]_inst_{outfilename}.wav")
-        vocs_path = (outdir / f"[S={self.shifts}|O={self.overlap}|SZ={self.segment}]_vocs_{outfilename}.wav")
+        outdir = Path(outdir)
+        inst_path = str(outdir / f"[S={self.shifts}|O={self.overlap}|SZ={self.segment}]_inst_{outfilename}.wav")
+        vocs_path = str(outdir / f"[S={self.shifts}|O={self.overlap}|SZ={self.segment}]_vocs_{outfilename}.wav")
         save_audio(instruments, str(inst_path) **save_kwargs)
         save_audio(vocals, str(vocs_path), **save_kwargs)
         return inst_path, vocs_path

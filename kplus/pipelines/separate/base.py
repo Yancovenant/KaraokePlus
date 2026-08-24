@@ -2,7 +2,7 @@ import logging
 from dataclasses import dataclass
 from pathlib import Path
 
-from kplus.tools import search_for_path, config
+from kplus.tools import config, search_for_path
 
 logger = logging.getLogger(__name__)
 

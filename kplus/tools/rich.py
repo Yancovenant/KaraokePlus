@@ -116,6 +116,16 @@ class Rich:
             expand=True,
         )
 
+    @property
+    def _live(self):
+        from rich import live
+        return live
+
+    @property
+    def Live(self):
+        return self._live.Live
+        
+
 rich = Rich()
 import sys as _sys
 from gettext import gettext as _, ngettext

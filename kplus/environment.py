@@ -1,23 +1,23 @@
 from __future__ import annotations
 
-import sys
-import kplus
-import socket
-import uuid
-import hashlib
-import platform
-import os
-import logging
-import subprocess
 import gc
+import hashlib
 import importlib
-import signal
-import shutil
+import logging
+import os
+import platform
 import random
+import shutil
+import signal
+import socket
+import subprocess
+import sys
+import uuid
 import warnings
-
-from functools import cached_property
+from functools import cached_property, wraps
 from pathlib import Path
+
+import kplus
 
 #from kplus.tools.progress import MainProgress
 
@@ -73,12 +73,13 @@ class environment:
         self.print_banner()
         
     def print_banner(self):
-        self.rich
-        from rich.table import Table, Column
-        from rich.panel import Panel
-        from rich.align import Align
-        from rich.text import Text
+        # Use module level rich first, since tools.rich is overlapping with env
+        self.rich  # noqa: B018
         from rich.console import Console, Group
+        from rich.panel import Panel
+        from rich.table import Column, Table
+        from rich.text import Text
+
         from .ansii_logo import all_logos
         
         console = Console()
@@ -109,11 +110,6 @@ class environment:
         info_table.add_row(Text("Author", style="b color(15)"), Text(": " + kplus.Release.author))
         info_table.add_row(Text("Version", style="b color(15)"), Text(": " + kplus.Release.version))
         for k, v in self.sys_info.items():
-            emoji2title = {
-                "Session": "🔑", "Platform": "💻",
-                "OS": "🐧", "Environment": "",
-                "Python": "🐍", "System": ""
-            }
             info_table.add_row(Text(f"{k}", style="b color(15)"), Text(": " + v, no_wrap=True))
         main_panel = Panel(
             Group(logo, Text(""), info_table),
@@ -124,18 +120,19 @@ class environment:
         )
         console.print(main_panel)
         console.print()
-        
     
     @cached_property
     def sys_info(self) -> dict:
-        env_mapping = {"colab": self.is_colab,
-            "kaggle": self.is_kaggle, "docker": self.is_docker,
+        env_mapping = {
+            "colab": self.is_colab,
+            "kaggle": self.is_kaggle,
+            "docker": self.is_docker,
             "local": self.is_local
         }
         environment = next((env for env, active in env_mapping.items() if active), "unknown")
         host = socket.gethostname()
         mac_node = str(uuid.getnode())
-        unique_string = f"{host}-{mac_node}".encode("utf-8")
+        unique_string = f"{host}-{mac_node}".encode()
         short_hash = hashlib.sha256(unique_string).hexdigest()[:12].upper()
         return {
             "Session": f"{host}-{short_hash}",
@@ -144,28 +141,13 @@ class environment:
             "OS": os.name,
             "Environment": environment,
             "Python": sys.version.split()[0],
-            # "Torch": self.device.type
         }
-                     
-    @cached_property
-    def uv(self) -> list[str]:
-        try:
-            self._run_sys_cmd(["uv", "--version"])
-        except Exception:
-            logger.warning(">> UV package is not installed, falling back using pip")
-            return ["pip"]
-        # return ["uv", "pip"] # UV still different in different platform
-        return ["pip"]
+
+    def run_cmd(self, cmd: list[str]) -> None:
+        return subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
      
-    def _run_sys_cmd(seld, cmd: list[str]):
-        return subprocess.check_call(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        
-    def _run_py_cmd(self, cmd:list[str]):
-        cmd = [sys.executable, "-m"] + cmd
-        return self._run_sys_cmd(cmd)
-    
     def _run_cmd_install(self, name: str):
-        return self._run_py_cmd(self.uv + ["install", "-q", name])
+        return self.run_cmd([sys.executable, "-m", "pip", "install", "-q", name])
         
     def _get_pkg(self, name: str):
         if name == "stable_ts":
@@ -180,53 +162,28 @@ class environment:
             if install_name == "tqdm" or not env:
                 self._run_cmd_install(install_name)
             else:
-                cmd = [sys.executable, "-m", *self.uv, "install", install_name, "--progress-bar", "off"]
-                process = subprocess.Popen(cmd,
-                        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, # This ensures we capture sys log output.
-                        text=True, bufsize=1)
-                full_output_log = []
-                with MainProgress(total=0, desc=f"Package '{install_name}' missing. Installing...", unit="pkg") as main_bar:
-                    downloaded_count = 0
-                    pbar = main_bar.pbar
+                cmd = [sys.executable, "-m", "pip", "install", install_name, "--progress-bar", "off"]
+                process = subprocess.Popen(
+                    cmd,
+                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT, # This ensures we capture sys log output.
+                    text=True, bufsize=1
+                )
+                from kplus.tools import rich
+                with rich.Live(transient=True) as live:
                     for line in iter(process.stdout.readline, ''):
-                        if not (clean_line:=line.strip()): continue
-                        full_output_log.append(clean_line)
-                        logger.debug(f">> {self.uv[0]}: {clean_line}")
-                        if clean_line.startswith("Collecting "):
-                            downloaded_count += 1
-                            pbar.total = downloaded_count
-                            pbar.set_description(f"Downloading {install_name} & deps")
-                            pbar.refresh()
-                        elif clean_line.startswith("Installing collected packages:"):
-                            packages_str = clean_line.split(":", 1)[1].strip()
-                            total_to_install = len([p for p in packages_str.split(",") if p.strip()])
-                            pbar.total = total_to_install
-                            pbar.n = 0
-                            pbar.set_description(f"Installing {total_to_install} packages")
-                            pbar.refresh()
-                    if pbar.total > 0:
-                        pbar.n = pbar.total
-                        pbar.set_description(f"Finished {install_name}")
-                        pbar.refresh()
-                    main_bar.update(1)
+                        install_text = rich.Text(line)
+                        live.update(rich.Panel(install_text, title=f"Installing {install_name}...", style="color(14)", padding=1))
                 process.stdout.close()
                 return_code = process.wait()
                 if return_code != 0:
-                    error_context = "\n".join(full_output_log[-15:])
-                    logger.error("\n" + "="*50)
-                    logger.error(f" PIP INSTALLATION FAILED FOR: {install_name}")
-                    logger.error("="*50)
-                    logger.error(error_context)
-                    logger.error("="*50 + "\n")
                     raise RuntimeError(
                         f"Subprocess failed with exit code {return_code}.\n"
-                        f"Command: {' '.join(cmd)}\n"
-                        f"Last output:\n{error_context}")
+                        f"Command: {' '.join(cmd)}\n")
             return importlib.import_module(import_name)
         for fn in [attempt_import, attempt_install_and_import]:
             try:
                 return fn()
-            except Exception as err:
+            except Exception as err:  # noqa: BLE001
                 logger.warning(f"Attempt failed for {name}: {err}")
                 continue
         raise ImportError(f"!!! Cannot continue as {name} could not be installed or imported...")
@@ -235,21 +192,21 @@ class environment:
         if (exist:=shutil.which(binary_name)): return exist
         try:
             if os.name == "nt":
-                pkg_map = {"ffmpeg": "Gyan.FFmpeg",
-                                     "nodejs": "OpenJS.NodeJS",
-                                     "deno": "DenoLand.Deno"}
+                pkg_map = {
+                    "ffmpeg": "Gyan.FFmpeg",
+                    "nodejs": "OpenJS.NodeJS",
+                    "deno": "DenoLand.Deno"
+                }
                 pkg_name = pkg_map.get(binary_name, binary_name)
-                subprocess.run(
-                        ["winget", "install", "--accept-source-agreements", "--accept-package-agreements", "--no-upgrade", pkg_name], 
-                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+                self.run_cmd(["winget", "install", "--accept-source-agreements", "--accept-package-agreements", "--no-upgrade", pkg_name])
             else:
                 if binary_name == "deno":
                     subprocess.run("curl -fsSL https://deno.land/install.sh | sh", shell=True, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                     deno_home = Path.home() / ".deno" / "bin"
                     os.environ["PATH"] = f"{deno_home}{os.pathsep}{os.environ['PATH']}"
                 else:
-                    self._run_sys_cmd(["sudo", "apt-get", "update", "-y", "-qq"])
-                    self._run_sys_cmd(["sudo", "apt-get", 'install', "-y", "-qq", binary_name])
+                    self.run_cmd(["sudo", "apt-get", "update", "-y", "-qq"])
+                    self.run_cmd(["sudo", "apt-get", 'install', "-y", "-qq", binary_name])
         except Exception as e:
             raise Exception(f"!!! Command failed while trying to install {binary_name}: {e}")
         if not (final_path := shutil.which(binary_name)):
@@ -277,33 +234,20 @@ class environment:
         raise Exception("!!! Cannot continue. as necessary fonts is not installed...")
 
     @cached_property
-    def _ensure_onnxruntime(self) -> bool:
-        if os.name != "nt":
-            try:
-                onnx_cmds = [
-                ]
-                for cmd in onnx_cmds:
-                    subprocess.run(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                return True
-            except Exception as e:
-                pass
-        logger.warning("!!! Continuing while no onnxruntime acceleration installed")
-    
-    @cached_property
     def device(self):
         return self.torch.device("cuda" if self.torch.cuda.is_available() else "cpu")
 
     def clean(self):
-        self.torch
+        self.torch  # noqa: B018
         import torch
         if torch.cuda.is_available(): torch.cuda.empty_cache()
         gc.collect()
 
     def _signal_handler(self, sig, frame):
         print("TODO: Process is stopping by signal", signal.Signals(sig).name, frame)
-        if sig in [signal.SIGINT, signal.SIGTERM]:
+        if sig in [signal.SIGINT, signal.SIGTERM]:  # noqa: SIM114
             pass
-        elif hasattr(signal, 'SIGXCPU') and sig == signal.SIGXCPU:
+        elif hasattr(signal, 'SIGXCPU') and sig == signal.SIGXCPU:  # noqa: SIM114
             pass
         elif sig == signal.SIGHUP:
             pass

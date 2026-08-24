@@ -139,10 +139,7 @@ class Downloader:
                     if i >= self.max_attempts: break
                     prg.update(task, description=f"{failure_type} - retrying in {delay:.1f}")
                     time.sleep(delay)
-        raise DownloadError(
-            "Download failed after %d attempts : %s" %
-            (self.max_attempts, last_error)
-        ) from last_error
+        raise DownloadError(f"Download failed after {self.max_attempts:d} attempts : {last_error!s}") from last_error
 
     def _handle_error(self, attempt: int, e: Exception):
         failure_type = self.downloader.classify_error(e)

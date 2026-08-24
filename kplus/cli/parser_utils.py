@@ -1,6 +1,7 @@
 
 from kplus.tools import RichArgumentParser
 
+
 class Options:
     def add_options(cls, parser: RichArgumentParser) -> None:
         raise NotImplementedError()
@@ -40,4 +41,10 @@ class SeparateOptions(DownloadOptions):
                             help="Number of random time-shifts. Improves SDR (Signal-to-Distortion) by up to 0.2 points, but multiplies processing time by N. (default: %(default)s)")    
         group.add_argument("--num-workers", type=int, metavar="N", default=0,
                            help="Number of jobs. This can increase memory usage but will be much faster when multiple cores are available. If not specified, will use the command line option. (default: %(default)s)")
-        
+
+class TranscribeOptions(DownloadOptions):
+    @classmethod
+    def add_options(cls, parser, **kwargs):
+        super().add_options(parser, **kwargs)
+        group = parser.add_argument_group("Transcribe Options")
+    

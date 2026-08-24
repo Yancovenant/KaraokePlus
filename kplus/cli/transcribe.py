@@ -10,6 +10,7 @@ from kplus.tools.rich import RichArgumentParser
 
 from .command import Command
 from .download import Download
+from .parser_utils import TranscribeOptions
 
 logger = logging.getLogger(__name__)
 
