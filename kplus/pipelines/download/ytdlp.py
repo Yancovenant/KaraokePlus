@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import logging
-
 from pathlib import Path
 
 from kplus import env
-from kplus.tools import rich, is_file
+from kplus.tools import is_file
+
 from .utils import ErrorType
 
 logger = logging.getLogger(__name__)
@@ -54,7 +54,7 @@ class Ytdlp:
             logger.warning("Cookie file does not exist or not configured: %s", cookiefile,)
 
     def build_opts(self, outtmpl: str = "%(title)s.%(ext)s", progress_hook = None, *, simulate: bool = False, **kwargs) -> dict:
-        opts = self.DEFAULT_OPTS
+        opts = self.DEFAULT_OPTS.copy()
         opts.update({
             "outtmpl": outtmpl,
             "simulate": simulate,
@@ -79,7 +79,6 @@ class Ytdlp:
             info = ydl.extract_info(url, download=True)
             # yt-dlp's requested format may have a different
             # intermediate extension before merging.
-            rich.inspect(info)
             requested = Path(ydl.prepare_filename(info))
             # Prefer the actual final filename if it exists.
             candidates = [requested, requested.with_suffix(".mp4"),]

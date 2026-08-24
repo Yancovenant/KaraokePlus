@@ -1,12 +1,12 @@
-import sys
+import json
 import logging
-
+import sys
 from pathlib import Path
 
+from kplus.pipelines import download_song
+from kplus.tools import config, safepath
+
 from .command import Command
-from kplus.tools import config, RichArgumentParser, safepath
-#from kplus.pipelines.songdownloader import SongDownloader
-from kplus.pipelines.download import download_song
 from .parser_utils import DownloadOptions
 
 logger = logging.getLogger(__name__)
@@ -27,10 +27,14 @@ class Download(Command):
     def run(self, args):
         opt = self._parse_config(args)
         result = download_song(**vars(opt))
+        filename = Path(result.filepath).stem
+        dirpath = Path(config["data_dir"]) / result.artist / safepath(filename)
+        dirpath.mkdir(parents=True, exist_ok=True)
+        datapath = dirpath / (safepath(filename) + ".json")
+        with open(datapath, "w", encoding="utf-8") as f:
+            json.dump({"title": result.title, "artist": result.artist, "duration": result.duration}, f, indent=4)
+        logger.info("Metadata successfully written to %r", str(datapath))
         if not opt.no_lyrics and result.lyrics:
-            filename = Path(result.filepath).stem
-            dirpath = Path(config["data_dir"]) / result.artist / safepath(filename)
-            dirpath.mkdir(parents=True, exist_ok=True)
             lyricpath = dirpath / (safepath(filename) + ".txt")
             with open(lyricpath, "w", encoding="utf-8") as f:
                 f.write(result.lyrics)

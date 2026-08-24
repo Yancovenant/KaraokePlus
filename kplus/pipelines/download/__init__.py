@@ -2,6 +2,7 @@
 from .downloader import Downloader, DownloadResult
 
 __all__ = [
+    "DownloadResult",
     "Downloader",
     "download_song"
 ]

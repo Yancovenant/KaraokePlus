@@ -113,6 +113,7 @@ class Rich:
             *_columns,
             self._progress.TimeRemainingColumn(),
             self._progress.TimeElapsedColumn(),
+            expand=True,
         )
 
 rich = Rich()

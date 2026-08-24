@@ -1,9 +1,16 @@
+import glob
 import os
-
+import tempfile
+from contextlib import contextmanager
 from pathlib import Path
+
+from .config import config
+from .text import safepath
 
 __all__ = [
     "raise_for_permission",
+    "search_for_path",
+    "temp_filenames",
 ]
 
 def raise_for_permission(path: str | Path, check: str = "all") -> None:
@@ -26,3 +33,26 @@ def raise_for_permission(path: str | Path, check: str = "all") -> None:
         raise ValueError("``check`` must be 'read', 'write', 'execute', or 'all'.")
     if not os.access(path, flag):
         raise PermissionError(f"Missing status: '{check}' permission denied for '{path}'.")
+
+def search_for_path(filepath: str) -> str:
+    """ Return the config directory if a path exists """
+    # Resolve to ( data_dir / * artist / requestedpath.stem )
+    search_pattern = str(Path(config["data_dir"]).expanduser() / "*" / safepath(filepath))
+    matching_files = glob.glob(search_pattern)
+    if matching_files:
+        return Path(matching_files[0]).parent
+    return None
+
+@contextmanager
+def temp_filenames(count: int, delete=True):
+    """ Yield temporary file names based on the requested counts
+    """
+    names = []
+    try:
+        for _ in range(count):
+            names.append(tempfile.NamedTemporaryFile(delete=False).name)
+        yield names
+    finally:
+        if delete:
+            for name in names:
+                os.unlink(name)

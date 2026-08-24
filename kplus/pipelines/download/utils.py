@@ -1,9 +1,9 @@
 from enum import Enum
 
 __all__ = [
-    "LyricsError",
     "DownloadError",
     "ErrorType",
+    "LyricsError",
 ]
 
 class LyricsError(Exception):
@@ -12,6 +12,7 @@ class LyricsError(Exception):
 
 class DownloadError(Exception):
     """Raised when yt-dlp cannot complete the requested operation."""
+
 
 class ErrorType(Enum):
     """ Base Exception for Network (YTDLP) Error """

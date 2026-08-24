@@ -1,12 +1,15 @@
-import re
-import requests
-import logging
-import time
+from __future__ import annotations
 
-from requests.exceptions import HTTPError
+import logging
+import re
+import time
 from dataclasses import dataclass
 
-from kplus.tools import rich
+import requests
+from requests.exceptions import HTTPError
+
+from kplus import env
+from kplus.tools import rich, similarity, token_similarity
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +50,7 @@ YOUTUBE_NOISE_RE = re.compile(
     """,
 )
 
-@dataclass(slots=True, frozen=True)
+@dataclass(slots=True)
 class LyricsCandidate:
     id: int | None
     title: str
@@ -56,6 +59,11 @@ class LyricsCandidate:
     duration: float
     plain_lyrics: str | None
     synced_lyrics: str | None
+
+    title_score: float = 0.0
+    artist_score: float = 0.0
+    duration_score: float = 0.0
+    total_score: float = 0.0
 
     @classmethod
     def from_api(cls, data: dict) -> LyricsCandidate:
@@ -73,6 +81,28 @@ class LyricsCandidate:
     def lyrics(self) -> str | None:
         return (self.plain_lyrics or self.synced_lyrics)
 
+    @staticmethod
+    def _duration_score(src: float, other: float) -> float:
+        """ Simply compare both duration gap """
+        if not src or not other: return 0.0
+        difference = abs(float(src) - float(other))
+        if difference <= 2: return 1.0
+        if difference <= 5: return 0.8
+        if difference <= 10: return 0.5
+        if difference <= 20: return 0.2
+        return 0.0
+
+    def make_score(self, title: str, artist: str, duration: float) -> None:
+        self.title_score = similarity(title, self.title)
+        self.artist_score = similarity(artist, self.artist)
+        self.duration_score = self._duration_score(duration, self.duration)
+        token_score = token_similarity(title, self.title)
+        self.total_score = (
+            self.title_score * 45 # Title most important
+            + (token_score * 20)
+            + (self.artist_score * 25) # Secondly is artist
+            + (self.duration_score * 10)
+        )
 
 class LyricsFetcherMixin:
     name: str
@@ -131,8 +161,38 @@ class LyricsFetcherMixin:
                     title = ext_artist_or_title
         return title, artist
 
-    def resolve_lyric_candidates(self, cands: list[LyricsCandidate]) -> str | None:
-        if not cands: return None
+    def resolve_lyric_candidates(self, title: str, artist: str, duration: float, cands: list[LyricsCandidate]) -> str | None:
+        if not cands:
+            logger.warning("%s returned no candidates for %r - %r", self.name, artist, title)
+            return None
+        for cand in cands: cand.make_score(title, artist, duration)
+        cands.sort(key=lambda item: item.total_score, reverse=True)
+        if env.verbose:
+            self.print(cands)
+        best = cands[0]
+        logger.info("Best LRCLIB candidate: %r - %r score=%.2f", best.artist, best.title, best.total_score)
+        if best.total_score < 70: # Gating Confidence
+            logger.warning("Best lyrics candidate is below confidence threshold: %.2f", best.total_score,)
+            return None
+        return best.lyrics
+
+    def print(self, cands: list[LyricsCandidate]) -> None:
+        if not cands: return
+        table = rich.Table(title="LRCLIB Candidates", show_lines=False)
+        table.add_column("#", justify="right",)
+        table.add_column("Score", justify="right")
+        table.add_column("Artist",)
+        table.add_column("Title")
+        table.add_column("Duration", justify="right",)
+        for index, candidate in enumerate(cands):
+            table.add_row(
+                str(index),
+                f"{candidate.total_score:.1f}",
+                candidate.artist,
+                candidate.title,
+                f"{candidate.duration:.0f}s",
+            )
+        logger.info(table)
         
     def get_lyrics(self):
         raise NotImplementedError()
@@ -145,7 +205,7 @@ class Lrclib(LyricsFetcherMixin):
         if not title or not artist: return None
         data = self._make_request("get", {
             "track_name": title, "artist_name": artist,
-            "duration": int(round(duration)),
+            "duration": round(duration),
         })
         if not isinstance(data, dict):
             return None
@@ -187,7 +247,6 @@ class Lrclib(LyricsFetcherMixin):
         with rich.console.status("LRCLIB Trying search candidates") as st:
             cans_by_id = {}
             for params in self.searches(title, artist):
-                logger.debug("LRCLIB search: %r", params)
                 candidates = self._search(params)
                 for can in candidates:
                     key = (
@@ -196,5 +255,5 @@ class Lrclib(LyricsFetcherMixin):
                     )
                     cans_by_id[key] = can
                 if candidates: time.sleep(0.25) # add a bit of delay
-            return self.resolve_lyric_candidates(list(cans_by_id.values()))
+            return self.resolve_lyric_candidates(title, artist, duration, list(cans_by_id.values()))
         

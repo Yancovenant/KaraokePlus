@@ -1,33 +1,60 @@
 #from .songdownloader import *
-from .audioseparation import SeparatorMixin
-from .visualizer import VisualizeWaveform
-from .aligner import *
+# from .audioseparation import SeparatorMixin
 from .aad import *
-from .transcriber import *
+from .aligner import *
+from .download import download_song, DownloadResult
 from .refiner import TimestampRefiner
-
+from .transcriber import *
+from .visualizer import VisualizeWaveform
+from .separate import separate_song
 
 __all__ = [
-    "separate"
+    "VisualizeWaveform",
+    "download_song",
+    "ensure_file",
+    "separate_song",
 ]
+###########################################
+# Ensuring videopath exists if URL download
+###########################################
+import json
+from urllib.parse import urlparse
 
-def separate(**options):
-    import subprocess
-    from pathlib import Path
-    from kplus.pipelines import SeparatorMixin
-    filepath = Path(info.filename)
-    audio_file_path = f"{filepath.stem}.wav"
-    options = SimpleNamespace(modelname="demucs", overlap=0.75, segment=200, shifts=1)
-    sep_class = SeparatorMixin.get_model(options)
-    subprocess.run(["ffmpeg", "-y", "-i", str(filepath), "-vn", "-ar", str(sep_class.sr), "-ac", str(sep_class.ac), str(audio_file_path)],
-                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    sep_info = sep_class.separate(audio_file_path)
-    inspect(sep_info)
-    vocs_path = sep_info.vocs_path
-    inst_path = sep_info.inst_path
-    try:
-        del sep_class.model, sep_class
-    except:
-        pass
-    env.clean()
-    return vocs_path, inst_path, sep_info
+from kplus.tools import safepath, search_for_path
+
+
+def ensure_file(inputpath: str | Path, *, no_lyrics: bool = False) -> DownloadResult:
+    inputpath = str(inputpath)
+    if urlparse(inputpath).scheme in {"https", "http"}:
+        logger.info("Downloading track source %s", inputpath)
+        return download_song(inputpath, no_lyrics=no_lyrics)
+    path = Path(inputpath)
+    if not path.is_file():
+        raise RuntimeError("Input file has not been downloaded and is not a file.")
+    # Else path Exist, get its data .json if exists
+    title, artist, duration, lyrics = None, None, None, None
+    dirpath = search_for_path(path.stem)
+    if dirpath:
+        filename = safepath(path.stem)
+        datafile = dirpath / Path(filename + ".json")
+        lyricfile = dirpath / Path(filename + ".txt")
+        if datafile.is_file():
+            try:
+                with open(datafile, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    title, artist, duration = data.get("title"), data.get("artist"), float(data.get("duration"))
+            except Exception as e:
+                logger.warning("Could not read metadata for %s: %s", datafile, e)
+        if lyricfile.is_file():
+            try:
+                with open(datafile, "r", encoding="utf-8") as f:
+                    lyrics = f.read()
+            except Exception as e:
+                logger.warning("Couldn't read existing lyrics file at %s: %s", lyricfile, e)
+    return DownloadResult(
+        title=title,
+        artist=artist,
+        duration=duration,
+        lyrics=lyrics,
+        filepath=str(path),
+    )

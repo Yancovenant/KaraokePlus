@@ -1,5 +1,5 @@
+from collections.abc import Callable
 from inspect import Parameter, signature
-from typing import Callable
 from pathlib import Path
 
 __all__ = [
@@ -34,4 +34,4 @@ def is_file(path: str | Path | None) -> bool | Path:
         return path
     else:
         return False
-    
+
