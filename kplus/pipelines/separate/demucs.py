@@ -69,7 +69,7 @@ class DemucsSeparator(SeparatorMixin):
         outdir = Path(outdir)
         inst_path = str(outdir / f"[S={self.shifts}|O={self.overlap}|SZ={self.segment}]_inst_{outfilename}.wav")
         vocs_path = str(outdir / f"[S={self.shifts}|O={self.overlap}|SZ={self.segment}]_vocs_{outfilename}.wav")
-        save_audio(instruments, str(inst_path) **save_kwargs)
+        save_audio(instruments, str(inst_path), **save_kwargs)
         save_audio(vocals, str(vocs_path), **save_kwargs)
         return inst_path, vocs_path
 
