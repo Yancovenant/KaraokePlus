@@ -7,7 +7,7 @@ class Rich:
     def __init__(self):
         env.rich; import rich  # noqa: B018, F401, I001
         from rich.console import Console  # type: ignore
-        self.console = Console()
+        self.console = Console(color_system="truecolor")
         self.inspect(self.console)
 
     def print(self, *args, **kwargs):
