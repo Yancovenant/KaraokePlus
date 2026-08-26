@@ -331,11 +331,11 @@ class DetectionResult:
         )
         audio_uri = Audio.np2base64(self.audio, self.sr)
         plotter.show(audio_uri=audio_uri, segments=self.segments)
-        from IPython.display import display, Audio  # noqa: I001
+        from IPython.display import display, Audio as IAudio  # noqa: I001
         for seg in self.segments:
             chunk = Audio.slicenp(self.audio, seg.start, seg.end, self.sr)
             rich.print(f"[{seg.start}-{seg.end}] ({seg.duration:.3f})")
-            if chunk.shape[0] > 0: display(Audio(chunk, rate=self.sr))
+            if chunk.shape[0] > 0: display(IAudio(chunk, rate=self.sr))
             else: rich.print("~No Audio~")
             del chunk
 
