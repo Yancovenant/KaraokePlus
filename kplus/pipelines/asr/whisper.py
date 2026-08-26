@@ -40,7 +40,7 @@ class WhisperASR(ASRMixin):
         self.config = WhisperConfig(**options)
         self.model = stable_whisper.load_faster_whisper(
             modelname, device=env.device.type,
-            compute_type=self.config.dtype,
+            compute_type=str(self.config.dtype).replace("torch.", ""),
             num_workers=self.config.max_threads,
             **options,
             **asdict(self.config),
