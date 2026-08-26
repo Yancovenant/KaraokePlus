@@ -31,11 +31,11 @@ from urllib.parse import urlparse
 from kplus.tools import safepath, search_for_path
 
 
-def ensure_file(inputpath: str | Path, *, no_lyrics: bool = False) -> DownloadResult:
+def ensure_file(inputpath: str | Path, *, no_lyrics: bool = False, **kwargs) -> DownloadResult:
     inputpath = str(inputpath)
     if urlparse(inputpath).scheme in {"https", "http"}:
         logger.info("Downloading track source %s", inputpath)
-        return download_song(inputpath, no_lyrics=no_lyrics)
+        return download_song(inputpath, no_lyrics=no_lyrics, **kwargs)
     path = Path(inputpath)
     if not path.is_file():
         raise RuntimeError("Input file has not been downloaded and is not a file.")
