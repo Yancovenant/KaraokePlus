@@ -57,21 +57,21 @@ class Downloader:
         duration = float(info.get("duration", 0))
         return title, artist, duration
 
-    def _download(self, url: str, outtmpl: str) -> str:
-        with rich.make_progress(is_download=True) as prg:
-            task = prg.add_task("Downloading", total=None)
-            def hook(data):
-                if data.get("status") == "downloading":
-                    total = data.get("total_bytes", data.get("total_bytes_estimate", 0))
-                    downloaded = data.get("downloaded_bytes")
-                    if total:
-                        prg.update(task, total=total, completed=downloaded, description="Downloading...")
-                elif data.get("status") == "finished":
-                    total = data.get("total_bytes", data.get("total_bytes_estimate", 0))
-                    prg.update(task, total=total or 1, completed=total or 1, description="Download Complete.")
-            filepath = self.downloader.download(url, outtmpl, progress_hook=hook)
-            prg.update(task, advance=1, description="Downloaded.")
-            return str(filepath)
+    def _download(self, url: str, outtmpl: str, prg) -> str:
+        # with rich.make_progress(is_download=True) as prg:
+        task = prg.add_task("Downloading", total=None)
+        def hook(data):
+            if data.get("status") == "downloading":
+                total = data.get("total_bytes", data.get("total_bytes_estimate", 0))
+                downloaded = data.get("downloaded_bytes")
+                if total:
+                    prg.update(task, total=total, completed=downloaded, description="Downloading...")
+            elif data.get("status") == "finished":
+                total = data.get("total_bytes", data.get("total_bytes_estimate", 0))
+                prg.update(task, total=total or 1, completed=total or 1, description="Download Complete.")
+        filepath = self.downloader.download(url, outtmpl, progress_hook=hook)
+        prg.update(task, advance=1, description="Downloaded.")
+        return str(filepath)
 
     def get_lyrics(self, *info) -> str:
         return self.lyrics_api.get_lyrics(*info)
@@ -101,7 +101,7 @@ class Downloader:
     ) -> DownloadResult:
         output = self.make_output(outpath, external_id)
         last_error = None
-        with rich.make_progress(is_download=False) as prg:
+        with rich.make_progress(is_download=True) as prg:
             task = prg.add_task("Preparing...", total=2 if no_lyrics else 3)
             for i in range(1, self.max_attempts + 1):
                 try:
@@ -119,7 +119,7 @@ class Downloader:
                         prg.update(task, advance=1)
                         if not lyrics: raise LyricsError("Lyrics not found with sufficient confidence.")
                     prg.update(task, description="Downloading...")
-                    filepath = self._download(url, output)
+                    filepath = self._download(url, output, prg=prg)
                     prg.update(task, advance=1, description="Completed.")
                     result = DownloadResult(
                         title=title,
