@@ -71,7 +71,7 @@ class RichLoggingHandler(rich.RichHandler):
             title.append(rich.Text(time_text + " ", style="log.time"))
         title.append(rich.Text(f"[PID: {pid}] ", style="log.path"))
         if self.show_path:
-            path_text = rich.Text("- ", style="log.path")
+            path_text = rich.Text("─ ", style="log.path")
             if name: path_text.append(name, style=f"link file://{link_path}" if link_path else "")
             elif path: path_text.append(path, style=f"link file://{link_path}" if link_path else "")
             if line_no:
