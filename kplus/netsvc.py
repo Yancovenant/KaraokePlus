@@ -75,13 +75,14 @@ class RichLoggingHandler(rich.RichHandler):
             title.append(rich.Text(time_text + " ", style="log.time"))
         title.append(rich.Text(f"[PID: {pid}] ", style="log.path"))
         if self.show_path:
-            path_text = rich.Text("─ ", style="log.path")
+            title.append(rich.Text("─ ", style="log.path"))
+            path_text = rich.Text(style="log.path")
             if name: path_text.append(name, style=f"link file://{link_path}" if link_path else "")
             elif path: path_text.append(path, style=f"link file://{link_path}" if link_path else "")
             if line_no:
                 path_text.append(f":{line_no}", style=f"link file://{link_path}#{line_no}" if link_path else "")
-            path_text.append(" ")
-            title.append(path_text)
+            pad_length = max(0, self.console.width - len(title) - len(path_text))
+            title.append(rich.Text.assemble(" " * pad_length, path_text))
         body = rich.Table.grid(rich.Column(style="log.level", width=self.level_width), rich.Column(ratio=1, style="log.message"), expand=True, padding=(0, 1))
         level_text = rich.Text(style="log.level")
         if self.show_level:
