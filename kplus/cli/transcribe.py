@@ -23,18 +23,17 @@ class Transcribe(Command):
     @staticmethod
     def internal_transcribe_options(parser: RichArgumentParser):
         group = parser.add_argument_group("Transcribe Options")
-        group.add_argument("--lyricsfile", dest="lyricsfile",
-                                 help="Initial Prompt for whisper")
         
     def _parse_config(self, args):
         TranscribeOptions.add_options(self.parser)
+        self.parser.add_argument("--lyricsfile", dest="lyricsfile",
+                                 help="Initial Prompt for whisper")
         opt = self.parser.parse_args(args)
         if not opt.filepath: self.parser.print_help(); sys.exit()
         config.parse_config(opt, setup_logging=True)
         return opt
 
-    def _run_audio_detection(self, args):
-        opt = self._parse_config(args)
+    def _run_audio_detection(self, opt):
         info = ensure_file(opt.filepath, no_lyrics=True)
         if opt.separate:
             separation_result = separate_song(info, **vars(opt))
@@ -49,11 +48,11 @@ class Transcribe(Command):
         
     def run(self, args):
         opt = self._parse_config(args)
-        info, audiopath, audio_result = self._run_audio_detection(args)
+        info, audiopath, audio_result = self._run_audio_detection(opt)
         if opt.lyricsfile is not None:
             with open(opt.lyricsfile, "rt", encoding="utf-8") as f:
                 info.lyrics = "".join(f.readlines())
-        transcibe(audiopath, audio_result, info.lyrics, **vars(opt))
+        transcribe(audiopath, audio_result.segments, info.lyrics, **vars(opt))
         if info.lyrics is not None:
             reference_aligner = ReferenceAligner(opt.verbose)
             lyrics_segments, new_audio_segments = reference_aligner.get_reference_timestamp(

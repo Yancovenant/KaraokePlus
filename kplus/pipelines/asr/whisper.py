@@ -4,6 +4,7 @@ import typing as t
 from dataclasses import asdict, dataclass
 
 from kplus import env
+from kplus.tools import filter_known_kwargs
 
 from .base import ASRConfig, ASRMixin
 from .utils import TextTiming, WordTiming
@@ -28,6 +29,16 @@ class WhisperConfig(ASRConfig):
     vad_filter: bool = False
     temperature: tuple = (0.0, 0.2, 0.4, 0.6, 0.8, 1.0)
 
+    @property
+    def initial(self):
+        device_index = self.device_map.split(":")[-1]
+        device_index = int(device_index) if device_index.isdigit() else 0
+        return {
+            "device_index": int(device_index),
+            "compute_type": str(self.dtype).replace("torch.", ""),
+            "num_workers": self.max_threads,
+        }
+
 
 class WhisperASR(ASRMixin):
     """ Whisper class ASR """
@@ -37,13 +48,12 @@ class WhisperASR(ASRMixin):
         super().__init__(**options)
         env.stable_ts, env.faster_whisper  # noqa: B018
         import stable_whisper  # type: ignore
-        self.config = WhisperConfig(**options)
+        config_params, options = filter_known_kwargs(WhisperConfig, options)
+        self.config = WhisperConfig(**config_params)
+        options.pop("num_workers", None)
         self.model = stable_whisper.load_faster_whisper(
             modelname, device=env.device.type,
-            compute_type=str(self.config.dtype).replace("torch.", ""),
-            num_workers=self.config.max_threads,
-            **options,
-            **asdict(self.config),
+            **self.config.initial,
         )
         
     def _transcribe(self, audionp: AudioNumpy, audiosegments: list[AudioSegment], reference: str, prg=None, **kwargs) -> list[TextTiming]:
@@ -74,7 +84,8 @@ class WhisperASR(ASRMixin):
             repetition_penalty=1.2,
             condition_on_previous_text=False,
             progress_callback=progress_callback,
-            **kwargs
+            verbose=kwargs.pop("verbose", None),
+            #**kwargs
         )
         for res in batch_result:
             words = []
