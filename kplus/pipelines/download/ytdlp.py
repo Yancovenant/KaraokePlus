@@ -22,7 +22,7 @@ class Ytdlp:
         "android",
         "web",
     )
-    DEFAULT_OPTS = {
+    DEFAULT_OPTS = {  # noqa: RUF012
         'format': FORMAT,
         'merge_output_format': 'mp4',
         "outtmpl": "%(title)s.%(ext)s",
@@ -40,13 +40,14 @@ class Ytdlp:
         "cachedir": str(Path.home() / ".cache" / "yt-dlp"),
     }
 
-    unrecoverable_error = [
+    unrecoverable_error = [  # noqa: RUF012
         ErrorType.UNKNOWN,
         ErrorType.GEO_BLOCKED,
         ErrorType.UNAVAILABLE,
     ]
     
     def __init__(self, cookiefile: str | None, **kwargs) -> None:
+        env.yt_dlp  # noqa: B018
         self.cookiefile = is_file(cookiefile)
         if self.cookiefile:
             logger.info("Using configured cookie file: %s", self.cookiefile)

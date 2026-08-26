@@ -6,7 +6,6 @@ import os
 import sys
 from datetime import datetime
 
-from kplus.environment import env
 from kplus.tools.config import config
 from kplus.tools.rich import rich
 
@@ -160,7 +159,7 @@ def setup_logger():
         handler = RichLoggingHandler(
             rich_tracebacks=True, markup=True,
             show_path=True, show_time=True, show_level=True,
-            omit_repeated_times=False,
+            omit_repeated_times=False, console=rich.console,
         )
         handler.setFormatter(RichLoggingFormatter(rich_format))
     logging.getLogger().addHandler(handler)
