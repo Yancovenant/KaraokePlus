@@ -33,7 +33,8 @@ class DemucsSeparator(SeparatorMixin):
         demucs_params, options = filter_known_kwargs(_get_model_demucs, options)
         with rich.make_progress(is_download=False) as prg:
             prg.add_task("Loading Demucs Model...", total=None)
-            self.model = _get_model_demucs(modelname, **demucs_params).to(env.device).eval()
+            # Load to cpu first, apply cuda on processing
+            self.model = _get_model_demucs(modelname, **demucs_params)
         self.sr = self.model.samplerate
         self.ac = self.model.audio_channels
         table = rich.Table.grid(rich.Column(), rich.Column(ratio=1), expand=True, padding=(0, 0))
@@ -125,10 +126,12 @@ class DemucsSeparator(SeparatorMixin):
             totals = [0.] * len(model.sources)
             total_models = len(model.models)
             for i, (sub_model, model_weights) in enumerate(zip(model.models, model.weights)):
-                sub_model.to(env.device)
+                original_model_device = next(iter(sub_model.parameters())).device
+                sub_model.to(env.device).eval()
                 kwargs['model_idx'] = f"{i + 1}/{total_models}"
                 res = self._apply_model(sub_model, mix, **kwargs)
                 out = res
+                sub_model.to(original_model_device)
                 for k, inst_weight in enumerate(model_weights):
                     out[:, k, :, :] *= inst_weight
                     totals[k] += inst_weight
