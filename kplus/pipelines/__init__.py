@@ -7,6 +7,7 @@ from pathlib import Path
 
 from .download import DownloadResult, download_song
 from .separate import separate_song
+from .audio import detect_audio_activity
 
 # from .refiner import TimestampRefiner
 # from .transcriber import *
@@ -19,6 +20,7 @@ __all__ = [
     "download_song",
     "ensure_file",
     "separate_song",
+    "detect_audio_activity"
 ]
 ###########################################
 # Ensuring videopath exists if URL download

@@ -1,6 +1,13 @@
+import logging
+import json
+
+from pathlib import Path
 
 from kplus import env
+from kplus.tools import rich
 
+
+logger = logging.getLogger(__name__)
 
 class AudioPlotter:
     def __init__(self, *args, **plot_kwargs):
@@ -15,6 +22,8 @@ class AudioPlotter:
         }
         self._plot_kwargs.update(plot_kwargs)
         self.refresh()
+        from plotly.io import renderers
+        self.has_renderer = renderers.default.strip()
 
     def hex2rgba(self, h: str, op: float) -> str:
         n = int(h.lstrip('#').ljust(8, 'F'), 16)
@@ -40,7 +49,7 @@ class AudioPlotter:
     def update_layout(self, **kwargs):
         self._layout_kw.append(kwargs)
 
-    def show(self, *kwargs):
+    def show(self, audio_uri=None, segments=None, **kwargs):
         fig = self.make_subplots(
             rows=self._row, cols=self._col, subplot_titles=self._titles,
             **self._plot_kwargs
@@ -56,4 +65,35 @@ class AudioPlotter:
         fig.update_layout(template="plotly_dark", hovermode="x unified",
             height=dynamic_height, margin={"l": 20, "r": 20, "t": 40, "b": 20},showlegend=False,
         )
-        fig.show()
+        if self.has_renderer:
+            fig.show(**kwargs)
+        else:
+            outpath = "test.html"
+            if audio_uri is not None and segments is not None:
+                segment_data = []
+                for i, segment in enumerate(segments):
+                    segment_data.append({
+                        "index": i,
+                        "start": float(segment.start),
+                        "end": float(segment.end),
+                    })
+                segment_json = json.dumps(segment_data)
+                fightml = fig.to_html(
+                    full_html=False,
+                    include_plotlyjs=True,
+                    config={
+                        "responsive": True,
+                        "displaylogo": False,
+                    },
+                )
+                from gettext import gettext as _
+                from .plotter_utils import base_html, audio_html
+                content = fightml
+                content += _(audio_html) % dict(segment_json=segment_json, audio_uri=audio_uri)
+                fullhtml = _(base_html) % dict(content=content)
+                with open(outpath, "w", encoding="utf-8") as f:
+                    f.write(fullhtml)
+            else:
+                fig.write_html(outpath)
+            rich.print("file://" + str(Path(outpath).expanduser().resolve()))
+            

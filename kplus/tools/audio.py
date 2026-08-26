@@ -7,8 +7,13 @@ env.ffmpeg, env.torch, env.numpy  # noqa: B018
 import json
 import subprocess
 import typing as t
+import base64
+import io
+import wave
+
 from functools import cached_property
 from pathlib import Path
+from dataclasses import dataclass
 
 import numpy as np
 import torch
@@ -20,6 +25,7 @@ __all__ = [
     "AudioNumpy",
     "AudioTensor",
     "AudioType",
+    "_TimingMixin",
 ]
 
 AudioNumpy: t.TypeAlias = np.ndarray
@@ -113,11 +119,42 @@ class Audio:
             wav = wav[0]
         return wav
 
-    def init(self, audio: AudioType, samplerate: int | None = None, channels: int | None = None, **kwargs) -> None:
+    @staticmethod
+    def np2base64(audio: AudioNumpy, sr: int) -> str:
+        # Make mono
+        if audio.ndim > 1:
+            audio = audio.reshape(-1)
+        # Prevent clipping
+        audio = np.clip(audio, -1.0, 1.0)
+        # float32 -> signed 16-bit PCM
+        pcm = (audio * 32767.0).astype(np.int16)
+        buffer = io.BytesIO()
+        with wave.open(buffer, "wb") as wav:
+            wav.setnchannels(1)
+            wav.setsampwidth(2)  # int16
+            wav.setframerate(sr)
+            wav.writeframes(pcm.tobytes())
+        encoded = base64.b64encode(buffer.getvalue()).decode("ascii")
+        return f"data:audio/wav;base64,{encoded}"
+
+    @cached_property
+    def base64(self) -> str:
+        """ Convert numpy audio to base64, require sr"""
+        audio = np.asarray(self.numpy, dtype=np.float32)
+        sr = self.samplerate()
+        return self.np2base64(audio, sr)
+        
+
+    def init(self,
+        audio: AudioType,
+        samplerate: int | None = None,
+        channels: int | None = None,
+        **kwargs
+    ) -> None:
         if isinstance(audio, (str, Path)):
-            self.audiopath = str(audio)
+            self.audiopath = str(Path(str(audio)).expanduser().resolve())
             streams = kwargs.pop("streams", 0)
-            self.tensor = self._read_audio(streams=streams, **kwargs)
+            self.tensor = self._read_audio(samplerate=samplerate, channels=channels, streams=streams, **kwargs)
         else:
             if isinstance(audio, AudioTensor):
                 self.tensor = audio
@@ -153,3 +190,20 @@ class Audio:
             # Case 4: What is a reasonable choice here?
             raise ValueError('The audio file has less channels than requested but is not mono.')
         return wav
+
+
+@dataclass(slots=True)
+class _HumanTime:
+    """ Helper Mixin for rendering human readable timing """
+
+@dataclass(slots=True)
+class _TimingMixin(_HumanTime):
+    start: float
+    end: float
+
+    _duration: float | ... = ...
+    @property
+    def duration(self) -> float:
+        if self._duration is not ...: return ...
+        self._duration = self.end - self.start
+        return self._duration

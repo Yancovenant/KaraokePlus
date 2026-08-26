@@ -42,9 +42,35 @@ class SeparateOptions(DownloadOptions):
         group.add_argument("--num-workers", type=int, metavar="N", default=0,
                            help="Number of jobs. This can increase memory usage but will be much faster when multiple cores are available. If not specified, will use the command line option. (default: %(default)s)")
 
-class TranscribeOptions(DownloadOptions):
+class AudioDetectionOptions(SeparateOptions):
+    @classmethod
+    def add_options(cls, parser, **kwargs):
+        super().add_options(parser, **kwargs)
+        parser.add_argument("--separate", action="store_true",
+                                 help="Wheter to run separation first, and use only its vocals")
+        group = parser.add_argument_group("Audio Detection Options")
+        group.add_argument("--precision-ms", type=int, metavar="MS", default=10,
+                          help="Define how much 1 frame in millisecond. ")
+        group.add_argument("--signal-overlap", type=float, metavar="RATIO", default=0.75,
+                          help="Used to calculate frame length")
+        group.add_argument("--use-filter", action="store_true", default=True,
+                          help="Wheter to apply frequency filter (200, 5000) (Human Freq) to the audio being detect")
+        
+
+class TranscribeOptions(AudioDetectionOptions):
     @classmethod
     def add_options(cls, parser, **kwargs):
         super().add_options(parser, **kwargs)
         group = parser.add_argument_group("Transcribe Options")
-    
+        group.add_argument("--whisper", nargs="?", const="large-v3", default=None, metavar="MODEL",
+                          help="Use Whisper model to transcribe")
+        group.add_argument("--qwen", nargs="?", const="Qwen/Qwen3-ASR-1.7B", default=None, metavar="MODEL",
+                          help="Use Qwen model to transcribe")
+        group = parser.add_argument_group("Whisper Transcribe Options")
+        group.add_argument("--max-threads", default=2)
+        group.add_argument("--beam-size", default=10)
+        group = parser.add_argument_group("Qwen Transcribe Options")
+        group.add_argument("--max-inference-batch-size", default=-1)
+        group.add_argument("--max-new-tokens", default=8192)
+        group.add_argument("--num-beams", default=10)
+        
