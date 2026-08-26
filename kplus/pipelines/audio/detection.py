@@ -5,7 +5,6 @@ import typing as t
 
 from functools import cached_property
 from dataclasses import dataclass
-from IPython.display import display, Audio as IAudio  # noqa: I001
 
 import kplus.init  # noqa: F401
 from kplus import env
@@ -16,6 +15,7 @@ from kplus.pipelines.audio.plotter import AudioPlotter
 
 # Need to be below
 import numpy as np
+from IPython.display import display, Audio as IAudio  # noqa: I001
 
 
 logger = logging.getLogger(__name__)
