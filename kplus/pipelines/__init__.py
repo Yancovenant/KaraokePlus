@@ -17,10 +17,10 @@ logger = logging.getLogger(__name__)
 
 __all__ = [
     "VisualizeWaveform",
+    "detect_audio_activity",
     "download_song",
     "ensure_file",
-    "separate_song",
-    "detect_audio_activity"
+    "separate_song"
 ]
 ###########################################
 # Ensuring videopath exists if URL download

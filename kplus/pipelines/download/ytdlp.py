@@ -27,12 +27,17 @@ class Ytdlp:
         'merge_output_format': 'mp4',
         "outtmpl": "%(title)s.%(ext)s",
         "noplaylist": True,
+
         "quiet": True,
         "no_warnings": True,
+        "noprogress": True,
+        "logger": logger,
+
         "retries": 3,
         "fragment_retries": 3,
         "socket_timeout": 30,
         "continuedl": True,
+
         "extractor_args": {
             "youtube": {"player_clients": list(player_clients)}
         },
