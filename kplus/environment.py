@@ -172,11 +172,14 @@ class environment:
                 from kplus.tools import rich
                 max_lines = 6
                 output_queue = collections.deque(maxlen=max_lines)
-                with rich.Live(transient=True) as live:
+                lines, last_line = [], None
+                with rich.Live(transient=True, refresh_per_second=15) as live:
                     for line in iter(process.stdout.readline, ''):
-                        output_queue.append(line.rstrip())
-                        content_text = "\n".join(output_queue)
-                        install_text = rich.Text(content_text)
+                        if not (line:=line.strip()): continue
+                        if line == last_line: continue
+                        if len(lines) >= max_lines: lines.pop()
+                        lines.append(line)
+                        install_text = rich.Text("\n".join(lines))
                         live.update(rich.Panel(install_text, title=f"Installing {install_name}...", style="color(14)", padding=1))
                 process.stdout.close()
                 return_code = process.wait()
