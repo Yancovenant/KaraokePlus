@@ -8,8 +8,9 @@ class Rich:
         env.rich; import rich  # noqa: B018, F401, I001
         from rich.console import Console  # type: ignore
         self.console = Console(
-            force_jupyter=True,
-            # color_system="truecolor"
+            # force_jupyter=True,
+            color_system="truecolor",
+            force_interactive=False,
         )
         self.inspect(self.console)
 
