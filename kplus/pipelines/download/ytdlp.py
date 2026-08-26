@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from pathlib import Path
 
 from kplus import env
@@ -38,6 +39,7 @@ class Ytdlp:
         "socket_timeout": 30,
         "continuedl": True,
 
+        "remote_components": ["ejs:github"],
         "extractor_args": {
             "youtube": {"player_clients": list(player_clients)}
         },
@@ -53,6 +55,7 @@ class Ytdlp:
     
     def __init__(self, cookiefile: str | None, **kwargs) -> None:
         env.yt_dlp  # noqa: B018
+        if os.name != "nt": env.deno  # noqa: B018
         self.cookiefile = is_file(cookiefile)
         if self.cookiefile:
             logger.info("Using configured cookie file: %s", self.cookiefile)
