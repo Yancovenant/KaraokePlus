@@ -44,7 +44,7 @@ class RichLoggingHandler(rich.RichHandler):
         self.omit_repeated_times = kwargs.get("omit_repeated_times", True)
         self.level_width = kwargs.get("level_width", None)
         self._last_time: Text | None = None
-        if self.enable_link_path and (env.is_colab or env.is_kaggle):
+        if self.enable_link_path and (self.console.is_terminal and (env.is_colab or env.is_kaggle)):
             # Check wheter environment is supported it
             logger.warning("Setting up clickable path link isn't supported on a jupyter cloud server")
             self.enable_link_path = False

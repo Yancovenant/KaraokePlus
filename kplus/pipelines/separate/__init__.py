@@ -18,8 +18,8 @@ class BaseSeparator:
     
     @classmethod
     def from_options(self, **options):
-        demucs_modelname = options.pop("demucs")
-        uvr_modelname = options.pop("uvr")
+        demucs_modelname = options.pop("demucs", None)
+        uvr_modelname = options.pop("uvr", None)
         if demucs_modelname and uvr_modelname:
             raise ValueError("Cannot use Demucs model and UVR model at the same time: %s - %s", demucs_modelname, uvr_modelname)
         modelclass = self.modelclass["demucs" if demucs_modelname else "uvr"]
