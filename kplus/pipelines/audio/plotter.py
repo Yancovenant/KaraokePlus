@@ -47,7 +47,7 @@ class AudioPlotter:
     def update_layout(self, **kwargs):
         self._layout_kw.append(kwargs)
 
-    def show(self, audio_uri=None, segments=None, **kwargs):
+    def show(self, *, audio_uri=None, segments=None, **kwargs):
         fig = self.make_subplots(
             rows=self._row, cols=self._col, subplot_titles=self._titles,
             **self._plot_kwargs
@@ -84,7 +84,7 @@ class AudioPlotter:
                         "displaylogo": False,
                     },
                 )
-                from gettext import gettext as _
+                from gettext import gettext as _  # noqa: I001
                 from .plotter_utils import audio_html, base_html
                 content = fightml
                 content += _(audio_html) % dict(segment_json=segment_json, audio_uri=audio_uri)

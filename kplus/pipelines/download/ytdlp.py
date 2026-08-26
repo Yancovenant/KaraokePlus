@@ -7,7 +7,7 @@ from pathlib import Path
 from kplus import env
 from kplus.tools import is_file
 
-from .utils import ErrorType
+from .utils import DownloadError, ErrorType
 
 logger = logging.getLogger(__name__)
 
@@ -102,4 +102,7 @@ class Ytdlp:
         raise FileNotFoundError("YT-DLP Download complete without producing a single output file: %s", requested)
 
     def classify_error(self, e: Exception) -> ErrorType:
-        return ErrorType(e)
+        failure_type = ErrorType(e)
+        if failure_type == ErrorType.AUTH and not self.cookiefile:
+            raise DownloadError("Not able to download video youtube as its auth/session error with no `cookiefile`")
+        return failure_type

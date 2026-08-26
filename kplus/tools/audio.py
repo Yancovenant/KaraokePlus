@@ -144,7 +144,10 @@ class Audio:
         audio = np.asarray(self.numpy, dtype=np.float32)
         sr = self.samplerate()
         return self.np2base64(audio, sr)
-        
+
+    @staticmethod
+    def slicenp(audio: AudioNumpy, start: float, end: float, sr: int) -> AudioNumpy:
+        return audio[int(start*sr):int(end*sr)]
 
     def init(self,
         audio: AudioType,
@@ -208,3 +211,4 @@ class _TimingMixin(_HumanTime):
         if self._duration is not ...: return ...
         self._duration = self.end - self.start
         return self._duration
+    
