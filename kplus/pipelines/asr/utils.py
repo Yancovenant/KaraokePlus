@@ -1,13 +1,17 @@
+from __future__ import annotations  # noqa: I001
 
+from kplus.tools.audio import _HumanTime, _TimingMixin
 
-from kplus.tools.audio import _TimingMixin, _HumanTime
+# Need to be below
+import torch
 
+from dataclasses import dataclass
 
 __all__ = [
-    "get_default_dtype",
-    "WordTiming",
-    "TextTiming",
     "ASRResult",
+    "TextTiming",
+    "WordTiming",
+    "get_default_dtype",
 ]
 
 def get_default_dtype() -> torch.dtype:

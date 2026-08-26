@@ -25,7 +25,7 @@ class DownloadOptions(InputOptions):
 
 class SeparateOptions(DownloadOptions):
     @classmethod
-    def add_options(cls, parser, **kwargs):
+    def add_options(cls, parser: RichArgumentParser, **kwargs):
         super().add_options(parser, **kwargs)
         group = parser.add_argument_group("Separate Options")
         group.add_argument("--demucs", nargs="?", const="mdx_extra_q", default=None, metavar="MODEL",
@@ -44,7 +44,7 @@ class SeparateOptions(DownloadOptions):
 
 class AudioDetectionOptions(SeparateOptions):
     @classmethod
-    def add_options(cls, parser, **kwargs):
+    def add_options(cls, parser: RichArgumentParser, **kwargs):
         super().add_options(parser, **kwargs)
         parser.add_argument("--separate", action="store_true",
                                  help="Wheter to run separation first, and use only its vocals")
@@ -59,7 +59,7 @@ class AudioDetectionOptions(SeparateOptions):
 
 class TranscribeOptions(AudioDetectionOptions):
     @classmethod
-    def add_options(cls, parser, **kwargs):
+    def add_options(cls, parser: RichArgumentParser, **kwargs):
         super().add_options(parser, **kwargs)
         group = parser.add_argument_group("Transcribe Options")
         group.add_argument("--whisper", nargs="?", const="large-v3", default=None, metavar="MODEL",

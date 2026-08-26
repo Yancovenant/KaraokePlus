@@ -1,12 +1,10 @@
+import argparse
 import re
 import sys
-from pathlib import Path
-import contextlib
-import argparse
-
 from inspect import cleandoc
+from pathlib import Path
 
-import kplus.init # intialize
+import kplus.init  # intialize
 from kplus.tools.config import config
 from kplus.tools.rich import RichArgumentParser, RichHelpFormatter
 

@@ -4,10 +4,14 @@ cookies.txt
 #pkl
 *.pkl
 
-# Test Images
+# Vscode
+.vscode
+
+# Test Data
 *.jpg
 *.png
 *.mp4
+*.wav
 
 # Python Cache
 __pycache__/

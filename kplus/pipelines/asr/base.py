@@ -9,8 +9,9 @@ import logging
 from dataclasses import field, dataclass, asdict
 
 from kplus import env
+from kplus.tools import rich
 
-from .utils import get_default_dtype, TextTiming, WordTiming
+from .utils import get_default_dtype, TextTiming, WordTiming, ASRResult
 
 if t.TYPE_CHECKING:
     from kplus.pipelines.audio import AudioSegment
@@ -69,9 +70,9 @@ class QwenASR(ASRMixin):
     _name = "Qwen"
     
     def __init__(self, modelname: str, **options):
-        super().__init__(self, **options):
+        super().__init__(self, **options)
         env.torchvision, env.qwen_asr  # noqa: B018
-        from qwen_asr import Qwen3ASRModel  # type: ignore # noqa: I001
+        from qwen_asr import Qwen3ASRModel  # type: ignore
         self.model = Qwen3ASRModel.from_pretrained(
             #"Qwen/Qwen3-ASR-1.7B",
             modelname,

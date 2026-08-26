@@ -1,10 +1,15 @@
+from __future__ import annotations
 
+import typing as t
 
-from .detection import DetectionResult, AudioExtractor, AudioSegment
+from .detection import AudioExtractor, AudioSegment, DetectionResult
+
+if t.TYPE_CHECKING:
+    from kplus.tools.audio import AudioType
 
 __all__ = [
-    "detect_audio_activity",
     "AudioSegment",
+    "detect_audio_activity",
 ]
 
 def detect_audio_activity(

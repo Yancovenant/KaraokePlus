@@ -1,11 +1,9 @@
-import logging
 import json
-
+import logging
 from pathlib import Path
 
 from kplus import env
 from kplus.tools import rich
-
 
 logger = logging.getLogger(__name__)
 
@@ -87,7 +85,7 @@ class AudioPlotter:
                     },
                 )
                 from gettext import gettext as _
-                from .plotter_utils import base_html, audio_html
+                from .plotter_utils import audio_html, base_html
                 content = fightml
                 content += _(audio_html) % dict(segment_json=segment_json, audio_uri=audio_uri)
                 fullhtml = _(base_html) % dict(content=content)

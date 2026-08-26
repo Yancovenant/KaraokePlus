@@ -1,8 +1,10 @@
 import textwrap
+
 import kplus
+from kplus.tools import rich
 
 from .command import PROG_NAME, Command, commands, load_internal_commands
-from kplus.tools.rich import rich
+
 
 class Help(Command):
     """ Display the list of available commands """

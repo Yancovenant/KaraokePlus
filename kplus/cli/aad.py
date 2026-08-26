@@ -1,8 +1,7 @@
 import logging
 import sys
 
-from kplus.environment import env
-from kplus.pipelines import detect_audio_activity
+from kplus.pipelines import detect_audio_activity, ensure_file, separate_song
 from kplus.tools import config
 from kplus.tools.audio import Audio
 

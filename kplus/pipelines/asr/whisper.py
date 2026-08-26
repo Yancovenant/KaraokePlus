@@ -1,18 +1,16 @@
 from __future__ import annotations
 
 import typing as t
-
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 
 from kplus import env
-from kplus.tools import rich
 
-from .base import ASRMixin, ASRConfig
+from .base import ASRConfig, ASRMixin
 from .utils import TextTiming, WordTiming
 
 if t.TYPE_CHECKING:
     from kplus.pipelines.audio import AudioSegment
-    from kplus.tools.audio import AudioType, AudioNumpy
+    from kplus.tools.audio import AudioNumpy
 
 
 @dataclass(slots=True)
@@ -52,7 +50,7 @@ class WhisperASR(ASRMixin):
         results = []
         task = prg.add_task(description="Transcribing...", total=None)
         def progress_callback(seek: float, total: float):
-            prg.update(completed=seek, total=total)
+            prg.update(task, completed=seek, total=total)
         # normal transcribe expect str, float() timestamp
         time_batches = ",".join(f"{seg.start},{seg.end}" for seg in audiosegments)
         # batch transcribe expect a dict?
@@ -63,7 +61,7 @@ class WhisperASR(ASRMixin):
             multilingual=kwargs.pop("multilingual", self.config.multilingual),
             beam_size=kwargs.pop("beam_size", self.config.beam_size),
             patience=kwargs.pop("patience", self.config.patience),
-            regroup=kwargs.pop("regroup", self.config.regroup)
+            regroup=kwargs.pop("regroup", self.config.regroup),
             language_detection_threshold=kwargs.pop("language_detection_threshold", self.config.language_detection_threshold),
             compression_ratio_threshold=kwargs.pop("compression_ratio_threshold", self.config.compression_ratio_threshold),
             log_prob_threshold=kwargs.pop("log_prob_threshold", self.config.log_prob_threshold),
@@ -79,7 +77,6 @@ class WhisperASR(ASRMixin):
             **kwargs
         )
         for res in batch_result:
-            main_bar.update(1)
             words = []
             for w in res.words:
                 words.append(

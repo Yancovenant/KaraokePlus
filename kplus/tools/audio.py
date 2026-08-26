@@ -1,19 +1,20 @@
+from __future__ import annotations
+
 # Should be imported only when needed to not make loading slower
 from kplus import env
 
 # Must be at the top
 env.ffmpeg, env.torch, env.numpy  # noqa: B018
 
+import base64
+import io
 import json
 import subprocess
 import typing as t
-import base64
-import io
 import wave
-
+from dataclasses import dataclass, field
 from functools import cached_property
 from pathlib import Path
-from dataclasses import dataclass
 
 import numpy as np
 import torch
@@ -201,7 +202,7 @@ class _TimingMixin(_HumanTime):
     start: float
     end: float
 
-    _duration: float | ... = ...
+    _duration: float | ... = field(default=..., init=False)
     @property
     def duration(self) -> float:
         if self._duration is not ...: return ...
