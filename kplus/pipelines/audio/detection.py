@@ -329,6 +329,7 @@ class DetectionResult:
             name="Final Mask",
             fill="tozeroy", line=dict(shape="hv"),
         )
+        from kplus.tools.audio import Audio
         audio_uri = Audio.np2base64(self.audio, self.sr)
         plotter.show(audio_uri=audio_uri, segments=self.segments)
         from IPython.display import display, Audio as IAudio  # noqa: I001
