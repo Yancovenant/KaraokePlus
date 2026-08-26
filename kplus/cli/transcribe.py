@@ -1,15 +1,18 @@
 import logging
 import sys
-from pathlib import Path
-from types import SimpleNamespace
+
+from kplus.pipelines import (
+    detect_audio_activity,
+    ensure_file,
+    separate_song,
+    transcribe,
+)
 
 #from kplus.pipelines import AAD, Transcriber, get_track_file
 #from kplus.pipelines.aligner import ReferenceAligner
 from kplus.tools import RichArgumentParser, config
-from kplus.pipelines.asr import transcribe
 
 from .command import Command
-from .download import Download
 from .parser_utils import TranscribeOptions
 
 logger = logging.getLogger(__name__)
@@ -38,6 +41,7 @@ class Transcribe(Command):
             audiopath = separation_result.vocs_path
             sr = separation_result.sr
         else:
+            from kplus.tools.audio import Audio
             audiopath = opt.filepath
             sr = Audio(str(opt.filepath)).samplerate()
         result = detect_audio_activity(audio=audiopath, sr=sr, **vars(opt))
