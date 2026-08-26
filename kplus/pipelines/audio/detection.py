@@ -5,6 +5,7 @@ import typing as t
 
 from functools import cached_property
 from dataclasses import dataclass
+from IPython.display import display, Audio as IAudio  # noqa: I001
 
 import kplus.init  # noqa: F401
 from kplus import env
@@ -329,11 +330,8 @@ class DetectionResult:
             name="Final Mask",
             fill="tozeroy", line=dict(shape="hv"),
         )
-        from kplus.tools.audio import Audio
-        rich.inspect(Audio)
         audio_uri = Audio.np2base64(self.audio, self.sr)
         plotter.show(audio_uri=audio_uri, segments=self.segments)
-        from IPython.display import display, Audio as IAudio  # noqa: I001
         for seg in self.segments:
             chunk = Audio.slicenp(self.audio, seg.start, seg.end, self.sr)
             rich.print(f"[{seg.start}-{seg.end}] ({seg.duration:.3f})")
