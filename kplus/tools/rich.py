@@ -10,7 +10,6 @@ class Rich:
         self.console = Console(
             # force_jupyter=True,
             color_system="truecolor",
-            force_interactive=False,
         )
         self.inspect(self.console)
 
