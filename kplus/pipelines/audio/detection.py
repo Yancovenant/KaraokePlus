@@ -9,7 +9,7 @@ from dataclasses import dataclass
 import kplus.init  # noqa: F401
 from kplus import env
 from kplus.tools import rich
-from kplus.tools.audio import Audio, AudioNumpy, AudioType, _TimingMixin
+from kplus.tools.audio import Audio as KAudio, AudioNumpy, AudioType, _TimingMixin
 
 from kplus.pipelines.audio.plotter import AudioPlotter
 
@@ -330,10 +330,10 @@ class DetectionResult:
             name="Final Mask",
             fill="tozeroy", line=dict(shape="hv"),
         )
-        audio_uri = Audio.np2base64(self.audio, self.sr)
+        audio_uri = KAudio.np2base64(self.audio, self.sr)
         plotter.show(audio_uri=audio_uri, segments=self.segments)
         for seg in self.segments:
-            chunk = Audio.slicenp(self.audio, seg.start, seg.end, self.sr)
+            chunk = KAudio.slicenp(self.audio, seg.start, seg.end, self.sr)
             rich.print(f"[{seg.start}-{seg.end}] ({seg.duration:.3f})")
             if chunk.shape[0] > 0: display(IAudio(chunk, rate=self.sr))
             else: rich.print("~No Audio~")
@@ -361,7 +361,7 @@ class AudioExtractor:
     def _preprocess_audio(self, audio: AudioType, sr: int) -> AudioNumpy:
         audionp = audio
         if not isinstance(audio, AudioNumpy):
-            audionp = Audio(audio, samplerate=sr, channels=1).numpy
+            audionp = KAudio(audio, samplerate=sr, channels=1).numpy
         assert isinstance(audionp, AudioNumpy)
         if self.use_filter:
             sos = self.extractor.scipy.signal.butter(10, [200, 5000], btype='bandpass', fs=sr, output='sos')
