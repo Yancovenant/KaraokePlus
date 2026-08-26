@@ -23,9 +23,9 @@ class BaseASR:
     }
     @classmethod
     def from_model(cls, **options) -> ASRMixin:
-        whisper_modelname = options.pop("whisper")
-        qwen_modelname = options.pop("qwen")
-        is_mms = options.pop("mms_fa")
+        whisper_modelname = options.pop("whisper", None)
+        qwen_modelname = options.pop("qwen", None)
+        is_mms = options.pop("mms_fa", None)
         error_text = f"Cannot use multiple model at the same time: {whisper_modelname} - {qwen_modelname} - {is_mms}"
         if (
             (whisper_modelname and qwen_modelname)

@@ -37,6 +37,7 @@ class WhisperASR(ASRMixin):
         super().__init__(**options)
         env.stable_ts, env.faster_whisper  # noqa: B018
         import stable_whisper  # type: ignore
+        self.config = WhisperConfig(**options)
         self.model = stable_whisper.load_faster_whisper(
             modelname, device=env.device.type,
             compute_type=self.config.dtype,
@@ -44,8 +45,7 @@ class WhisperASR(ASRMixin):
             **options,
             **asdict(self.config),
         )
-        self.config = WhisperConfig(**options)
-
+        
     def _transcribe(self, audionp: AudioNumpy, audiosegments: list[AudioSegment], reference: str, prg=None, **kwargs) -> list[TextTiming]:
         results = []
         task = prg.add_task(description="Transcribing...", total=None)

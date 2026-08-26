@@ -73,6 +73,7 @@ class QwenASR(ASRMixin):
         super().__init__(self, **options)
         env.torchvision, env.qwen_asr  # noqa: B018
         from qwen_asr import Qwen3ASRModel  # type: ignore
+        self.config = QwenConfig(**options)
         self.model = Qwen3ASRModel.from_pretrained(
             #"Qwen/Qwen3-ASR-1.7B",
             modelname,
@@ -90,8 +91,7 @@ class QwenASR(ASRMixin):
                 **asdict(self.config),
             }
         )
-        self.config = QwenConfig(**options)
-
+        
     def _transcribe(self, audionp: AudioNumpy, audiosegments: list[AudioSegment], reference: str, prg=None, **kwargs) -> list[TextTiming]:
         logger.debug(f"Running Qwen ASR model with {len(audiosegments)} segments and config: {self.sr}")
         audio_chunk_list, results = [], []
