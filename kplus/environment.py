@@ -11,6 +11,7 @@ import shutil
 import signal
 import socket
 import subprocess
+import collections
 import sys
 import uuid
 import warnings
@@ -169,9 +170,13 @@ class environment:
                     text=True, bufsize=1
                 )
                 from kplus.tools import rich
+                max_lines = 6
+                output_queue = collections.deque(maxlen=max_lines)
                 with rich.Live(transient=True) as live:
                     for line in iter(process.stdout.readline, ''):
-                        install_text = rich.Text(line)
+                        output_queue.append(line.rstrip())
+                        content_text = "\n".join(output_queue)
+                        install_text = rich.Text(content_text)
                         live.update(rich.Panel(install_text, title=f"Installing {install_name}...", style="color(14)", padding=1))
                 process.stdout.close()
                 return_code = process.wait()
