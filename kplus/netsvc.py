@@ -6,8 +6,8 @@ import os
 import sys
 from datetime import datetime
 
-from kplus.tools.config import config
-from kplus.tools.rich import rich
+from kplus import env
+from kplus.tools import config, rich
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +44,10 @@ class RichLoggingHandler(rich.RichHandler):
         self.omit_repeated_times = kwargs.get("omit_repeated_times", True)
         self.level_width = kwargs.get("level_width", None)
         self._last_time: Text | None = None
+        if self.enable_link_path and (env.is_colab or env.is_kaggle):
+            # Check wheter environment is supported it
+            logger.warning("Setting up clickable path link isn't supported on a jupyter cloud server")
+            self.enable_link_path = False
         
     def _log_rich_render(self,
         console: Console,
