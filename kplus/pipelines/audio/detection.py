@@ -9,13 +9,14 @@ from dataclasses import dataclass
 import kplus.init  # noqa: F401
 from kplus import env
 from kplus.tools import rich
-from kplus.tools.audio import Audio as KAudio, AudioNumpy, AudioType, _TimingMixin
+from kplus.tools.audio import Audio as KAudio, AudioNumpy, AudioType
 
+from kplus.pipelines.utils import AudioSegment
 from kplus.pipelines.audio.plotter import AudioPlotter
 
 # Need to be below
 import numpy as np
-from IPython.display import display, Audio as IAudio  # noqa: I001
+from IPython.display import display, Audio as IAudio
 
 
 logger = logging.getLogger(__name__)
@@ -211,9 +212,6 @@ class Mel(Feature):
         )
         super().plot(show, row)
 
-
-class AudioSegment(_TimingMixin):
-    """ Responsible to hold audio segment """
 
 @dataclass(slots=True)
 class DetectionResult:

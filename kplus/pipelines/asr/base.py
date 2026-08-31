@@ -1,20 +1,22 @@
-from __future__ import annotations
+from __future__ import annotations  # noqa: I001
 
 from kplus.tools.audio import Audio, AudioType, AudioNumpy
 # Need to be below
 import torch
 import typing as t
 import logging
+import difflib
 
 from dataclasses import field, dataclass, asdict
 
 from kplus import env
-from kplus.tools import rich
+from kplus.tools import rich, get_phonetic
+from kplus.pipelines.utils import TextTiming, WordTiming, ASRResult
 
-from .utils import get_default_dtype, TextTiming, WordTiming, ASRResult
+from .utils import get_default_dtype
 
 if t.TYPE_CHECKING:
-    from kplus.pipelines.audio import AudioSegment
+    from kplus.pipelines.utils import AudioSegment
 
 logger = logging.getLogger(__name__)
 
@@ -58,69 +60,42 @@ class ASRMixin:
         results.sort(key=lambda x: x.words[0].start if x.words else 0.0)
         return ASRResult(texts=results)
 
+    def _fix_duplicate(self, new_res, ori: TextTiming):
+        new_words = [get_phonetic(w.word.strip()).latin for w in new_res.words]
+        ori_words = [get_phonetic(w.word.strip()).latin for w in ori.words]
+        patched = []
+        matcher = difflib.SequenceMatcher(None, ori_words, new_words) # should this converted to a number for faster performance? like jiwer does it
+        for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+            if tag == 'equal' or tag == 'replace': patched.extend(new_res.words[j1:j2])
+            elif tag == 'delete':
+                logger.warning(f"  -> Whisper deleting words {i1} - {i2}")
+                for missing_idx in range(i1, i2):
+                    patched.append(ori.words[missing_idx])
+            elif tag == 'insert':
+                logger.warning(f"  -> Dropping Whisper hallucination: {[w.word for w in new_res.words[j1:j2]]}")
+        new_res.words = patched
+        return new_res
 
-@dataclass(slots=True)
-class QwenConfig(ASRConfig):
-    max_inference_batch_size: int = -1 # -1 for infinte
-    max_new_tokens: int = 8192 #
-    num_beams: int = 10
-
-class QwenASR(ASRMixin):
-    """ Qwen class ASR """
-    _name = "Qwen"
+    def _align(self, audionp: AudioNumpy, transcriptions: ASRResult, reference: str, audiosegments: list[AudioSegment], prg=None, **kwargs) -> list[TextTiming]:
+            raise NotImplementedError()
     
-    def __init__(self, modelname: str, **options):
-        super().__init__(self, **options)
-        env.torchvision, env.qwen_asr  # noqa: B018
-        from qwen_asr import Qwen3ASRModel  # type: ignore
-        self.config = QwenConfig(**options)
-        self.model = Qwen3ASRModel.from_pretrained(
-            #"Qwen/Qwen3-ASR-1.7B",
-            modelname,
-            dtype=self.config.dtype,
-            device_map=self.config.device_map,
-            attn_implementation="sdpa",
-            forced_aligner="Qwen/Qwen3-ForcedAligner-0.6B",
-            **options,
-            **asdict(self.config),
-            forced_aligner_kwargs={
-                "dtype": self.config.dtype,
-                "device_map": self.config.device_map,
-                "attn_implementation": "sdpa",
-                **options,
-                **asdict(self.config),
-            }
-        )
-        
-    def _transcribe(self, audionp: AudioNumpy, audiosegments: list[AudioSegment], reference: str, prg=None, **kwargs) -> list[TextTiming]:
-        logger.debug(f"Running Qwen ASR model with {len(audiosegments)} segments and config: {self.sr}")
-        audio_chunk_list, results = [], []
-        for seg in audiosegments:
-            start, end = int(seg.start * self.sr), int(seg.end * self.sr)
-            audio_chunk_list.append((audionp[start:end], self.sr))
-        logger.debug(f"Prepared {len(audio_chunk_list)} audio chunks for Qwen ASR model")
-        batch_result = self.model.transcribe(audio=audio_chunk_list, context=None, return_time_stamps=True, **kwargs)
-        logger.debug(f"Qwen ASR model returned {len(batch_result)} segments")
-        for seg, aseg in zip(batch_result, audiosegments):
-            #prg.update(1)
-            if seg.time_stamps is not None:
-                words = []
-                for word in seg.time_stamps:
-                    words.append(
-                        WordTiming(
-                            start=float(word.start_time + aseg.start),
-                            end=float(word.end_time + aseg.start),
-                            score=1.0,
-                            word=str(word.text)
-                        )
-                    )
-                results.append(
-                    TextTiming(
-                        words=words,
-                        language=seg.language
-                    )
-                )
-        return results
+    def align(self, audio: AudioType, transcriptions: ASRResult, reference: str, audiosegments: list[AudioSegment], prg=None, **kwargs) -> list[TextTiming]:
+        audionp = Audio(audio, samplerate=self.sr, channels=1).numpy
+        if not audiosegments:
+            duration = len(audionp) / self.sr
+            audiosegments = [AudioSegment(start=0.0, end=duration)]
+        try:
+            with rich.make_progress(is_download=False) as prg:
+                prg.add_task(description=f"{self._name} Starting Alignment...", total=None)
+                results = self._align(audionp, transcriptions, reference, audiosegments, prg, **kwargs)
+        except Exception as err:
+            logger.exception(f"Error while doing Alignment, error: {err}")
+            raise
+        results.sort(key=lambda x: x.words[0].start if x.words else 0.0)
+        return ASRResult(texts=results)
+
+
+
 
 class MMS_FA(ASRMixin):
     """ mms_fa facebook wav2vec2 aligner """

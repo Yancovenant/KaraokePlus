@@ -2,6 +2,7 @@ import logging
 import sys
 
 from kplus.pipelines import (
+    align2ref,
     detect_audio_activity,
     ensure_file,
     separate_song,
@@ -19,11 +20,6 @@ logger = logging.getLogger(__name__)
 
 class Transcribe(Command):
     """ Whisper Transcribe given audio """
-
-    @staticmethod
-    def internal_transcribe_options(parser: RichArgumentParser):
-        group = parser.add_argument_group("Transcribe Options")
-        
     def _parse_config(self, args):
         TranscribeOptions.add_options(self.parser)
         self.parser.add_argument("--lyricsfile", dest="lyricsfile",
@@ -52,8 +48,6 @@ class Transcribe(Command):
         if opt.lyricsfile is not None:
             with open(opt.lyricsfile, "rt", encoding="utf-8") as f:
                 info.lyrics = "".join(f.readlines())
-        transcribe(audiopath, audio_result.segments, info.lyrics, **vars(opt))
+        result = transcribe(audiopath, audio_result.segments, info.lyrics, **vars(opt))
         if info.lyrics is not None:
-            reference_aligner = ReferenceAligner(opt.verbose)
-            lyrics_segments, new_audio_segments = reference_aligner.get_reference_timestamp(
-                transcriptions, info.lyrics, audio_segments)
+            ref_result, new_audiosegments = align2ref(result, info.lyrics, audio_result.segments)

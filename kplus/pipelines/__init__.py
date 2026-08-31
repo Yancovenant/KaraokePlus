@@ -8,6 +8,7 @@ from pathlib import Path
 from .asr import transcribe
 from .audio import detect_audio_activity
 from .download import DownloadResult, download_song
+from .lyrics import align2ref
 from .separate import separate_song
 
 # from .refiner import TimestampRefiner
@@ -18,11 +19,12 @@ logger = logging.getLogger(__name__)
 
 __all__ = [
     "VisualizeWaveform",
+    "align2ref",
     "detect_audio_activity",
     "download_song",
     "ensure_file",
     "separate_song",
-    "transcribe"
+    "transcribe",
 ]
 ###########################################
 # Ensuring videopath exists if URL download

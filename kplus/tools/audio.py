@@ -199,16 +199,29 @@ class Audio:
 @dataclass(slots=True)
 class _HumanTime:
     """ Helper Mixin for rendering human readable timing """
+    @staticmethod
+    def s2hms(s: float | None) -> str:
+        if s is None:
+            return "--:--.--"
+        m, s = divmod(s, 60)
+        return f"{int(m):02d}:{s:05.2f}"
+
+    @property
+    def starth(self) -> str:
+        return self.s2hms(self.start)
+    
+    @property
+    def endh(self) -> str:
+        return self.s2hms(self.end)
 
 @dataclass(slots=True)
 class _TimingMixin(_HumanTime):
     start: float
     end: float
 
-    _duration: float | ... = field(default=..., init=False)
     @property
     def duration(self) -> float:
-        if self._duration is not ...: return ...
-        self._duration = self.end - self.start
-        return self._duration
+        if self.start is None or self.end is None: return 0.0
+        return float(round(self.end - self.start, 2))
+
     

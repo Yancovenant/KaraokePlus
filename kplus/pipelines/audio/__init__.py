@@ -2,13 +2,12 @@ from __future__ import annotations
 
 import typing as t
 
-from .detection import AudioExtractor, AudioSegment, DetectionResult
+from .detection import AudioExtractor, DetectionResult
 
 if t.TYPE_CHECKING:
     from kplus.tools.audio import AudioType
 
 __all__ = [
-    "AudioSegment",
     "detect_audio_activity",
 ]
 

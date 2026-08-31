@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import typing as t
 
-from .base import MMS_FA, ASRMixin, QwenASR
-from .utils import ASRResult
+from kplus import env
+from kplus.pipelines.utils import ASRResult
+
+from .base import MMS_FA, ASRMixin
+from .qwen import QwenASR
 from .whisper import WhisperASR
 
 if t.TYPE_CHECKING:
-    from kplus.pipelines.audio import AudioSegment
+    from kplus.pipelines.utils import AudioSegment
     from kplus.tools.audio import AudioType
 
 __all__ = [
@@ -48,4 +51,22 @@ class BaseASR:
 def transcribe(audio: AudioType, audiosegments: list[AudioSegment], reference:str, **options) -> ASRResult:
     """ Transcribe given audio file """
     transcriber = BaseASR.from_model(**options)
-    return transcriber.transcribe(audio, audiosegments, reference, **options)
+    result = transcriber.transcribe(audio, audiosegments, reference, **options)
+    del transcriber.model, transcriber
+    env.clean()
+    return result
+
+def align(audio: AudioType, audiosegments: list[AudioSegment], reference: str, **options):
+    """ Single Align """
+    aligner = BaseASR.from_model(**options)
+    result = aligner.align(audio, audiosegments, reference, **options)
+    del aligner.model, aligner
+    env.clean()
+    return result
+
+def multi_align(audio: AudioType, audiosegments: list[AudioSegment], reference: str, **options):
+    """ Multiple Model Alignment """
+    whisper_align = align(audio, audiosegments, reference, whisper="large-v3", **options)
+    qwen_align = align(audio, audiosegments, reference, qwen="Qwen/Qwen3-ASR-1.7B", **options)
+    mms_align = align(audio, audiosegments, reference, mms_fa=True, **options)
+    return whisper_align, qwen_align, mms_align
