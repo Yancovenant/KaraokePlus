@@ -1,4 +1,6 @@
 import difflib
+import string
+
 from functools import cached_property, lru_cache
 
 from kplus import env
@@ -18,6 +20,7 @@ __all__ = [
     "safepath",
     "similarity",
     "token_similarity",
+    "normalizekaldi"
 ]
 
 ####################
@@ -26,6 +29,11 @@ __all__ = [
 def safepath(s: str) -> str:
     return "".join([c for c in s if c.isalpha() or c.isdigit() or c in ' _-']).strip()
 
+_PUNCTUATION_TRANSLATOR = str.maketrans('', '', string.punctuation)
+def normalizekaldi(s : str) ->:
+    s = s.translate(self._PUNCTUATION_TRANSLATOR).lower().strip()
+    s = re.sub(r"[<\[][^>\]]*[>\]]", "", s) # Kaldi
+    return s
 
 class RomajiPhonetic:
     def __init__(self, text: str):
