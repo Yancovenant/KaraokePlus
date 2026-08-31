@@ -5,7 +5,7 @@ import typing as t
 from kplus import env
 
 env.torch
-import torcb
+import torch
 
 from kplus.pipelines.utils import ASRResult
 
