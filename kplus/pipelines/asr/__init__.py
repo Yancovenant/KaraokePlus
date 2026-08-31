@@ -3,6 +3,10 @@ from __future__ import annotations
 import typing as t
 
 from kplus import env
+
+env.torch
+import torcb
+
 from kplus.pipelines.utils import ASRResult
 
 from .base import MMS_FA, ASRMixin
@@ -58,8 +62,9 @@ def transcribe(audio: AudioType, audiosegments: list[AudioSegment], reference:st
 
 def align(audio: AudioType, audiosegments: list[AudioSegment], reference: str, **options):
     """ Single Align """
-    aligner = BaseASR.from_model(**options)
-    result = aligner.align(audio, audiosegments, reference, **options)
+    with torch.inference_mode():
+        aligner = BaseASR.from_model(**options)
+        result = aligner.align(audio, audiosegments, reference, **options)
     del aligner.model, aligner
     env.clean()
     return result

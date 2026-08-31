@@ -62,6 +62,8 @@ class TranscribeOptions(AudioDetectionOptions):
     def add_options(cls, parser: RichArgumentParser, **kwargs):
         super().add_options(parser, **kwargs)
         group = parser.add_argument_group("Transcribe Options")
+        group.add_argument("--lyricsfile", dest="lyricsfile",
+                                 help="Initial Prompt for asr")
         group.add_argument("--whisper", nargs="?", const="large-v3", default=None, metavar="MODEL",
                           help="Use Whisper model to transcribe")
         group.add_argument("--qwen", nargs="?", const="Qwen/Qwen3-ASR-1.7B", default=None, metavar="MODEL",
@@ -73,4 +75,9 @@ class TranscribeOptions(AudioDetectionOptions):
         group.add_argument("--max-inference-batch-size", default=-1)
         group.add_argument("--max-new-tokens", default=8192)
         group.add_argument("--num-beams", default=10)
+
+class KaraokeOptions(TranscribeOptions):
+    @classmethod
+    def add_options(cls, parser: RichArgumentParser, **kwargs):
+        super().add_options(parser, **kwargs)
         

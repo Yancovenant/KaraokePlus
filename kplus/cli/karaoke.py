@@ -14,6 +14,7 @@ from kplus.pipelines import (
     TimestampRefiner,
     Transcriber,
     get_track_file,
+    align2ref,
 )
 from kplus.pipelines.utils import AudioLoader
 from kplus.tools.config import config
@@ -29,100 +30,43 @@ logger = logging.getLogger(__name__)
 
 
 class Karaoke(Command):
-    """ Separate either input URL or file path into 2 different stems (vocals, instrumentals) """
+    """ Create a karaoke subtitle ready video. """
+    def _parse_config(self, args):
+        KaraokeOptions.add_options(self.parser)
+        opt = self.parser.parse_args(args)
+        if not opt.filepath: self.parser.print_help(); sys.exit()
+        config.parse_config(opt, setup_logging=True)
+        return opt
+
+    def _run_audio_detection(self, opt):
+        info = ensure_file(opt.filepath, no_lyrics=True)
+        if opt.separate:
+            separation_result = separate_song(info, **vars(opt))
+            audiopath = separation_result.vocs_path
+            sr = separation_result.sr
+        else:
+            from kplus.tools.audio import Audio
+            audiopath = opt.filepath
+            sr = Audio(str(opt.filepath)).samplerate()
+        audio_result = detect_audio_activity(audio=audiopath, sr=sr, **vars(opt))
+        return info, audiopath, audio_result, separation_result
+    
     def run(self, args):
-        self.parser.add_argument("-i", '--input', dest="filepath",
-                                 help="The input file path or URL that needs to be make karaoke of, (mp4)")
-        self.parser.add_argument("--lyricsfile", dest="lyricsfile",
-                                 help="If input is not URL, and no lyrics path were given, default to multiplex only")
-        group = self.parser.add_argument_group("Transcribe Options (Speech To Text)")
-        group.add_argument("--use-cliptimestamp", action="store_true", help="Wheter to process audio segment by chunk or cliptimestamp")
-        self.parser.add_argument("--max-threads", dest="max_threads", type=int, help="max thread for running whisper")
-        opt, unknown = self.parser.parse_known_args(args)
-        if not opt.filepath:
-            self.parser.print_help()
-            sys.exit()
-        config.parse_config(unknown, setup_logging=True)
-        info = get_track_file(opt.filepath, opt.lyricsfile is not None)
+        opt = self._parse_config(args)
+        info, audiopath, audio_result, separation_result = self._run_audio_detection(opt)
+        if not info.lyrics and not opt.lyricsfile:
+            logger.warning("Running karaoke without lyrical subtitle")
         if opt.lyricsfile is not None:
             with open(opt.lyricsfile, "rt", encoding="utf-8") as f:
                 info.lyrics = f.readlines()
-        filepath = Path(info.filename)
-
-
-        # Step 1 separate and maybe make it a wav first
-        env.ffmpeg  # noqa: B018
-        audio_file_path = f"{filepath.stem}.wav"
-        # Hardcoded for now
-        options = SimpleNamespace(modelname="demucs", overlap=0.75, segment=200, shifts=1)
-        sep_class = SeparatorMixin.get_model(options)
-        subprocess.run(["ffmpeg", "-y", "-i", str(filepath), "-vn", "-ar", str(sep_class.sr), "-ac", str(sep_class.ac), str(audio_file_path)],
-                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        sep_info = sep_class.separate(audio_file_path)
-        del sep_class.model, sep_class
-        env.clean()
-        logger.info(f"Finished separating -- {audio_file_path}")
-        logger.info(f">> Inst Path: {sep_info.inst_path}")
-        logger.info(f">> Vocs Path: {sep_info.vocs_path}")
-        logger.info(f">> SR: {sep_info.sr}")
-
-        # Step 2 get audio segment
-        aad_opts = SimpleNamespace(verbose=False, precision_ms=0.5, sr=sep_info.sr, overlap=0.75)
-        _,audio_segments = AAD(aad_opts).get_audio_segments(sep_info.vocs_path)
-        logger.info(f"Finished Getting Audio Segments -- {len(audio_segments)} segments")
-        for aseg in audio_segments:
-            logger.debug(f"Segment: {aseg.h_start} - {aseg.h_end} ({aseg.duration:.3f})")
-        
-        # At this point i think we wanna convert the sampling rate to be 16000 since both uses that?
-        # 2.5 make the audio_np available and pass it then to the rest (using sr 16KHz for now for everything)
-        audio_loader = AudioLoader(sep_info.vocs_path, samplerate=16000, channels=1)
-        audio_np = audio_loader.audio_np
-
-        # Step 3 Transcribe Using Whisper
-        trans_class = Transcriber(verbose=True)
-        trans_class.load_model("large-v3", beamsize=10, max_threads=2)
-        trans_result =  trans_class.transcribe(audio_np, audio_segments, info.lyrics,
-                                           multilingual=True, patience=2.5, regroup=False,
-                                           language_detection_threshold=0.9, compression_ratio_threshold=2.0,
-                                           log_prob_threshold=-1.0, no_speech_threshold=0.6, best_of=5,
-                                           vad_filter=False, temperature=(0.0, 0.2, 0.4, 0.6, 0.8, 1.0),)
-        del trans_class.model, trans_class
-        env.clean()
-        logger.info(f"Finished Transcribing -- {len(trans_result.segments)} segments")
-        ref_segments, new_audio_segments = ReferenceAligner(verbose=True).get_reference_timestamp(
-            trans_result, info.lyrics, audio_segments
-        )
-
-        ai_align_result = self._align_many(audio_np, ref_segments, new_audio_segments)
-        logger.info(f"Finished Alignment -- {len(ai_align_result)} AI Aligner, with {(len(seg) for ai_segs in ai_align_result for seg in ai_segs.segments)}")
-        # Already cleaned
-        refiner_class = TimestampRefiner(verbose=False, precision_ms=10, sr=sep_info.sr, resample=False) #0.5ms
-        refine_result = refiner_class.refine(
-            *ai_align_result, audio=sep_info.vocs_path, ori=ref_segments, audio_segments=new_audio_segments)
-        refine_result.to_lyrics_segment().populate_ass()
-        logger.info(f"Finished Refinement and populating ass -- {len(refine_result.segments)} segments")
-
-        # Last step rendering
-        Render(with_ass=True).render(video_filepath=filepath, inst_path=sep_info.inst_path, duration=info.duration, result=refine_result)
+        result, with_ass = None, False
+        if info.lyrics:
+            asr_result = transcribe(audiopath, audio_result.segments, info.lyrics, **vars(opt))
+            ref_result, new_audiosegments = align2ref(result, info.lyrics, audio_result.segments)
+            align_results = align_many(audiopath, new_audiosegments, info.lyrics, **vars(opt))
+            result = refine(ref_result, *align_results, audiosegments=new_audiosegments)
+            result.groupby_line_idx().populate_ass()
+            with_ass = True
+        Render(with_ass=with_ass).render(video_filepath=info.filepath, inst_path=separation_result.inst_path, duration=info.duration, result=result)
 
     
-    def _align_many(self, audio_np, ref_segments, audio_segments):
-        torch = env.torch
-        logger.debug(f"Multi align ref_segs: {len(ref_segments.segments)}, new audio: {len(audio_segments)}")
-        with torch.inference_mode():
-            trans_class = Transcriber(verbose=True)
-            #qwen
-            model = trans_class.load_model("qwen", max_inference_batch_size=1, dtype=torch.float16)
-            fa_res_qwen = AlignerAny().align(model, audio_np, None, ref_segments, audio_segments)
-            del model, trans_class.model
-            env.clean()
-            # Whisper
-            model = trans_class.load_model("large-v3", beamsize=10, max_threads=2)
-            fa_res_whisper = AlignerAny().align(model, audio_np, None, ref_segments, audio_segments, verbose=True, token_step=0, regroup=False)
-            del model, trans_class.model, trans_class
-            env.clean()
-            # MMS FA
-            fa_res_def = AlignerAny().align(None, audio_np, None, ref_segments, audio_segments)
-            env.clean()
-        logger.debug(f"len of qwen: {len(fa_res_qwen.segments)}, whisper: {len(fa_res_whisper.segments)}, mmsfa: {len(fa_res_def.segments)}")
-        return (fa_res_qwen, fa_res_whisper, fa_res_def)

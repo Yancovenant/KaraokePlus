@@ -160,9 +160,11 @@ class environment:
         def attempt_import():
             return importlib.import_module(import_name)
         def attempt_install_and_import():
+            nonlocal install_name
             if install_name == "tqdm" or not env:
                 self._run_cmd_install(install_name)
             else:
+                install_name = install_name.replace("_", "-")
                 cmd = [sys.executable, "-m", "pip", "install", install_name, "--progress-bar", "off"]
                 process = subprocess.Popen(
                     cmd,

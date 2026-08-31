@@ -22,8 +22,6 @@ class Transcribe(Command):
     """ Whisper Transcribe given audio """
     def _parse_config(self, args):
         TranscribeOptions.add_options(self.parser)
-        self.parser.add_argument("--lyricsfile", dest="lyricsfile",
-                                 help="Initial Prompt for whisper")
         opt = self.parser.parse_args(args)
         if not opt.filepath: self.parser.print_help(); sys.exit()
         config.parse_config(opt, setup_logging=True)

@@ -135,6 +135,9 @@ class Feature:
         self._smoothed = self.extractor.smooth_ms(self.data, ExtractorConfig.smooth_distance_ms)
         return self._smoothed
 
+    def valley_times(self, safe_start: float = 0.0) -> np.ndarray:
+        return self.times[self.valleys] + safe_start
+        
     @property
     def valleys(self) -> np.ndarray:
         """ Local minima of the feature signal """
@@ -153,6 +156,16 @@ class Feature:
         self._threshold = noise_floor + (np.std(self.smoothed) * ExtractorConfig.std_multiplier)
         return self._threshold
 
+    def mask_times(self, safe_start: float = 0.0) -> tuple[float, float]:
+        scipy = self.extractor.scipy
+        find_objects, labels = scipy.ndimage.find_objects, scipy.ndimage.label
+        shifted_times = self.times + safe_start
+        slices = [slc[0] for slc in find_objects(label(self.mask)[0])]
+        return [
+            (float(round(shifted_times[slc.start], 2)), float(round(shifted_times[slc.stop], 2)))
+            for slc in slices
+        ]
+        
     @property
     def mask(self) -> np.ndarray:
         if self._mask is not ...: return self._mask
@@ -228,6 +241,16 @@ class DetectionResult:
     _final_mask: np.ndarray | ... = ...
     _segments: list[AudioSegment] | ... = ...
 
+    def mask_times(self, safe_start: float = 0.0) -> tuple[float, float]:
+        scipy = self.extractor.scipy
+        find_objects, labels = scipy.ndimage.find_objects, scipy.ndimage.label
+        shifted_times = self.times + safe_start
+        slices = [slc[0] for slc in find_objects(label(self.final_mask)[0])]
+        return [
+            (float(round(shifted_times[slc.start], 2)), float(round(shifted_times[slc.stop], 2)))
+            for slc in slices
+        ]
+    
     @property
     def final_mask(self) -> np.ndarray:
         if self._final_mask is not ...: return self._final_mask
