@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import typing as t
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from kplus import env
 from kplus.pipelines.utils import ASRResult, TextTiming, WordTiming
@@ -30,7 +30,7 @@ class WhisperConfig(ASRConfig):
     vad_filter: bool = False
     temperature: tuple = (0.0, 0.2, 0.4, 0.6, 0.8, 1.0)
     token_step: int = 0 # 0 for max
-    extra_models: list[str] = ["large-v3", "large-v2", "tiny", "distil-large-v3.5"]  # noqa: RUF008
+    extra_models: list[str] = field(default_factory=lambda: ["large-v3", "large-v2", "tiny", "distil-large-v3.5"])
     steps: str = "se"
     whisper_precision: float = 0.02
 
