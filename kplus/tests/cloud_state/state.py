@@ -223,3 +223,4 @@ class State:
         except Exception as e:
             console.print(f"\n[bold red]✖ Error during load sequence: {e}[/]")
             raise
+    
