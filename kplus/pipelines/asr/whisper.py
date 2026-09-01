@@ -95,7 +95,6 @@ class WhisperASR(ASRMixin):
             vad_parameters=vad_parameters
         )
         logger.debug(f"Detected Language: `{lang}` ({prob})")
-        rich.print(rich.Panel(all_langs))
         return lang
 
     def _transcribe(self, audionp: AudioNumpy, audiosegments: list[AudioSegment], reference: str, prg=None, **kwargs) -> list[TextTiming]:

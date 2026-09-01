@@ -20,9 +20,9 @@ if t.TYPE_CHECKING:
 
 __all__ = [
     "align",
+    "detect_language",
     "multi_align",
     "transcribe",
-    "detect_language",
 ]
 
 class BaseASR:
