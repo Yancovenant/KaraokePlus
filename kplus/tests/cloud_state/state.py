@@ -98,11 +98,11 @@ class State:
         """ Save Data """
         ukey = self.unique_key(key)
         self.print_header("save", ukey)
-        backup_dir: Path = Path(self.working_dir / ukey / self._name)
+        backup_dir: Path = Path(self.working_dir / ukey)
         backup_dir.mkdir(parents=True, exist_ok=True)
-        save_path: Path = Path(self.working_dir / ukey / self._name).with_suffix(".pkl")
-        temp_path: Path = Path(self.working_dir / ukey / self._name).with_suffix(".tmp")
-        backup_path: Path = Path(self.working_dir / ukey / self._name).with_suffix(".bak")
+        save_path: Path = Path(backup_dir / self._name).with_suffix(".pkl")
+        temp_path: Path = Path(backup_dir / self._name).with_suffix(".tmp")
+        backup_path: Path = Path(backup_dir / self._name).with_suffix(".bak")
         try:
             to_save: dict = {}
             file_to_save: list = []
@@ -125,7 +125,7 @@ class State:
                     task = prg.add_task("Backing up files...", total=len(file_to_save))
                     for name in file_to_save:
                         srcpath = Path(to_save[name]).resolve()
-                        targetpath = backup_dir / srcpath
+                        targetpath = backup_dir / srcpath.relative_to("/")
                         targetpath.parent.mkdir(parents=True, exist_ok=True)
                         if srcpath.is_file(): shutil.copy(srcpath, targetpath)
                         else: prg.console.print(f"⚠️ Warning: File '{srcpath}' missing. Variable saved without physical backup.", style="yellow")
@@ -142,10 +142,7 @@ class State:
                     save_path.rename(backup_path)
                 temp_path.rename(save_path)
                 prg.advance(task)
-                paths = sorted(
-                    backup_dir.iterdir(),
-                    key=lambda path: (path.is_file(), path.name.lower())
-                )
+                paths = [p for p in backup_dir.rglob("*") if p.is_file()]
                 task = prg.add_task("Uploading to R2...", total=len(paths))
                 for path in paths:
                     s3_key = str(path.relative_to(self.working_dir)).replace("\\", "/")
@@ -161,10 +158,10 @@ class State:
         """ Load Data """
         ukey = self.unique_key(key)
         self.print_header("load", ukey)
-        backup_dir: Path = Path(self.working_dir / ukey / self._name)
+        backup_dir: Path = Path(self.working_dir / ukey)
         backup_dir.mkdir(parents=True, exist_ok=True)
-        save_path: Path = Path(self.working_dir / ukey / self._name).with_suffix(".pkl")
-        backup_path: Path = Path(self.working_dir / ukey / self._name).with_suffix(".bak")
+        save_path: Path = Path(backup_dir / self._name).with_suffix(".pkl")
+        backup_path: Path = Path(backup_dir / self._name).with_suffix(".bak")
         try:
             with console.status("Syncing from Cloudflare R2...") as status:
                 paginator = self.s3_client.get_paginator('list_objects_v2')
@@ -213,7 +210,7 @@ class State:
                         prg.advance(task)
             table = Table("Restored Environment",
                 Column("Variable", style="b white"), Column("Object Type", style="cyan"),
-                Column("Status", style="right"),
+                Column("Status", justify="right"),
                 box=box.SIMPLE_HEAVY, show_lines=True, expand=True
             )
             for name in self.tracked_vars:
