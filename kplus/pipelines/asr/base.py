@@ -25,8 +25,8 @@ logger = logging.getLogger(__name__)
 class ASRConfig:
     dtype: torch.dtype = field(default_factory=get_default_dtype)
     device_map: str = (
-        "cuda:"
-        "1" if torch.cuda.device_count() > 1 else "0"
+        "cuda:" + 
+        ("1" if torch.cuda.device_count() > 1 else "0")
     ) if env.device.type == "cuda" else env.device.type
     
 
