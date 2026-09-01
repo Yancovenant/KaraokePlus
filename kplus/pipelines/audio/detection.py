@@ -223,7 +223,7 @@ class Mel(Feature):
             name=self._name + " Spectogram", z=self.S_dB, x=self.times, y=freq,
             colorscale="Magma", showscale=False
         )
-        super().plot(show, row)
+        super(Mel, self).plot(show, row)
 
 
 @dataclass(slots=True)
