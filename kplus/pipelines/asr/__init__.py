@@ -4,7 +4,7 @@ import typing as t
 
 from kplus import env
 
-env.torch
+env.torch  # noqa: B018
 import torch
 
 from kplus.pipelines.utils import ASRResult
@@ -18,7 +18,9 @@ if t.TYPE_CHECKING:
     from kplus.tools.audio import AudioType
 
 __all__ = [
-    "transcribe"
+    "align",
+    "multi_align",
+    "transcribe",
 ]
 
 class BaseASR:

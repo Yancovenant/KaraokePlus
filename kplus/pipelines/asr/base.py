@@ -7,11 +7,11 @@ import typing as t
 import logging
 import difflib
 
-from dataclasses import field, dataclass, asdict
+from dataclasses import field, dataclass
 
 from kplus import env
 from kplus.tools import rich, get_phonetic
-from kplus.pipelines.utils import TextTiming, WordTiming, ASRResult
+from kplus.pipelines.utils import TextTiming, ASRResult
 
 from .utils import get_default_dtype
 
@@ -93,8 +93,6 @@ class ASRMixin:
             raise
         results.sort(key=lambda x: x.words[0].start if x.words else 0.0)
         return ASRResult(texts=results)
-
-
 
 
 class MMS_FA(ASRMixin):
