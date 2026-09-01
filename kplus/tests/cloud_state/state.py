@@ -26,9 +26,6 @@ class State:
         self.tracked_vars = [*to_track]
 
         self._name = "CTCRefineVars"
-        self.temp_path: Path
-        self.save_path: Path
-        self.backup_path: Path
 
         self.is_colab = "COLAB_RELEASE_TAG" in os.environ or Path("./content").exists()
         self.is_kaggle = "KAGGLE_KERNEL_RUN_TYPE" in os.environ or Path("./kaggle").exists()
@@ -49,7 +46,7 @@ class State:
             return UserSecretsClient().get_secret(key)
         raise RuntimeError("Environment not supported")
 
-    def load_cloudflare(self):
+    def load_cloudflare(self) -> None:
         try:
             self.CF_ACCOUNT_ID: str = self.get_secret("CF_ACCOUNT_ID")
             self.CF_ACCESS_KEY: str = self.get_secret("CF_ACCESS_KEY")
@@ -97,11 +94,12 @@ class State:
             expand=False
         ))
 
-    def save(self, key: str) -> None:
+    def save(self, key: str, scope: dict) -> None:  # noqa: B008
         """ Save Data """
         ukey = self.unique_key(key)
         self.print_header("save", ukey)
         backup_dir: Path = Path(self.working_dir / ukey / self._name)
+        backup_dir.mkdir(parents=True, exist_ok=True)
         save_path: Path = Path(self.working_dir / ukey / self._name).with_suffix(".pkl")
         temp_path: Path = Path(self.working_dir / ukey / self._name).with_suffix(".tmp")
         backup_path: Path = Path(self.working_dir / ukey / self._name).with_suffix(".bak")
@@ -113,14 +111,14 @@ class State:
             var_node = tree.add("Variables:", style="blue")
             file_node = tree.add("Files to Backup", style="magenta")
             for name in self.tracked_vars:
-                if name not in globals():
+                if name not in scope:
                     var_node.add(f"[dim red]✖[/] [dim]{name} (Not Initialized)[/]")
                     continue
-                to_save[name] = globals()[name]
+                to_save[name] = scope[name]
                 var_node.add(f"[green]✔[/] {name}")
                 if name.endswith("path"):
                     file_to_save.append(name)
-                    file_node.add(f"[green]✔[/] {name} [dim]({globals()[name]})[/]")
+                    file_node.add(f"[green]✔[/] {name} [dim]({scope[name]})[/]")
             console.print(tree)
             with self._progress() as prg:
                 if file_to_save:
@@ -155,19 +153,20 @@ class State:
                     prg.advance(task)
             console.print("\n✔ State safely secured to Cloudflare R2.\n", style="b green")
         except Exception as err:
-            if self.temp_path.is_file(): self.temp_path.unlink()
+            if temp_path.is_file(): temp_path.unlink()
             console.print(f"\n✖ Error during save sequence: {err}", style="b red")
             raise
 
-    def load(self, key: str) -> None:
+    def load(self, key: str, scope: dict) -> None:
         """ Load Data """
         ukey = self.unique_key(key)
         self.print_header("load", ukey)
         backup_dir: Path = Path(self.working_dir / ukey / self._name)
+        backup_dir.mkdir(parents=True, exist_ok=True)
         save_path: Path = Path(self.working_dir / ukey / self._name).with_suffix(".pkl")
         backup_path: Path = Path(self.working_dir / ukey / self._name).with_suffix(".bak")
         try:
-            with console.Status("Syncing from Cloudflare R2...", style="b cyan") as status:
+            with console.status("Syncing from Cloudflare R2...") as status:
                 paginator = self.s3_client.get_paginator('list_objects_v2')
                 pages = paginator.paginate(Bucket=self.CF_BUCKET_NAME)
                 download_count = 0
@@ -180,7 +179,7 @@ class State:
                         download_count += 1
                 if download_count == 0:
                     console.print(f"⚠️ No objects found in bucket '{self.CF_BUCKET_NAME}'.", style="b yellow")
-                status.update("Locating and verifying payload...", style="b cyan")
+                status.update("Locating and verifying payload...")
                 current_loadpath = save_path
                 if not current_loadpath.is_file() or current_loadpath.stat().st_size == 0:
                     if backup_path.is_file() and backup_path.stat().st_size > 0:
@@ -192,7 +191,7 @@ class State:
                     saved_data = pickle.load(f)
                 status.update("Injecting globals...", style="b cyan")
                 for name, val in saved_data.items():
-                    globals()[name] = val
+                    scope[name] = val
             file_to_copy: list[Path] = [
                 name for name in self.tracked_vars
                 if name.endswith("path")
@@ -202,9 +201,9 @@ class State:
                 with self._progress() as prg:
                     task = prg.add_task("Restoring physical files...", total=len(file_to_copy))
                     for name in file_to_copy:
-                        if not globals()[name]:
+                        if not scope[name]:
                             prg.advance(); continue
-                        targetpath = Path(globals()[name]).resolve()
+                        targetpath = Path(scope[name]).resolve()
                         srcpath = backup_dir / targetpath.relative_to("/")
                         if srcpath.is_file():
                             targetpath.parent.mkdir(parents=True, exist_ok=True)
