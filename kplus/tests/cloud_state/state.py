@@ -29,6 +29,7 @@ class State:
 
         self.is_colab = "COLAB_RELEASE_TAG" in os.environ or Path("./content").exists()
         self.is_kaggle = "KAGGLE_KERNEL_RUN_TYPE" in os.environ or Path("./kaggle").exists()
+        if self.is_kaggle: self.is_colab = False
         self.working_dir: Path = Path(
             "/content" if self.is_colab else
             "/kaggle/working" if self.is_kaggle else
