@@ -84,18 +84,18 @@ class State:
 
     def print_header(self, action: str, ukey: str) -> None:
         console.print()
-        Panel(
-            f"CTC Refine | {action.upper()}",
+        console.print(Panel(
             Text.assemble(
                 Text("Target ID:    ", style="b white"),
                 Text(ukey + "\n", style="cyan"),
                 Text("Storage:      ", style="b white"),
                 Text(str(self.working_dir), style="dim")
             ),
+            title=f"CTC Refine | {action.upper()}",
             title_align="left",
             box=box.ROUNDED,
             expand=False
-        )
+        ))
 
     def save(self, key: str) -> None:
         """ Save Data """
