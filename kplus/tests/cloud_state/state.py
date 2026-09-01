@@ -208,9 +208,10 @@ class State:
                         else:
                             prg.console.print(f"⚠️ Backup file missing: '{srcpath}'. Variable loaded without physical file.", style="yellow")
                         prg.advance(task)
-            table = Table("Restored Environment",
+            table = Table(
                 Column("Variable", style="b white"), Column("Object Type", style="cyan"),
                 Column("Status", justify="right"),
+                title="Restored Environment",
                 box=box.SIMPLE_HEAVY, show_lines=True, expand=True
             )
             for name in self.tracked_vars:

@@ -94,7 +94,11 @@ class SequenceResult:
             width = max(len(r), len(h), len(op_type))
             r_padded = r.ljust(width)
             h_padded = h.ljust(width)
-            o_padded = op_type.ljust(width)
+            o_padded = (
+                op_type.name.ljust(width)
+                if isinstance(op_type, OP) else
+                op_type.ljust(width)
+            )
             color = (
                 "green" if op_type == OP.M else
                 "yellow" if op_type == OP.S else 

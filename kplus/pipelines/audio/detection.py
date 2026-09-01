@@ -158,7 +158,7 @@ class Feature:
 
     def mask_times(self, safe_start: float = 0.0) -> tuple[float, float]:
         scipy = self.extractor.scipy
-        find_objects, labels = scipy.ndimage.find_objects, scipy.ndimage.label
+        find_objects, label = scipy.ndimage.find_objects, scipy.ndimage.label
         shifted_times = self.times + safe_start
         slices = [slc[0] for slc in find_objects(label(self.mask)[0])]
         return [
@@ -243,7 +243,7 @@ class DetectionResult:
 
     def mask_times(self, safe_start: float = 0.0) -> tuple[float, float]:
         scipy = self.extractor.scipy
-        find_objects, labels = scipy.ndimage.find_objects, scipy.ndimage.label
+        find_objects, label = scipy.ndimage.find_objects, scipy.ndimage.label
         shifted_times = self.times + safe_start
         slices = [slc[0] for slc in find_objects(label(self.final_mask)[0])]
         return [
