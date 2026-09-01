@@ -73,18 +73,19 @@ def transcribe(audio: AudioType, audiosegments: list[AudioSegment], reference:st
     env.clean()
     return result
 
-def align(audio: AudioType, audiosegments: list[AudioSegment], reference: str, **options):
+def align(audio: AudioType, transcriptions: ASRResult, reference: str, audiosegments: list[AudioSegment], **options):
     """ Single Align """
     with torch.inference_mode():
         aligner = BaseASR.from_model(**options)
-        result = aligner.align(audio, audiosegments, reference, **options)
+        result = aligner.align(audio, transcriptions, reference, audiosegments, **options)
     del aligner.model, aligner
     env.clean()
     return result
 
-def multi_align(audio: AudioType, audiosegments: list[AudioSegment], reference: str, **options):
+def multi_align(audio: AudioType, transcriptions: ASRResult, reference: str, audiosegments: list[AudioSegment], **options):
     """ Multiple Model Alignment """
-    whisper_align = align(audio, audiosegments, reference, whisper="large-v3", **options)
-    qwen_align = align(audio, audiosegments, reference, qwen="Qwen/Qwen3-ASR-1.7B", **options)
-    mms_align = align(audio, audiosegments, reference, mms_fa=True, **options)
+    for name in ("whisper", "qwen", "mms_fa"): options.pop(name, None)
+    whisper_align = align(audio, transcriptions, reference, audiosegments, whisper="large-v3", extra_models=[], **options)
+    qwen_align = align(audio, transcriptions, reference, audiosegments, qwen="Qwen/Qwen3-ASR-1.7B", **options)
+    mms_align = align(audio, transcriptions, reference, audiosegments, mms_fa=True, **options)
     return whisper_align, qwen_align, mms_align
