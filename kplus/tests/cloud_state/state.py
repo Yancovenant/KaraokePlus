@@ -186,10 +186,10 @@ class State:
                         console.print("⚠️ Main .pkl missing or empty. Reverting to .bak fallback.", style="b yellow")
                         current_loadpath = backup_path
                     else: raise FileNotFoundError("Neither main nor backup .pkl files could be found or read.")
-                status.update("Deserializing memory map...", style="b cyan")
+                status.update("Deserializing memory map...")
                 with open(current_loadpath, "rb") as f:
                     saved_data = pickle.load(f)
-                status.update("Injecting globals...", style="b cyan")
+                status.update("Injecting globals...")
                 for name, val in saved_data.items():
                     scope[name] = val
             file_to_copy: list[Path] = [
