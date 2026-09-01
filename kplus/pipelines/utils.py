@@ -49,12 +49,6 @@ class TextTiming(_HumanTime):
 
     _text: str | ... = ...
     _latin: str | ... = ...
-
-    def __setstate__(self, state):
-        """Intercepts the object when it is being loaded from cache/pickle."""
-        if "latin" in state or getattr(self, "_latin", None):
-            state["_latin"] = ...
-        self.__dict__.update(state)
     
     @property
     def text(self) -> str:
