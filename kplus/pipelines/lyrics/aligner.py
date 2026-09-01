@@ -32,6 +32,7 @@ class LyricAligner:
         new_audiosegments = []
         results = []
         for data in datas:
+            assert data.start < data.end
             min_audiosegment = audiosegments[min(data.audio_ids)]
             max_audiosegment = audiosegments[max(data.audio_ids)]
             new_audiosegments.append(AudioSegment(start=min_audiosegment.start, end=max_audiosegment.end))
