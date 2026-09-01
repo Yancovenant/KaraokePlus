@@ -2,7 +2,7 @@
 import logging
 from pathlib import Path
 
-from .asr import transcribe
+from .asr import *
 from .audio import detect_audio_activity
 from .download import DownloadResult, download_song
 from .lyrics import align2ref
@@ -11,10 +11,13 @@ from .separate import separate_song
 logger = logging.getLogger(__name__)
 
 __all__ = [
+    "align",
     "align2ref",
     "detect_audio_activity",
+    "detect_language",
     "download_song",
     "ensure_file",
+    "multi_align",
     "separate_song",
     "transcribe",
 ]
