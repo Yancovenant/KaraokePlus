@@ -58,7 +58,7 @@ class BaseASR:
 
 def detect_language(audio: AudioType, **options) -> str:
     """ Detect language """
-    transcriber: WhisperASR = BaseASR.from_model(whisper="large-v3")
+    transcriber: WhisperASR = BaseASR.from_model(whisper="large-v3", extra_models=[])
     detection_params, options = filter_known_kwargs(transcriber.detect_language, options)
     lang = transcriber.detect_language(audio, **detection_params)
     del transcriber.model, transcriber
