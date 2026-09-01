@@ -1,18 +1,23 @@
 from __future__ import annotations
 
+import logging
 import typing as t
 from dataclasses import dataclass, field
 
 from kplus import env
 from kplus.pipelines.utils import ASRResult, TextTiming, WordTiming
-from kplus.tools import filter_known_kwargs
+from kplus.tools import filter_known_kwargs, rich
 from kplus.tools.audio import Audio
 
 from .base import ASRConfig, ASRMixin
 
 if t.TYPE_CHECKING:
+    import numpy as np
+
     from kplus.pipelines.utils import AudioSegment
-    from kplus.tools.audio import AudioNumpy
+    from kplus.tools.audio import AudioNumpy, AudioType
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
@@ -22,7 +27,6 @@ class WhisperConfig(ASRConfig):
     multilingual: bool = True
     patience: float = 2.5
     regroup: bool = False
-    language_detection_threshold: float = 0.9
     compression_ratio_threshold: float = 2.0
     log_prob_threshold: float = -1.0
     no_speech_threshold: float = 0.6
@@ -33,6 +37,10 @@ class WhisperConfig(ASRConfig):
     extra_models: list[str] = field(default_factory=lambda: ["large-v3", "large-v2", "tiny", "distil-large-v3.5"])
     steps: str = "se"
     whisper_precision: float = 0.02
+
+    # Lang
+    language_detection_threshold: float = 0.9
+    language_detection_segments: int = 3
 
     @property
     def initial(self):
@@ -68,7 +76,28 @@ class WhisperASR(ASRMixin):
                     **self.config.initial,
                 )
             )
-        
+
+    def detect_language(self,
+        audio: AudioType,
+        features: np.ndarray | None = None,
+        vad_filter: bool = False,
+        vad_parameters: dict | None = None,
+        language_detection_segments: int | None = None,
+        language_detection_threshold: float | None = None
+    ) -> str:
+        """ Detect Language """
+        audionp = Audio(audio, samplerate=self.sr, channels=1).numpy
+        lang, prob, all_langs = self.model.detect_language(
+            audionp,
+            language_detection_threshold=language_detection_threshold or self.config.language_detection_threshold,
+            language_detection_segments=language_detection_segments or self.config.language_detection_segments,
+            vad_filter=vad_filter,
+            vad_parameters=vad_parameters
+        )
+        logger.debug(f"Detected Language: `{lang}` ({prob})")
+        rich.print(rich.Panel(all_langs))
+        return lang
+
     def _transcribe(self, audionp: AudioNumpy, audiosegments: list[AudioSegment], reference: str, prg=None, **kwargs) -> list[TextTiming]:
         results = []
         task = prg.add_task(description="Transcribing...", total=None)
@@ -86,6 +115,7 @@ class WhisperASR(ASRMixin):
             patience=kwargs.pop("patience", self.config.patience),
             regroup=kwargs.pop("regroup", self.config.regroup),
             language_detection_threshold=kwargs.pop("language_detection_threshold", self.config.language_detection_threshold),
+            language_detection_segments=kwargs.pop("language_detection_segments", self.config.language_detection_segments),
             compression_ratio_threshold=kwargs.pop("compression_ratio_threshold", self.config.compression_ratio_threshold),
             log_prob_threshold=kwargs.pop("log_prob_threshold", self.config.log_prob_threshold),
             no_speech_threshold=kwargs.pop("no_speech_threshold", self.config.no_speech_threshold),

@@ -99,7 +99,6 @@ class AudioAlignment:
     tokens: list[Token] # per word
     audio_ids: list[int] = field(default_factory=list)
 
-    
     def to_texttiming(self) -> TextTiming:
         return TextTiming(words=[
             WordTiming(

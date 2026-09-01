@@ -24,30 +24,32 @@ class QwenConfig(ASRConfig):
     max_new_tokens: int = 8192 #
     num_beams: int = 10
 
+    @property
+    def initial(self):
+        return {
+            "dtype": self.dtype,
+            "device_map": self.device_map,
+        }
+
 class QwenASR(ASRMixin):
     """ Qwen class ASR """
     _name = "Qwen"
     
     def __init__(self, modelname: str, **options):
-        super().__init__(self, **options)
+        super().__init__(**options)
         env.torchvision, env.qwen_asr  # noqa: B018
         from qwen_asr import Qwen3ASRModel  # type: ignore
-        self.config = QwenConfig(**options)
+        config_params, options = filter_known_kwargs(QwenConfig, options)
+        self.config = QwenConfig(**config_params)
         self.model = Qwen3ASRModel.from_pretrained(
             #"Qwen/Qwen3-ASR-1.7B",
             modelname,
-            dtype=self.config.dtype,
-            device_map=self.config.device_map,
             attn_implementation="sdpa",
             forced_aligner="Qwen/Qwen3-ForcedAligner-0.6B",
-            **options,
-            **asdict(self.config),
+            **self.config.initial,
             forced_aligner_kwargs={
-                "dtype": self.config.dtype,
-                "device_map": self.config.device_map,
                 "attn_implementation": "sdpa",
-                **options,
-                **asdict(self.config),
+                **self.config.initial,
             }
         )
         
@@ -58,7 +60,8 @@ class QwenASR(ASRMixin):
             start, end = int(seg.start * self.sr), int(seg.end * self.sr)
             audio_chunk_list.append((audionp[start:end], self.sr))
         logger.debug(f"Prepared {len(audio_chunk_list)} audio chunks for Qwen ASR model")
-        batch_result = self.model.transcribe(audio=audio_chunk_list, context=None, return_time_stamps=True, **kwargs)
+        transcribe_params, kwargs = filter_known_kwargs(self.model.transcribe, kwargs)
+        batch_result = self.model.transcribe(audio=audio_chunk_list, context=None, return_time_stamps=True, **transcribe_params)
         logger.debug(f"Qwen ASR model returned {len(batch_result)} segments")
         for seg, aseg in zip(batch_result, audiosegments):
             #prg.update(1)

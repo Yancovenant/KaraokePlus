@@ -8,6 +8,7 @@ env.torch  # noqa: B018
 import torch
 
 from kplus.pipelines.utils import ASRResult
+from kplus.tools import filter_known_kwargs
 
 from .base import MMS_FA, ASRMixin
 from .qwen import QwenASR
@@ -21,6 +22,7 @@ __all__ = [
     "align",
     "multi_align",
     "transcribe",
+    "detect_language",
 ]
 
 class BaseASR:
@@ -53,6 +55,15 @@ class BaseASR:
             else None)
         )
         return modelclass(modelname, **options)
+
+def detect_language(audio: AudioType, **options) -> str:
+    """ Detect language """
+    transcriber: WhisperASR = BaseASR.from_model(whisper="large-v3")
+    detection_params, options = filter_known_kwargs(transcriber.detect_language, options)
+    lang = transcriber.detect_language(audio, **detection_params)
+    del transcriber.model, transcriber
+    env.clean()
+    return lang
 
 def transcribe(audio: AudioType, audiosegments: list[AudioSegment], reference:str, **options) -> ASRResult:
     """ Transcribe given audio file """
