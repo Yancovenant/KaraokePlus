@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from kplus.tools.audio import _HumanTime, _TimingMixin
+from kplus.tools.text import RomajiPhonetic, get_phonetic
 
 __all__ = [
     "ASRResult",
@@ -26,6 +27,18 @@ class WordTiming(_TimingMixin):
     word: str
     score: float
 
+    _phone: RomajiPhonetic | ... = ...
+    
+    @property
+    def phone(self) -> RomajiPhonetic:
+        if self._phone is not ...: return self._phone
+        self._phone = get_phonetic(self.word)
+        return self._phone
+        
+    @property
+    def latin(self) -> str:
+        return self.phone.latin
+
 
 @dataclass(slots=True)
 class TextTiming(_HumanTime):
@@ -35,12 +48,19 @@ class TextTiming(_HumanTime):
     ass_event: str | None = None
 
     _text: str | ... = ...
+    _latin: str | ... = ...
     
     @property
     def text(self) -> str:
         if self._text is not ...: return self._text
         self._text = " ".join([w.word for w in self.words])
         return self._text
+
+    @property
+    def latin(self) -> str:
+        if self._latin is not ...: return self._latin
+        self._latin = " ".join([w.latin for w in self.words])
+        return self._latin
 
     @property
     def start(self) -> float:
