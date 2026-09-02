@@ -84,8 +84,9 @@ class ASRMixin:
         assert len(audiosegments) > 0
         try:
             from functools import partial  # noqa: I001
-            import tqdm
+            import tqdm, sys
             tqdm.tqdm = partial(tqdm.tqdm, disable=True)
+            tqdm.tqdm = partial(tqdm.tqdm, file=sys.stdout)
             with rich.make_progress(is_download=False) as prg:
                 prg.add_task(description=f"{self._name} Starting Alignment...", total=None)
                 results = self._align(audionp, transcriptions, reference, audiosegments, prg, **kwargs)
