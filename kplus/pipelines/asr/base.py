@@ -84,10 +84,6 @@ class ASRMixin:
         audionp = Audio(audio, samplerate=self.sr, channels=1).numpy
         assert len(audiosegments) > 0
         try:
-            from functools import partial  # noqa: I001
-            import tqdm, sys
-            tqdm.tqdm = partial(tqdm.tqdm, disable=True)
-            tqdm.tqdm = partial(tqdm.tqdm, file=sys.stdout)
             with rich.make_progress(is_download=False) as prg:
                 prg.add_task(description=f"{self._name} Starting Alignment...", total=None)
                 results = self._align(audionp, transcriptions, reference, audiosegments, prg, **kwargs)
@@ -100,6 +96,8 @@ class ASRMixin:
 
 class MMS_FA(ASRMixin):
     """ mms_fa facebook wav2vec2 aligner """
+    _name = "MMS FA"
+    
     def __init__(self, modelname: str, **options):
         super().__init__(**options)
         env.torchaudio; import torchaudio  # type: ignore # noqa: B018, I001

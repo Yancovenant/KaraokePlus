@@ -15,7 +15,7 @@ import collections
 import sys
 import uuid
 import warnings
-from functools import cached_property, wraps
+from functools import cached_property, wraps, partial
 from pathlib import Path
 
 import kplus
@@ -275,6 +275,10 @@ class environment:
         self._setup_signal()
         from rich.traceback import install
         install()
+        # Tqdm with rich error
+        self.tqdm  # noqa: B018
+        import tqdm
+        tqdm.tqdm = partial(tqdm.tqdm, file=sys.stdout, disable=True)
 
     @property
     def verbose(self) -> int:
