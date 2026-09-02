@@ -65,6 +65,7 @@ class AudioPlotter:
         )
         if env.verbose:
             import json
+            from plotly.utils import PlotlyJSONEncoder
             rich.print("\n========== PLOTLY DEBUG ==========")
             fig_json = fig.to_json()
             rich.print(f"Figure JSON: {len(fig_json) / 1024**2:.2f} MB")
@@ -82,6 +83,7 @@ class AudioPlotter:
             for i, trace in enumerate(fig.data):
                 trace_json = json.dumps(
                     trace.to_plotly_json(),
+                    cls=PlotlyJSONEncoder,
                     separators=(",", ":"),
                 )
                 rich.print(
