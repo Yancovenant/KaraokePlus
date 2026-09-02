@@ -174,6 +174,12 @@ class Feature:
 
     def plot(self, show=False, row: int = 1) -> None:
         plotter = self.extractor.plotter
+        rich.print(
+            f"{self._name} Size: \n"
+            f">> times: {self.times.nbytes / 1024**2:.2f} MB\n"
+            f">> smooth: {self.smoothed.nbytes / 1024**2:.2f} MB\n"
+            f">> mask: {self.mask.nbytes / 1024**2:.2f} MB\n"
+        )
         plotter.scatter(
             row=row, x=self.times, y=self.mask * np.max(self.smoothed),
             name=self._name + " Mask",
