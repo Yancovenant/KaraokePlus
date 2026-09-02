@@ -5,7 +5,7 @@ from pathlib import Path
 from .asr import *
 from .audio import detect_audio_activity
 from .download import DownloadResult, download_song
-from .lyrics import align2ref
+from .lyrics import *
 from .separate import separate_song
 
 logger = logging.getLogger(__name__)
@@ -18,6 +18,7 @@ __all__ = [
     "download_song",
     "ensure_file",
     "multi_align",
+    "refine",
     "separate_song",
     "transcribe",
 ]

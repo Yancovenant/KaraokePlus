@@ -109,4 +109,5 @@ class AudioAlignment:
                 start=t.start, end=t.end,
                 score=t.score, word=t.word, 
             ) for t in self.tokens
-        ], language=self.tokens[0].language)
+        ], language=next((t.language for t in self.tokens if t.language is not None), "en"))
+        

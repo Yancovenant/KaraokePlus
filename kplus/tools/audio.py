@@ -15,6 +15,7 @@ import wave
 from dataclasses import dataclass, field
 from functools import cached_property
 from pathlib import Path
+from IPython.display import display, Audio as IAudio
 
 import numpy as np
 import torch
@@ -148,6 +149,10 @@ class Audio:
     @staticmethod
     def slicenp(audio: AudioNumpy, start: float, end: float, sr: int) -> AudioNumpy:
         return audio[int(start*sr):int(end*sr)]
+
+    @staticmethod
+    def display_audio(audio: AudioNumpy, sr: int) -> None:
+        return display(IAudio(audio, rate=sr))
 
     def init(self,
         audio: AudioType,
