@@ -6,6 +6,7 @@ import torch
 import typing as t
 import logging
 import difflib
+import copy
 
 from dataclasses import field, dataclass
 
@@ -99,3 +100,65 @@ class ASRMixin:
 
 class MMS_FA(ASRMixin):
     """ mms_fa facebook wav2vec2 aligner """
+    def __init__(self, modelname: str, **options):
+        super().__init__(**options)
+        env.torchaudio; import torchaudio  # type: ignore # noqa: B018, I001
+        bundle = torchaudio.pipelines.MMS_FA
+        self.sr = bundle.sample_rate
+        self.model = bundle.get_model(with_star=True).to(env.device)
+        self.tokenizer = bundle.get_tokenizer()
+        self.aligner = bundle.get_aligner()
+
+    def _tokenize(self, text: str) -> list:
+        tokens = []
+        for chunk in text.split():
+            if not chunk.strip(): continue
+            tokens.append({"original": chunk, "token": get_phonetic(chunk).latin})
+        return tokens
+
+    def _align(self, audionp: AudioNumpy, transcriptions: ASRResult, reference: str, audiosegments: list[AudioSegment], prg=None, **kwargs) -> list[TextTiming]:
+        results = []
+        task = prg.add_task(description="Aligning...", total=None)
+        def progress_callback(seek: float, total: float):
+            prg.update(task, completed=seek, total=total)
+        for hyp, seg in zip(transcriptions.texts, audiosegments):
+            if not (seg.end < hyp.start or seg.start > hyp.end):
+                safe_start = max(0, max(min(hyp.start, seg.start), hyp.start - 1.0) - 0.5)
+                safe_end = min(len(audionp), min(max(hyp.end, seg.end), hyp.end + 1.0) + 0.5)
+                audio_chunk = Audio.slicenp(audionp, safe_start, safe_end, self.sr)
+                assert len(audio_chunk) > 0
+                audio_chunk = torch.from_numpy(audio_chunk).unsqueeze(0)
+                tokens = self._tokenize(hyp.text)
+                transcript_tokens = ["*"]
+                for tok in tokens:
+                    transcript_tokens.extend(list(tok["token"]))
+                    transcript_tokens.append("*")
+                try:
+                    with torch.inference_mode():
+                        emission, _ = self.model(audio_chunk.to(env.device))
+                        token_spans = self.aligner(emission[0], self.tokenizer(transcript_tokens))
+                except Exception as err:
+                    logger.error(f"!!! Error while doing ctc align: {err}", exc_info=True)
+                    raise
+                char_spans = [span for token, span in zip(transcript_tokens, token_spans) if token != "*"]
+                ratio = audio_chunk.size(1) / emission.size(1)
+                del token_spans, emission, audio_chunk
+                char_idx, words = 0, []
+                for i, tok in enumerate(tokens):
+                    word_len = len(tok["token"])
+                    current_char_spans = char_spans[char_idx : char_idx + word_len]
+                    char_idx += word_len
+                    if not current_char_spans: continue
+                    first_char_span = current_char_spans[0]
+                    last_char_span = current_char_spans[-1]
+                    local_start = int(ratio * first_char_span[0].start) / self.sr
+                    local_end = int(ratio * last_char_span[-1].end) / self.sr
+                    total_score = sum(c[0].score for c in current_char_spans) / len(current_char_spans)
+                    rw = copy.copy(hyp.words[i])
+                    rw.start = local_start + safe_start
+                    rw.end = local_end + safe_start
+                    rw.score = float(total_score)
+                    words.append(rw)
+                results.append(TextTiming(words=words, language=hyp.language))
+                prg.update(task)
+        return results
