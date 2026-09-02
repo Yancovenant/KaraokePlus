@@ -18,6 +18,7 @@ class AudioPlotter:
             "shared_xaxes": True,
             "vertical_spacing": 0.05,
         }
+        plot_kwargs = {k: v for k, v in plot_kwargs.items() if k in self._plot_kwargs}
         self._plot_kwargs.update(plot_kwargs)
         self.refresh()
         from plotly.io import renderers
