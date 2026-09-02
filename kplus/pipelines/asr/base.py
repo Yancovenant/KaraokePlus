@@ -86,7 +86,6 @@ class ASRMixin:
             from functools import partial  # noqa: I001
             import tqdm
             tqdm.tqdm = partial(tqdm.tqdm, disable=True)
-            tqdm.auto.tqdm = partial(tqdm.auto.tqdm, disable=True)
             with rich.make_progress(is_download=False) as prg:
                 prg.add_task(description=f"{self._name} Starting Alignment...", total=None)
                 results = self._align(audionp, transcriptions, reference, audiosegments, prg, **kwargs)
