@@ -242,7 +242,7 @@ class Mel(Feature):
         
         encoded_png = base64.b64encode(png).decode('utf-8')
         png_str = f"data:image/png;base64,{encoded_png}"
-
+        rich.print(f"Mel >> {len(png_str) / 1024**2:.2f} MB")
         n_mels = z.shape[0]
         plotter.scatter(
             func_name="Image", source=png_str, row=row,
