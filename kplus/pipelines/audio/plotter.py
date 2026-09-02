@@ -67,7 +67,8 @@ class AudioPlotter:
         for kw in self._layout_kw:
             fig.update_layout(**kw)
         fig.update_layout(template="plotly_dark", hovermode="x unified",
-            height=dynamic_height, margin={"l": 20, "r": 20, "t": 40, "b": 20},showlegend=False,
+            height=dynamic_height, margin={"l": 20, "r": 20, "t": 40, "b": 20},
+            showlegend=False,
         )
         if self.has_renderer and not self.use_html:
             fig.show(**kwargs)

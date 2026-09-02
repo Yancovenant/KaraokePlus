@@ -216,14 +216,42 @@ class Mel(Feature):
         return self._S_dB
 
     def plot(self, show=False, row: int = 1) -> None:
+        env.matplotlib
+        import matplotlib.pyplot as plt
+        import base64
+        from io import BytesIO
+        from PIL import Image
         plotter = self.extractor.plotter
         freq = self.extractor.librosa.mel_frequencies(n_mels=self.S.shape[0], fmax=5000)
+        z = self.S_dB
+        normalized = (z - z.min()) / (z.max() - z.min())  # scale between 0 and 1
+        colormap = plt.get_cmap('magma')
+        rgba_img = colormap(normalized)
+        img_array = (rgba_img * 255).astype(np.uint8)
+        
+        image = Image.fromarray(img_array)
+        buffer = BytesIO()
+        image.save(buffer, format="PNG", optimize=True)
+        png = buffer.getvalue()
+        
+        encoded_png = base64.b64encode(png).decode('utf-8')
+        png_str = f"data:image/png;base64,{encoded_png}"
+
+        n_mels = z.shape[0]
         plotter.scatter(
-            row=row, func_name="Heatmap",
-            name=self._name + " Spectogram", z=self.S_dB, x=self.times, y=freq,
-            colorscale="Magma", showscale=False
+            func_name="Image", source=png_str, row=row,
+            x0=float(self.times[0]),
+            dx=float((self.times[-1] - self.times[0]) / (len(self.times) - 1)),
+            y0=0,
         )
-        super(Mel, self).plot(show, row)
+        plotter.update_layout(
+            yaxis=dict(
+                range=[0, n_mels - 1],
+                scaleanchor=None,
+                constrain=None,
+            )
+        )
+        super().plot(show, row)
 
 
 @dataclass(slots=True)
