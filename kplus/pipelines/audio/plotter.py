@@ -79,6 +79,12 @@ class AudioPlotter:
         if self.has_renderer and not self.use_html:
             import plotly.io as pio
             fig = pio.from_json(fig.to_json())
+            if env.verbose:
+                rich.print("========== PLOTLY RENDER DEBUG ==========")
+                rich.print(f"renderer.default = {pio.renderers.default!r}")
+                rich.print(f"kwargs = {kwargs}")
+                rich.print(f"figure type = {type(fig)}")
+                rich.print("=========================================")
             fig.show(**kwargs)
         else:
             outpath = "test.html"
