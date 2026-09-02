@@ -113,8 +113,8 @@ class Refiner:
                 f"{'\n'.join(f'[{i}] ' + ' '.join(w.word for w in s.words) for i, s in enumerate([o_text, *ai_text_list]))}"
             )
             if env.verbose: self.plotter.refresh()
-            min_ai_start = min(min(w.start for ai_text in ai_text_list for w in ai_text.words), (w.start for w in o_text.words))
-            max_ai_end = max(max(w.end for ai_text in ai_text_list for w in ai_text.words), (w.end for w in o_text.words))
+            min_ai_start = min(w.start for text in (ai_text_list + [o_text]) for w in text.words)
+            max_ai_end = max(w.end for text in (ai_text_list + [o_text]) for w in text.words)
             safe_start = max(0, max(min(min_ai_start, aseg.start), min_ai_start - 1.0) - 0.5)
             safe_end = min(len(audionp), min(max(max_ai_end, aseg.end), max_ai_end + 1.0) + 0.5)
             audio_chunk = Audio.slicenp(audionp, safe_start, safe_end, self.sr)
