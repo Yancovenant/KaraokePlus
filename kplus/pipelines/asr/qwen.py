@@ -91,7 +91,10 @@ class QwenASR(ASRMixin):
             prg.update(task, completed=seek, total=total)
         audio_chunk_list, text_chunk_list, lang_chunk_list, saved_safe_start = [], [], [], []
         duration = len(audionp) / self.sr
-        assert len(transcriptions.texts) == len(audiosegments)
+        assert len(transcriptions.texts) == len(audiosegments), (
+            "Alignment doesnt match\n"
+            f"{len(transcriptions.texts)} - {len(audiosegments)}"
+        )
         for hyp, seg in zip(transcriptions.texts, audiosegments):
             if not (seg.end < hyp.start or seg.start > hyp.end):
                 safe_start = max(0, max(min(hyp.start, seg.start), hyp.start - 1.0) - 0.5)
