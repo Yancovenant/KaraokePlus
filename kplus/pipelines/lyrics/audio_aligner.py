@@ -1,4 +1,5 @@
 
+from kplus import env
 from kplus.pipelines.utils import AudioSegment
 from kplus.tools import rich
 
@@ -29,15 +30,32 @@ class AudioAligner:
             if len(data.audio_ids) > 0: continue
             prev_idx = next((j for j in range(i - 1, -1, -1) if datas[j].audio_ids), None,)
             next_idx = next((j for j in range(i + 1, len(datas)) if datas[j].audio_ids), None,)
-            dropped = [datas[k] for k in range(prev_idx, next_idx + 1)]
-            rich.print(datas[next_idx].audio_ids, datas[next_idx+1].audio_ids)
-            min_audio_id = max(prev_line.audio_ids) if prev_line is not None else 0
-            max_audio_id = min(next_line.audio_ids) if next_line is not None else len(audiosegments) - 1
-            assert min_audio_id <= max_audio_id, "This is safe to assume that there something wrong with the alignment"
-            for drop in dropped: drop.audio_ids = list(range(min_audio_id, max_audio_id + 1))
+            prev_idx = prev_idx or 0
+            next_idx = next_idx or len(datas) - 1
+            dropped = datas[prev_idx+1:next_idx]
+            if env.verbose:
+                rich.print(f">> {i} Dropped: {prev_idx} - {next_idx}")
+                for drop in dropped:
+                    rich.print(f">>>> {drop.audio_ids}")
+            assert len(datas[next_idx].audio_ids) > 0
+            assert len(datas[prev_idx].audio_ids) > 0
+            min_audio_id = max(datas[prev_idx].audio_ids)
+            max_audio_id = min(datas[next_idx].audio_ids)
+            if env.verbose:
+                rich.print(f">> {i} Audio Interpolate {min_audio_id} - {max_audio_id}")
+            assert min_audio_id < max_audio_id
+            for drop in dropped:
+                assert len(drop.audio_ids) == 0
+                drop.audio_ids = list(range(min_audio_id, max_audio_id+1))
+                if env.verbose:
+                    rich.print(f">>>> {drop.audio_ids}")
         # assert
-        for data in datas:
+        for i, data in enumerate(datas):
             assert len(data.audio_ids) > 0
+            if env.verbose:
+                rich.print(f"{i}: {data.audio_ids}")
+        if env.verbose:
+            rich.print("="*20)
         return datas
 
     def _interpolate_words(self, datas: list[AudioAlignment], audiosegments: list[AudioSegment]) -> list[AudioAlignment]:
@@ -45,37 +63,42 @@ class AudioAligner:
             return token.start is not None and token.end is not None
         for i, data in enumerate(datas):
             if not is_populated(data.tokens[0]):
-                if i > 0: min_audio_id = max(datas[i-1].audio_ids)
-                else: min_audio_id = max(0, min(data.audio_ids) - 1)
+                prev_audio_id = (
+                    max(datas[i-1].audio_ids) if i > 0 else
+                    max(0, min(data.audio_ids) - 1)
+                )
+                min_audio_id = min(min(data.audio_ids), prev_audio_id)
                 max_audio_id = min(data.audio_ids)
-                min_audiosegment = audiosegments[min_audio_id]
-                max_audiosegment = audiosegments[max_audio_id]
-                data.tokens[0].start = min_audiosegment.start
-                data.tokens[0].end = max_audiosegment.end
+                data.tokens[0].start = audiosegments[min_audio_id].start
+                data.tokens[0].end = audiosegments[max_audio_id].end
                 if min_audio_id not in data.audio_ids:
                     data.audio_ids.append(min_audio_id)
                 if max_audio_id not in data.audio_ids:
                     data.audio_ids.append(max_audio_id)
             if not is_populated(data.tokens[len(data.tokens) - 1]):
-                if i < len(datas) - 1: max_audio_id = min(datas[i+1].audio_ids)
-                else: max_audio_id = min(len(audiosegments) - 1, max(data.audio_ids) + 1)
+                next_audio_id = (
+                    min(datas[i+1].audio_ids) if i < len(datas) - 1 else
+                    min(len(audiosegments) - 1, max(data.audio_ids) + 1)
+                )
+                max_audio_id = max(max(data.audio_ids), next_audio_id)
                 min_audio_id = max(data.audio_ids)
-                min_audiosegment = audiosegments[min_audio_id]
-                max_audiosegment = audiosegments[max_audio_id]
-                data.tokens[len(data.tokens) - 1].start = min_audiosegment.start
-                data.tokens[len(data.tokens) - 1].end = max_audiosegment.end
+                data.tokens[len(data.tokens) - 1].start = audiosegments[min_audio_id].start
+                data.tokens[len(data.tokens) - 1].end = audiosegments[max_audio_id].end
                 if min_audio_id not in data.audio_ids:
                     data.audio_ids.append(min_audio_id)
                 if max_audio_id not in data.audio_ids:
                     data.audio_ids.append(max_audio_id)
         assert data.tokens[0].start is not None, data
         assert data.tokens[len(data.tokens) - 1] is not None
-        for data in datas:
+        for i, data in enumerate(datas):
             min_start = min(t.start for t in data.tokens if t.start is not None)
             max_end = max(t.end for t in data.tokens if t.end is not None)
-            for token in data.tokens:
-                assert t.start < t.end
-                if token.start is not None and token.end is not None: continue
+            for j, token in enumerate(data.tokens):
+                if env.verbose:
+                    rich.print(f"{i} - {j}: {token}")
+                if token.start is not None and token.end is not None:
+                    assert token.start <= token.end
+                    continue
                 # just interpolate it fully
                 token.start = min_start
                 token.end = max_end
