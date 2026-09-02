@@ -387,6 +387,7 @@ class DetectionResult:
         )
         audio_uri = KAudio.np2base64(self.audio, self.sr)
         plotter.show(audio_uri=audio_uri, segments=self.segments)
+        return
         for seg in self.segments:
             chunk = KAudio.slicenp(self.audio, seg.start, seg.end, self.sr)
             rich.print(f"[{seg.start}-{seg.end}] ({seg.duration:.3f})")
