@@ -183,7 +183,7 @@ class State:
                     if backup_path.is_file() and backup_path.stat().st_size > 0:
                         console.print("⚠️ Main .pkl missing or empty. Reverting to .bak fallback.", style="b yellow")
                         current_loadpath = backup_path
-                    else: raise FileNotFoundError("Neither main nor backup .pkl files could be found or read.")
+                    else: console.print("Neither main nor backup .pkl files could be found or read.", style="b red")
                 status.update("Deserializing memory map...")
                 with open(current_loadpath, "rb") as f:
                     saved_data = pickle.load(f)

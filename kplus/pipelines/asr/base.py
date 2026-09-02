@@ -79,11 +79,9 @@ class ASRMixin:
     def _align(self, audionp: AudioNumpy, transcriptions: ASRResult, reference: str, audiosegments: list[AudioSegment], prg=None, **kwargs) -> list[TextTiming]:
             raise NotImplementedError()
     
-    def align(self, audio: AudioType, transcriptions: ASRResult, reference: str, audiosegments: list[AudioSegment], prg=None, **kwargs) -> list[TextTiming]:
+    def align(self, audio: AudioType, transcriptions: ASRResult, reference: str, audiosegments: list[AudioSegment], **kwargs) -> list[TextTiming]:
         audionp = Audio(audio, samplerate=self.sr, channels=1).numpy
-        if not audiosegments:
-            duration = len(audionp) / self.sr
-            audiosegments = [AudioSegment(start=0.0, end=duration)]
+        assert len(audiosegments) > 0
         try:
             with rich.make_progress(is_download=False) as prg:
                 prg.add_task(description=f"{self._name} Starting Alignment...", total=None)
