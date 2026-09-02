@@ -23,7 +23,7 @@ class Refiner:
         if env.verbose:
             self.plotter = AudioPlotter(options.pop("resample", False), shared_xaxes=True, vertical_spacing=0.05)
             
-    def _compute_optimal(text: TextTiming, *ai_text_list, mel: Mel, safe_start: float) -> TextTiming:
+    def _compute_optimal(self, text: TextTiming, *ai_text_list, mel: Mel, safe_start: float) -> TextTiming:
         def _update_best(anchor):
             nonlocal best_start, best_end, best_score
             best_start, best_end, best_score = anchor.start, anchor.end, anchor.score
@@ -45,7 +45,7 @@ class Refiner:
             w.start, w.end, w.score = best_start, best_end, best_score
         return text
 
-    def _compute_unreliable(text: TextTiming, *ai_text_list, mel: Mel, safe_start: float) -> TextTiming:
+    def _compute_unreliable(self, text: TextTiming, *ai_text_list, mel: Mel, safe_start: float) -> TextTiming:
         def _update_best(anchor):
             nonlocal best_start, best_end, best_score
             best_start, best_end, best_score = anchor.start, anchor.end, anchor.score
@@ -76,7 +76,7 @@ class Refiner:
             w.start, w.end, w.score = best_start, best_end, best_score
         return text
 
-    def _compute_last(text: TextTiming, *ai_text_list, mask_times: tuple) -> TextTiming:
+    def _compute_last(self, text: TextTiming, *ai_text_list, mask_times: tuple) -> TextTiming:
         for i, (*word_list,) in enumerate(zip(*(ai_text.words for ai_text in ai_text_list))):
             whs, qwn, mms = word_list
             w = text.words[i]
@@ -120,7 +120,7 @@ class Refiner:
             audio_chunk = Audio.slicenp(audionp, safe_start, safe_end, self.sr)
             assert audio_chunk.shape[0] > 0, f"Audio shouldnt be 0 duration, {safe_start}-{safe_end}"
 
-            audio_result = detect_audio_activity(audio=audionp, sr=self.sr)
+            audio_result = detect_audio_activity(audio=audio_chunk, sr=self.sr)
             refined_text = self._refine(o_text, *ai_text_list, safe_start=safe_start, audio_result=audio_result)
             refined.append(refined_text)
 
@@ -156,8 +156,7 @@ class Refiner:
                 marker={"color": color.replace("0.3", "1.0"), "size": 6, "symbol": "square", "line": {"width": 0}},
                 mode="text+markers",)
 
-    def plot(self, audio_result: DetectionResult, refined_text: TextTiming, *ai_text_list) -> None:
-        audio_result.plot()
+    def plot(self, audio_result: DetectionResult, refined_text: TextTiming, ai_text_list: list[TextTiming]) -> None:
         colors = ["#636EFA", "#EF553B", "#00CC96", "#AB63FA", "#FFA15A", "#19D3F3"]
-        self._draw_ai_text_list(ai_text_list, colors, row=1)
-        self.plotter.show()
+        self._draw_ai_text_list(ai_text_list, colors=colors, row=1)
+        self.plotter.show(renderer="iframe")

@@ -247,7 +247,7 @@ class DetectionResult:
         shifted_times = self.times + safe_start
         slices = [slc[0] for slc in find_objects(label(self.final_mask)[0])]
         return [
-            (float(round(shifted_times[slc.start], 2)), float(round(shifted_times[slc.stop], 2)))
+            (float(round(shifted_times[slc.start], 2)), float(round(shifted_times[slc.stop-1], 2)))
             for slc in slices
         ]
     
