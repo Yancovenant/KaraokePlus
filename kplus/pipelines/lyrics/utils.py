@@ -92,10 +92,14 @@ class Tokens:
         self._groups = _groups
         return self._groups
 
+    @property
+    def text(self):
+        return " ".join([w.word for w in self.tokens])
+
 
 @dataclass(slots=True)
 class AudioAlignment:
-    line_idx: int
+    line_idx: int | list[int]
     tokens: list[Token] # per word
     audio_ids: list[int] = field(default_factory=list)
 

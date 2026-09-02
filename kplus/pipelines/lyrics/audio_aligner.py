@@ -103,11 +103,41 @@ class AudioAligner:
                 token.start = min_start
                 token.end = max_end
         return datas
+
+    def _cluster_segment(self, datas: list[AudioAlignment]) -> list[AudioAlignment]:
+        clusters = []
+        current_data: list[AudioAlignment] = []
+        current_audio_ids = set()
+        for i, data in enumerate(datas):
+            unique_audio_ids = set(data.audio_ids)
+            if not current_data or not current_audio_ids.isdisjoint(unique_audio_ids):
+                current_data.append(data)
+                current_audio_ids.update(unique_audio_ids)
+            else:
+                clusters.append((current_data, current_audio_ids))
+                current_data = [data]
+                current_audio_ids = unique_audio_ids
+        if current_data:
+            clusters.append((current_data, current_audio_ids))
+        new_datas: list[AudioAlignment] = []
+        for i, (cluster, audio_ids) in enumerate(clusters):
+            all_line_idx = [c.line_idx for c in cluster]
+            all_tokens = [t for c in cluster for t in c.tokens]
+            all_audio_ids = [c.audio_ids for c in cluster]
+            if env.verbose:
+                rich.print(f"{i} Cluster: {all_line_idx} - {len(all_tokens)} - {all_audio_ids} - {audio_ids}")
+                rich.print(f">> {" ".join([w.word for w in all_tokens])}")
+            new_datas.append(AudioAlignment(
+                line_idx=all_line_idx, tokens=all_tokens, audio_ids=list(audio_ids)
+            ))
+        return new_datas
+
         
     def __call__(self, ref_tokens: Tokens, audiosegments: list[AudioSegment]) -> list[AudioAlignment]:
         audiosegments.sort(key=lambda x: x.start)
         datas: list[AudioAlignment] = self._prepare_alignment(ref_tokens, audiosegments)
         datas: list[AudioAlignment] = self._interpolate_lines(datas, audiosegments)
         datas: list[AudioAlignment] = self._interpolate_words(datas, audiosegments)
+        datas: list[AudioAlignment] = self._cluster_segment(datas)
         return datas
         
