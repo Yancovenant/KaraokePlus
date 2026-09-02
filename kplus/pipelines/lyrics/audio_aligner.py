@@ -88,8 +88,13 @@ class AudioAligner:
                     data.audio_ids.append(min_audio_id)
                 if max_audio_id not in data.audio_ids:
                     data.audio_ids.append(max_audio_id)
-        assert data.tokens[0].start is not None, data
-        assert data.tokens[len(data.tokens) - 1] is not None
+        for i, data in enumerate(datas):
+            assert data.tokens[0].start is not None, data
+            assert data.tokens[-1].end is not None
+            audio_end = audiosegments[max(data.audio_ids)].end
+            current_end = data.tokens[-1].end
+            # use audio_end but capped it at max 2s
+            data.tokens[-1].end = min(max(current_end, audio_end), current_end + 2.0)
         for i, data in enumerate(datas):
             min_start = min(t.start for t in data.tokens if t.start is not None)
             max_end = max(t.end for t in data.tokens if t.end is not None)
