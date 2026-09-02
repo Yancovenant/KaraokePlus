@@ -222,6 +222,7 @@ class Mel(Feature):
         return self._S_dB
 
     def plot(self, show=False, row: int = 1) -> None:
+        return super().plot(show, row)
         env.matplotlib
         import matplotlib.pyplot as plt
         import base64
