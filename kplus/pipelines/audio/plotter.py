@@ -69,7 +69,7 @@ class AudioPlotter:
         fig.update_layout(template="plotly_dark", hovermode="x unified",
             height=dynamic_height, margin={"l": 20, "r": 20, "t": 40, "b": 20},showlegend=False,
         )
-        if self.has_renderer or not self.use_html:
+        if self.has_renderer and not self.use_html:
             fig.show(**kwargs)
         else:
             outpath = "test.html"
