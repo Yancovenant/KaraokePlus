@@ -101,7 +101,7 @@ class QwenASR(ASRMixin):
                 audio_chunk_list.append((audio_chunk, self.sr))
                 text_chunk_list.append(hyp.latin)
                 lang_chunk_list.append(hyp.language)
-        assert len(audio_chunk_list) > 0, audio_chunk_list, text_chunk_list, lang_chunk_list
+        assert len(audio_chunk_list) > 0, f"{audio_chunk_list} - {text_chunk_list} - {lang_chunk_list}"
         align_result = self.model.forced_aligner.align(audio_chunk_list, text_chunk_list, lang_chunk_list)
         assert len(align_result) == len(saved_safe_start)
         for res, safe_start, lang in zip(align_result, saved_safe_start, lang_chunk_list):
