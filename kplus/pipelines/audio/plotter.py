@@ -22,6 +22,10 @@ class AudioPlotter:
         self.refresh()
         from plotly.io import renderers
         self.has_renderer = renderers.default.strip()
+        if plot_kwargs.pop("resample", False):
+            env.plotly_resampler  # noqa: B018
+            from plotly_resampler import register_plotly_resampler  # type: ignore
+            register_plotly_resampler(mode='auto')
 
     def hex2rgba(self, h: str, op: float) -> str:
         n = int(h.lstrip('#').ljust(8, 'F'), 16)
@@ -48,7 +52,6 @@ class AudioPlotter:
         self._layout_kw.append(kwargs)
 
     def show(self, *, audio_uri=None, segments=None, **kwargs):
-        logger.debug(f"Audio Plotting {kwargs}")
         fig = self.make_subplots(
             rows=self._row, cols=self._col, subplot_titles=self._titles,
             **self._plot_kwargs

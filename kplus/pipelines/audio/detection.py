@@ -372,7 +372,7 @@ class AudioExtractor:
         self.precision_ms = precision_ms
         self.overlap = signal_overlap
         self.use_filter = use_filter
-        self.extractor = Extractor(self.precision_ms)
+        self.extractor = Extractor(self.precision_ms, **kwargs)
         
     def frame_and_hop(self, sr: int) -> tuple[int, int]:
         hoplength = int((sr / 1000) * self.precision_ms) # if sr == 44100 and precision_ms == 1, hop_length = 44 samples
