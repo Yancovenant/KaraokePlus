@@ -159,4 +159,4 @@ class Refiner:
     def plot(self, audio_result: DetectionResult, refined_text: TextTiming, ai_text_list: list[TextTiming]) -> None:
         colors = ["#636EFA", "#EF553B", "#00CC96", "#AB63FA", "#FFA15A", "#19D3F3"]
         self._draw_ai_text_list(ai_text_list, colors=colors, row=1)
-        self.plotter.show(renderer="iframe")
+        self.plotter.show()
