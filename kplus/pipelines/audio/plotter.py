@@ -76,10 +76,9 @@ class AudioPlotter:
             height=dynamic_height, margin={"l": 20, "r": 20, "t": 40, "b": 20},
             showlegend=False,
         )
-        with open("/content/production_plot.json", "w") as f:
-            f.write(fig.to_json())
-        return fig.show(**kwargs)
         if self.has_renderer and not self.use_html:
+            import plotly.io as pio
+            fig = pio.from_json(fig.to_json())
             fig.show(**kwargs)
         else:
             outpath = "test.html"

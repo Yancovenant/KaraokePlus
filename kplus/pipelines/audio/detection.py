@@ -195,7 +195,8 @@ class Feature:
         )
         plotter.scatter(
             row=row, x=self.times[self.valleys], y=self.smoothed[self.valleys],
-            name=self._name + " Valleys", mode="markers")
+            name=self._name + " Valleys", mode="markers"
+        )
         if show: plotter.show()
 
 
