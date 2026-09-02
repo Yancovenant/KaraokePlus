@@ -91,6 +91,7 @@ class QwenASR(ASRMixin):
             prg.update(task, completed=seek, total=total)
         audio_chunk_list, text_chunk_list, lang_chunk_list, saved_safe_start = [], [], [], []
         duration = len(audionp) / self.sr
+        assert len(transcriptions.texts) == len(audiosegments)
         for hyp, seg in zip(transcriptions.texts, audiosegments):
             if not (seg.end < hyp.start or seg.start > hyp.end):
                 safe_start = max(0, max(min(hyp.start, seg.start), hyp.start - 1.0) - 0.5)
@@ -101,7 +102,10 @@ class QwenASR(ASRMixin):
                 audio_chunk_list.append((audio_chunk, self.sr))
                 text_chunk_list.append(hyp.latin)
                 lang_chunk_list.append(hyp.language)
-        assert len(audio_chunk_list) > 0, f"{audio_chunk_list} - {text_chunk_list} - {lang_chunk_list}"
+        assert len(audio_chunk_list) > 0, (
+            f"{audio_chunk_list} - {text_chunk_list} - {lang_chunk_list}\n"
+            f"{duration} - {self.sr}"
+        )
         align_result = self.model.forced_aligner.align(audio_chunk_list, text_chunk_list, lang_chunk_list)
         assert len(align_result) == len(saved_safe_start)
         for res, safe_start, lang in zip(align_result, saved_safe_start, lang_chunk_list):
