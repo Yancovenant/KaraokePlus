@@ -128,6 +128,36 @@ class Refiner:
                 self.plot(audio_result, refined_text, ai_text_list)
         return ASRResult(texts=refined)
 
+    def _draw_ai_text_list(self, ai_text_list: list[TextTiming], colors: list[str], row: int) -> None:
+        total_ai = len(ai_text_list)
+        for i, text in enumerate(ai_text_list):
+            color = colors[i % len(colors)]
+            color = self.plotter.hex2rgba(color, 0.3)
+            xcords, ycords, labels, text_y, text_x, h_texts = [],[],[],[],[],[]
+            plot_idx = total_ai - 1 - i
+            for w in text.words:
+                xcords.extend([w.start, w.start, w.end, w.end, None])
+                ycords.extend([plot_idx, plot_idx+1, plot_idx+1, plot_idx, None])
+                score_str = f"{w.score:.3f}" if w.score is not None else "N/A"
+                labels.append(f"{w.word}<br>{score_str}")
+                text_x.append((w.start + w.end)/2)
+                text_y.append((plot_idx + plot_idx+1)/2)
+                h_str = f"Word: {w.word}<br>[{w.start:.3f}-{w.end:.3f}] ({w.duration:.3f})"
+                h_texts.extend([*[h_str]*4, None])
+            self.plotter.scatter(x=xcords, y=ycords, name="",
+                text=h_texts, hovertemplate="%{text}<extra></extra>",
+                mode="lines", fill="toself", fillcolor=color, row=row,
+                line={"width": 2, "color": color.replace("0.3", "0.8")})
+            center_hovers = [f"Word: {w.word}<br>[{w.start:.3f}-{w.end:.3f}] ({w.duration:.3f})" for w in text.words]
+            self.plotter.scatter(x=text_x, y=text_y, name="",
+                customdata=center_hovers, hovertemplate="%{customdata}<extra></extra>",
+                text=labels, textposition="middle center", row=row,
+                textfont={"color": "white", "size": 12},
+                marker={"color": color.replace("0.3", "1.0"), "size": 6, "symbol": "square", "line": {"width": 0}},
+                mode="text+markers",)
 
     def plot(self, audio_result: DetectionResult, refined_text: TextTiming, *ai_text_list) -> None:
         audio_result.plot()
+        colors = ["#636EFA", "#EF553B", "#00CC96", "#AB63FA", "#FFA15A", "#19D3F3"]
+        self._draw_ai_text_list(ai_text_list, colors, row=1)
+        self.plotter.show()
