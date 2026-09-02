@@ -48,6 +48,7 @@ class AudioPlotter:
         self._layout_kw.append(kwargs)
 
     def show(self, *, audio_uri=None, segments=None, **kwargs):
+        logger.debug(f"Audio Plotting {kwargs}")
         fig = self.make_subplots(
             rows=self._row, cols=self._col, subplot_titles=self._titles,
             **self._plot_kwargs
