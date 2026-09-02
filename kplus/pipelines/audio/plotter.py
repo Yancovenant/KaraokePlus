@@ -27,6 +27,7 @@ class AudioPlotter:
             env.plotly_resampler  # noqa: B018
             from plotly_resampler import register_plotly_resampler  # type: ignore
             register_plotly_resampler(mode='auto')
+        self.use_html = plot_kwargs.pop("use_html", False)
 
     def hex2rgba(self, h: str, op: float) -> str:
         n = int(h.lstrip('#').ljust(8, 'F'), 16)
@@ -68,7 +69,7 @@ class AudioPlotter:
         fig.update_layout(template="plotly_dark", hovermode="x unified",
             height=dynamic_height, margin={"l": 20, "r": 20, "t": 40, "b": 20},showlegend=False,
         )
-        if self.has_renderer:
+        if self.has_renderer or not self.use_html:
             fig.show(**kwargs)
         else:
             outpath = "test.html"
