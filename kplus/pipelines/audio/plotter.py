@@ -67,6 +67,7 @@ class AudioPlotter:
         if env.verbose:
             rich.print("========== PLOTLY DEBUG ==========")
             rich.print(f"Figure JSON: {len(fig.to_json()) / 1024 / 1024:.2f} MB")
+            rich.print(f"Kwargs: {kwargs}")
             rich.print("==================================")
 
         dynamic_height = 180 * self._row
