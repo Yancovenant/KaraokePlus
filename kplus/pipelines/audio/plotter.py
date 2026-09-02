@@ -85,6 +85,9 @@ class AudioPlotter:
                 rich.print(f"kwargs = {kwargs}")
                 rich.print(f"figure type = {type(fig)}")
                 rich.print("=========================================")
+            from IPython.display import display
+            rich.print("displaying..")
+            display(fig)
             fig.show(**kwargs)
         else:
             outpath = "test.html"
