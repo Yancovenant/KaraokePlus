@@ -185,5 +185,5 @@ class WhisperASR(ASRMixin):
                             start=float(round(safe_start + w.start, 2)), end=float(round(safe_start + w.end,3)),
                             score=float(round(w.probability, 3)), word=str(w.word.strip()),
                         ))
-                results.append(TextTiming(words=words, language=align_result[0].language))
+                results.append(TextTiming(words=words, language=align_result.language))
         return results
