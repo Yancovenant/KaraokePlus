@@ -58,7 +58,6 @@ class AudioPlotter:
             rows=self._row, cols=self._col, subplot_titles=self._titles,
             **self._plot_kwargs
         )
-        self._scatter = self._scatter[:1]
         fig.add_traces(
             data=[s[0] for s in self._scatter],
             rows=[s[1] for s in self._scatter],
