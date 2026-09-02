@@ -64,43 +64,10 @@ class AudioPlotter:
             cols=[s[2] for s in self._scatter],
         )
         if env.verbose:
-            import json
-            from plotly.utils import PlotlyJSONEncoder
-            rich.print("\n========== PLOTLY DEBUG ==========")
-            fig_json = fig.to_json()
-            rich.print(f"Figure JSON: {len(fig_json) / 1024**2:.2f} MB")
-            fig_html = fig.to_html(
-                full_html=False,
-                include_plotlyjs=False,
-            )
-            rich.print(f"Figure HTML (no plotly.js): {len(fig_html) / 1024**2:.2f} MB")
-            fig_html_full = fig.to_html(
-                full_html=False,
-                include_plotlyjs=True,
-            )
-            rich.print(f"Figure HTML (with plotly.js): {len(fig_html_full) / 1024**2:.2f} MB")
-            rich.print("\n--- TRACES ---")
-            for i, trace in enumerate(fig.data):
-                trace_json = json.dumps(
-                    trace.to_plotly_json(),
-                    cls=PlotlyJSONEncoder,
-                    separators=(",", ":"),
-                )
-                rich.print(
-                    f"[{i}] "
-                    f"type={trace.type!r} "
-                    f"name={getattr(trace, 'name', None)!r} "
-                    f"row/col={i} "
-                    f"size={len(trace_json) / 1024**2:.2f} MB"
-                )
-                if trace.type == "image":
-                    source = trace.source or ""
-                    rich.print(
-                        f"    source: "
-                        f"{len(source) / 1024**2:.2f} MB"
-                    )
-            
-            rich.print("==================================\n")
+            rich.print("========== PLOTLY DEBUG ==========")
+            rich.print(f"Figure JSON: {len(fig.to_json()) / 1024 / 1024:.2f} MB")
+            rich.print("==================================")
+
         dynamic_height = 180 * self._row
         for kw in self._layout_kw:
             fig.update_layout(**kw)
@@ -108,6 +75,7 @@ class AudioPlotter:
             height=dynamic_height, margin={"l": 20, "r": 20, "t": 40, "b": 20},
             showlegend=False,
         )
+        return fig.show(**kwargs)
         if self.has_renderer and not self.use_html:
             fig.show(**kwargs)
         else:
