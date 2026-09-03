@@ -153,10 +153,11 @@ class WhisperASR(ASRMixin):
         task = prg.add_task(description="Aligning...", total=None)
         def progress_callback(seek: float, total: float):
             prg.update(task, completed=seek, total=total)
+        duration = len(audionp) / self.sr
         for hyp, seg in zip(transcriptions.texts, audiosegments):
             if not (seg.end < hyp.start or seg.start > hyp.end):
                 safe_start = max(0, max(min(hyp.start, seg.start), hyp.start - 1.0) - 0.5)
-                safe_end = min(len(audionp), min(max(hyp.end, seg.end), hyp.end + 1.0) + 0.5)
+                safe_end = min(duration, min(max(hyp.end, seg.end), hyp.end + 1.0) + 0.5)
                 audio_chunk = Audio.slicenp(audionp, safe_start, safe_end, self.sr)
                 assert len(audio_chunk) > 0
                 align_result = self.model.align(

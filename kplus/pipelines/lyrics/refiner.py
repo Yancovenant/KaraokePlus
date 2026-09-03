@@ -196,4 +196,4 @@ class Refiner:
         audio_result.flux.times = audio_result.flux.times + safe_start
         audio_result.rms.times = audio_result.rms.times + safe_start
         audio_result.plot()
-        refined_text.display_audio(audio_chunk, audio_result.sr)
+        refined_text.display_audio(audio_chunk, audio_result.sr, offset=safe_start)

@@ -80,10 +80,11 @@ class TextTiming(_HumanTime):
         if self.start is None or self.end is None: return 0.0
         return float(round(self.end - self.start, 2))
 
-    def display_audio(self, audio: AudioNumpy, sr: int) -> None:
+    def display_audio(self, audio: AudioNumpy, sr: int, *, offset: float = 0.0) -> None:
         for w in self.words:
             rich.print(f"[{w.starth}-{w.endh}] ({w.duration:.3f}) - {w.word}")
-            audio_chunk = Audio.slicenp(audio, w.start, w.end, sr)
+            if w.start is None or w.end is None: continue
+            audio_chunk = Audio.slicenp(audio, w.start - offset, w.end - offset, sr)
             if audio_chunk.shape[0] > 0:
                 Audio.display_audio(audio_chunk, sr=sr)
             else:
