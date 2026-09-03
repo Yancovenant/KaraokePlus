@@ -66,11 +66,6 @@ class AudioPlotter:
             rows=[s[1] for s in self._scatter],
             cols=[s[2] for s in self._scatter],
         )
-        if env.verbose:
-            rich.print("========== PLOTLY DEBUG ==========")
-            rich.print(f"Figure JSON: {len(fig.to_json()) / 1024 / 1024:.2f} MB")
-            rich.print(f"Kwargs: {kwargs}")
-            rich.print("==================================")
 
         dynamic_height = 180 * self._row
         for kw in self._layout_kw:
@@ -80,17 +75,6 @@ class AudioPlotter:
             showlegend=False,
         )
         if self.has_renderer and not self.use_html:
-            import plotly.io as pio
-            fig = pio.from_json(fig.to_json())
-            if env.verbose:
-                rich.print("========== PLOTLY RENDER DEBUG ==========")
-                rich.print(f"renderer.default = {pio.renderers.default!r}")
-                rich.print(f"kwargs = {kwargs}")
-                rich.print(f"figure type = {type(fig)}")
-                rich.print("=========================================")
-            from IPython.display import display
-            rich.print("displaying..")
-            display(fig)
             fig.show(**kwargs)
         else:
             outpath = "test.html"

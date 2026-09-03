@@ -223,11 +223,10 @@ class Mel(Feature):
         return self._S_dB
 
     def plot(self, show=False, row: int = 1) -> None:
-        return super().plot(show, row)
-        env.matplotlib
-        import matplotlib.pyplot as plt
-        import base64
+        env.matplotlib  # noqa: B018
+        import base64  # noqa: I001
         from io import BytesIO
+        import matplotlib.pyplot as plt
         from PIL import Image
         plotter = self.extractor.plotter
         freq = self.extractor.librosa.mel_frequencies(n_mels=self.S.shape[0], fmax=5000)
@@ -244,7 +243,6 @@ class Mel(Feature):
         
         encoded_png = base64.b64encode(png).decode('utf-8')
         png_str = f"data:image/png;base64,{encoded_png}"
-        rich.print(f"Mel >> {len(png_str) / 1024**2:.2f} MB")
         n_mels = z.shape[0]
         plotter.scatter(
             func_name="Image", source=png_str, row=row,
@@ -253,13 +251,13 @@ class Mel(Feature):
             y0=0,
         )
         plotter.update_layout(
-            yaxis=dict(
-                range=[0, n_mels - 1],
-                scaleanchor=None,
-                constrain=None,
-            )
+            yaxis={
+                "range": [0, n_mels - 1],
+                "scaleanchor": None,
+                "constrain": None,
+            }
         )
-        super().plot(show, row)
+        return super().plot(show, row)
 
 
 @dataclass(slots=True)
