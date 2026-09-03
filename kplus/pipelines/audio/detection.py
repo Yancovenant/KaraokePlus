@@ -129,6 +129,10 @@ class Feature:
         self._times = self.extractor.librosa.times_like(self.data, sr=self.sr, hop_length=self.hoplength)
         return self._times
 
+    @times.setter
+    def times(self, value: np.ndarray) -> None:
+        self._times = value
+
     @property
     def smoothed(self) -> np.ndarray:
         if self._smoothed is not ...: return self._smoothed
@@ -355,6 +359,10 @@ class DetectionResult:
         assert np.allclose(self.mel.times, self.rms.times) and np.allclose(self.flux.times, self.rms.times)
         self._times = self.rms.times
         return self._times
+
+    @times.setter
+    def times(self, value: np.ndarray) -> None:
+        self._times = value
 
     @property
     def segments(self) -> list[AudioSegment]:
