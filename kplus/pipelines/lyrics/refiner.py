@@ -158,7 +158,7 @@ class Refiner:
                 marker={"color": color.replace("0.3", "1.0"), "size": 6, "symbol": "square", "line": {"width": 0}},
                 mode="text+markers",)
 
-    def _draw_seg(self, text: TextTiming, color: str, row: int, *, plotter: AudioPlotter | None = None, max_y = 1) -> None:
+    def _draw_refined_text(self, text: TextTiming, color: str, row: int, *, plotter: AudioPlotter | None = None, max_y = 1) -> None:
         plotter = plotter if plotter is not None else self.plotter
         color = plotter.hex2rgba(color, 0.3)
         xcords, ycords, labels, text_y, text_x, h_texts = [],[],[],[],[],[]
@@ -190,7 +190,7 @@ class Refiner:
         plotter = audio_result.extractor.plotter
         colors = ["#636EFA", "#EF553B", "#00CC96", "#AB63FA", "#FFA15A", "#19D3F3"]
         self._draw_ai_text_list(ai_text_list, plotter=plotter, colors=colors, row=5)
-        self._draw_refined_text(refined_text, plotter=plotter, color="AB63FA", row=2,) #max_y=self.np.max(d.aad_res.rms_smoothed))
+        self._draw_refined_text(refined_text, plotter=plotter, color="AB63FA", row=6,) #max_y=self.np.max(d.aad_res.rms_smoothed))
         audio_result.times = audio_result.times + safe_start
         audio_result.mel.times = audio_result.mel.times + safe_start
         audio_result.flux.times = audio_result.flux.times + safe_start
