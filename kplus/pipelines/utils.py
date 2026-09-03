@@ -1,9 +1,14 @@
 from __future__ import annotations
 
+import typing as t
 from dataclasses import dataclass
 
-from kplus.tools.audio import _HumanTime, _TimingMixin
+from kplus.tools import rich
+from kplus.tools.audio import Audio, _HumanTime, _TimingMixin
 from kplus.tools.text import RomajiPhonetic, get_phonetic
+
+if t.TYPE_CHECKING:
+    from kplus.tools.audio import AudioNumpy
 
 __all__ = [
     "ASRResult",
@@ -75,6 +80,13 @@ class TextTiming(_HumanTime):
         if self.start is None or self.end is None: return 0.0
         return float(round(self.end - self.start, 2))
 
+    def display_audio(self, audio: AudioNumpy, sr: int) -> None:
+        rich.print(f"[{self.starth}-{self.endh}] ({self.duration:.3f}) - {self.text}")
+        if audio.shape[0] > 0:
+            Audio.display_audio(audio, sr=sr)
+        else:
+            rich.print("~No Audio~")
+        del audio
 
 @dataclass(slots=True)
 class ASRResult:

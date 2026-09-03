@@ -12,7 +12,7 @@ from kplus.pipelines.utils import TextTiming, ASRResult
 import numpy as np
 
 if t.TYPE_CHECKING:
-    from kplus.tools.audio import AudioType
+    from kplus.tools.audio import AudioType, AudioNumpy
     from kplus.pipelines.audio.detection import Mel, DetectionResult
     from kplus.pipelines.utils import AudioSegment
     
@@ -125,7 +125,7 @@ class Refiner:
             refined.append(refined_text)
 
             if env.verbose:
-                self.plot(audio_result, refined_text, ai_text_list)
+                self.plot(audio_chunk, audio_result, refined_text, ai_text_list, safe_start=safe_start)
         return ASRResult(texts=refined)
 
     def _draw_ai_text_list(self, ai_text_list: list[TextTiming], colors: list[str], row: int, *, plotter: AudioPlotter | None = None) -> None:
@@ -157,8 +157,13 @@ class Refiner:
                 marker={"color": color.replace("0.3", "1.0"), "size": 6, "symbol": "square", "line": {"width": 0}},
                 mode="text+markers",)
 
-    def plot(self, audio_result: DetectionResult, refined_text: TextTiming, ai_text_list: list[TextTiming]) -> None:
+    def plot(self, audio_chunk: AudioNumpy, audio_result: DetectionResult, refined_text: TextTiming, ai_text_list: list[TextTiming], *, safe_start: float) -> None:
         plotter = audio_result.extractor.plotter
         colors = ["#636EFA", "#EF553B", "#00CC96", "#AB63FA", "#FFA15A", "#19D3F3"]
         self._draw_ai_text_list(ai_text_list, plotter=plotter, colors=colors, row=5)
+        audio_result.times = audio_result.times + safe_start
+        audio_result.mel.times = audio_result.mel.times + safe_start
+        audio_result.flux.times = audio_result.flux.times + safe_start
+        audio_result.rms.times = audio_result.rms.times + safe_start
         audio_result.plot()
+        refined_text.display_audio(audio_chunk, audio_result.sr)
