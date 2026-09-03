@@ -28,6 +28,9 @@ class AudioPlotter:
             from plotly_resampler import register_plotly_resampler  # type: ignore
             register_plotly_resampler(mode='auto')
         self.use_html = plot_kwargs.pop("use_html", False)
+        if env.is_colab:
+            from google.colab import output
+            output.enable_custom_widget_manager()
 
     def hex2rgba(self, h: str, op: float) -> str:
         n = int(h.lstrip('#').ljust(8, 'F'), 16)

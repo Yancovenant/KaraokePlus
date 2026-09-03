@@ -165,6 +165,7 @@ class State:
         backup_path: Path = Path(backup_dir / self._name).with_suffix(".bak")
         try:
             with console.status("Syncing from Cloudflare R2...") as status:
+                status._live.refresh()
                 paginator = self.s3_client.get_paginator('list_objects_v2')
                 pages = paginator.paginate(Bucket=self.CF_BUCKET_NAME)
                 download_count = 0
