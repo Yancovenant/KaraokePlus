@@ -71,6 +71,10 @@ class environment:
         self.is_kaggle = "KAGGLE_KERNEL_RUN_TYPE" in os.environ or Path("./kaggle").exists()
         self.is_docker = Path("./.dockerenv").exists()
         self.is_local = not any([self.is_colab, self.is_kaggle, self.is_docker])
+        if self.is_colab:
+            from google.colab import output
+            output.enable_custom_widget_manager()
+            logger.debug("Google colab enabled custom widget manager")
         self.print_banner()
         
     def print_banner(self):
