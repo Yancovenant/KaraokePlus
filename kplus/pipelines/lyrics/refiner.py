@@ -158,10 +158,39 @@ class Refiner:
                 marker={"color": color.replace("0.3", "1.0"), "size": 6, "symbol": "square", "line": {"width": 0}},
                 mode="text+markers",)
 
+    def _draw_seg(self, text: TextTiming, color: str, row: int, *, plotter: AudioPlotter | None = None, max_y = 1) -> None:
+        plotter = plotter if plotter is not None else self.plotter
+        color = plotter.hex2rgba(color, 0.3)
+        xcords, ycords, labels, text_y, text_x, h_texts = [],[],[],[],[],[]
+        for i, word in enumerate(text.words):
+            if word.score is None: continue
+            xcords.extend([*[word.start]*2, *[word.end]*2, None])
+            ycords.extend([0, max_y, max_y, 0, None])
+            score_str = f"{word.score:.3f}" if word.score is not None else "N/A"
+            labels.append(f"({i})<br>{word.word}<br>{score_str}")
+            text_x.append((word.start + word.end)/2)
+            text_y.append(max_y/2)
+            h_str = f"Word: {word.word}<br>[{word.start:.3f}-{word.end:.3f}] ({word.duration:.3f})"
+            h_texts.extend([*[h_str]*4, None])
+        plotter.scatter(x=xcords, y=ycords, name="",
+            text=h_texts, hovertemplate="%{text}<extra></extra>",
+            mode="lines", fill="toself", fillcolor=color, row=row,
+            line={"width": 2, "color": color.replace("0.3", "0.8")}
+        )
+        center_hovers = [f"Word: {word.word}<br>[{word.start:.3f}-{word.end:.3f}] ({word.duration:.3f})" for word in text.words if word.score is not None]
+        plotter.scatter(x=text_x, y=text_y, name="",
+            customdata=center_hovers, hovertemplate="%{customdata}<extra></extra>",
+            text=labels, textposition="middle center", row=row,
+            textfont={"color": "white", "size": 12},
+            marker={"color": color.replace("0.3", "1.0"), "size": 6, "symbol": "square", "line": {"width": 0}},
+            mode="text+markers",
+        )
+
     def plot(self, audio_chunk: AudioNumpy, audio_result: DetectionResult, refined_text: TextTiming, ai_text_list: list[TextTiming], *, safe_start: float) -> None:
         plotter = audio_result.extractor.plotter
         colors = ["#636EFA", "#EF553B", "#00CC96", "#AB63FA", "#FFA15A", "#19D3F3"]
         self._draw_ai_text_list(ai_text_list, plotter=plotter, colors=colors, row=5)
+        self._draw_refined_text(refined_text, plotter=plotter, color="AB63FA", row=2,) #max_y=self.np.max(d.aad_res.rms_smoothed))
         audio_result.times = audio_result.times + safe_start
         audio_result.mel.times = audio_result.mel.times + safe_start
         audio_result.flux.times = audio_result.flux.times + safe_start
