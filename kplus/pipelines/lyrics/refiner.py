@@ -93,6 +93,7 @@ class Refiner:
                     break
                 else:
                     continue
+        return text
                 
     def _refine(self, o_text: TextTiming, *ai_text_list, safe_start: float, audio_result: DetectionResult) -> TextTiming:
         refined_text = copy.deepcopy(o_text)
