@@ -176,6 +176,10 @@ class Feature:
         self._mask = (self.smoothed > self.threshold)
         return self._mask
 
+    @mask.setter
+    def mask(self, value: np.ndarray) -> None:
+        self._mask = value
+
     def plot(self, show=False, row: int = 1) -> None:
         plotter = self.extractor.plotter
 
