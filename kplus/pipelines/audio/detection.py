@@ -386,6 +386,7 @@ class DetectionResult:
             fill="tozeroy", line=dict(shape="hv"),
         )
         audio_uri = KAudio.np2base64(self.audio, self.sr)
+        plotter.update_titles(["Mel", "RMS", "Flux", "Final Mask"])
         plotter.show(audio_uri=audio_uri, segments=self.segments)
         return
         for seg in self.segments:
