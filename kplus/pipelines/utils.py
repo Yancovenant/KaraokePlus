@@ -81,12 +81,14 @@ class TextTiming(_HumanTime):
         return float(round(self.end - self.start, 2))
 
     def display_audio(self, audio: AudioNumpy, sr: int) -> None:
-        rich.print(f"[{self.starth}-{self.endh}] ({self.duration:.3f}) - {self.text}")
-        if audio.shape[0] > 0:
-            Audio.display_audio(audio, sr=sr)
-        else:
-            rich.print("~No Audio~")
-        del audio
+        for w in self.words:
+            rich.print(f"[{w.starth}-{w.endh}] ({w.duration:.3f}) - {w.word}")
+            audio_chunk = Audio.slicenp(audio, w.start, w.end, sr)
+            if audio_chunk.shape[0] > 0:
+                Audio.display_audio(audio_chunk, sr=sr)
+            else:
+                rich.print("~No Audio~")
+            del audio_chunk
 
 @dataclass(slots=True)
 class ASRResult:
