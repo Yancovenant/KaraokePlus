@@ -31,6 +31,7 @@ class AudioPlotter:
         if env.is_colab:
             from google.colab import output
             output.enable_custom_widget_manager()
+            logger.debug("Google colab enabled custom widget manager")
 
     def hex2rgba(self, h: str, op: float) -> str:
         n = int(h.lstrip('#').ljust(8, 'F'), 16)
