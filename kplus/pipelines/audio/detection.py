@@ -248,8 +248,7 @@ class Mel(Feature):
         plotter.update_layout(
             yaxis={
                 "range": [0, n_mels - 1],
-                "scaleanchor": None,
-                "constrain": None,
+                "scaleanchor": False,
             }
         )
         return super().plot(show, row)
@@ -454,7 +453,7 @@ class AudioExtractor:
         if env.verbose: mel.plot(show=True)
         return mel
     
-    def detect_all(self, audio: AudioType, sr: int) -> DetectionResult:
+    def detect_all(self, audio: AudioType, sr: int, *, no_show: bool = False) -> DetectionResult:
         audionp = self._preprocess_audio(audio, sr)
         mel = self._detect_mel(audionp, sr)
         rms = self._detect_rms(audionp, sr)
@@ -463,7 +462,7 @@ class AudioExtractor:
             sr=sr, extractor=self.extractor, audio=audionp,
             rms=rms, flux=flux, mel=mel,
         )
-        if env.verbose: result.plot()
+        if env.verbose and not no_show: result.plot()
         return result
 
 

@@ -18,7 +18,8 @@ def detect_audio_activity(
     precision_ms: int = 10,
     signal_overlap: float = 0.75,
     use_filter: bool = True,
+    no_show: bool = False,
     **kwargs
 ) -> DetectionResult:
     extractor = AudioExtractor(precision_ms, signal_overlap, use_filter, **kwargs)
-    return extractor.detect_all(audio, sr)
+    return extractor.detect_all(audio, sr, no_show=no_show)

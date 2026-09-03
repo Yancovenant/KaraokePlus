@@ -120,7 +120,7 @@ class Refiner:
             audio_chunk = Audio.slicenp(audionp, safe_start, safe_end, self.sr)
             assert audio_chunk.shape[0] > 0, f"Audio shouldnt be 0 duration, {safe_start}-{safe_end}"
 
-            audio_result = detect_audio_activity(audio=audio_chunk, sr=self.sr)
+            audio_result = detect_audio_activity(audio=audio_chunk, sr=self.sr, no_show=True)
             refined_text = self._refine(o_text, *ai_text_list, safe_start=safe_start, audio_result=audio_result)
             refined.append(refined_text)
 
@@ -128,11 +128,12 @@ class Refiner:
                 self.plot(audio_result, refined_text, ai_text_list)
         return ASRResult(texts=refined)
 
-    def _draw_ai_text_list(self, ai_text_list: list[TextTiming], colors: list[str], row: int) -> None:
+    def _draw_ai_text_list(self, ai_text_list: list[TextTiming], colors: list[str], row: int, *, plotter: AudioPlotter | None = None) -> None:
+        plotter = plotter if plotter is not None else self.plotter
         total_ai = len(ai_text_list)
         for i, text in enumerate(ai_text_list):
             color = colors[i % len(colors)]
-            color = self.plotter.hex2rgba(color, 0.3)
+            color = plotter.hex2rgba(color, 0.3)
             xcords, ycords, labels, text_y, text_x, h_texts = [],[],[],[],[],[]
             plot_idx = total_ai - 1 - i
             for w in text.words:
@@ -144,12 +145,12 @@ class Refiner:
                 text_y.append((plot_idx + plot_idx+1)/2)
                 h_str = f"Word: {w.word}<br>[{w.start:.3f}-{w.end:.3f}] ({w.duration:.3f})"
                 h_texts.extend([*[h_str]*4, None])
-            self.plotter.scatter(x=xcords, y=ycords, name="",
+            plotter.scatter(x=xcords, y=ycords, name="",
                 text=h_texts, hovertemplate="%{text}<extra></extra>",
                 mode="lines", fill="toself", fillcolor=color, row=row,
                 line={"width": 2, "color": color.replace("0.3", "0.8")})
             center_hovers = [f"Word: {w.word}<br>[{w.start:.3f}-{w.end:.3f}] ({w.duration:.3f})" for w in text.words]
-            self.plotter.scatter(x=text_x, y=text_y, name="",
+            plotter.scatter(x=text_x, y=text_y, name="",
                 customdata=center_hovers, hovertemplate="%{customdata}<extra></extra>",
                 text=labels, textposition="middle center", row=row,
                 textfont={"color": "white", "size": 12},
@@ -157,6 +158,7 @@ class Refiner:
                 mode="text+markers",)
 
     def plot(self, audio_result: DetectionResult, refined_text: TextTiming, ai_text_list: list[TextTiming]) -> None:
+        plotter = audio_result.extractor.plotter
         colors = ["#636EFA", "#EF553B", "#00CC96", "#AB63FA", "#FFA15A", "#19D3F3"]
-        self._draw_ai_text_list(ai_text_list, colors=colors, row=1)
-        self.plotter.show()
+        self._draw_ai_text_list(ai_text_list, plotter=plotter, colors=colors, row=5)
+        audio_result.plot()
