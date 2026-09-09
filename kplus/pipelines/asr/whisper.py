@@ -107,7 +107,7 @@ class WhisperASR(ASRMixin):
         # batch transcribe expect a dict?
         # time_batches = [{"start": seg.start, "end": seg.end} for seg in audio_segments]
         batch_result = self.model.transcribe(
-            audionp, language=None,
+            audionp, language=kwargs.pop("language", None),
             initial_prompt=reference,
             multilingual=kwargs.pop("multilingual", self.config.multilingual),
             beam_size=kwargs.pop("beam_size", self.config.beam_size),
