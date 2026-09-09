@@ -35,6 +35,7 @@ class ExtractorConfig:
 
     merge_ms: int = 140
     delete_ms: int = 100
+    merge_lower_ms: int = 3000
 
     max_maskblock_ms: int = 10000 # 10s
     min_maskblock_ms: int = 1000 # 1s
@@ -83,7 +84,42 @@ class Extractor:
         starts = np.where(diffs == 1)[0]
         ends   = np.where(diffs == -1)[0] 
         return starts, ends
-        
+    
+    def mask_merge_lower_duration(self, datamask: np.ndarray, merge_ms: int = ExtractorConfig.merge_lower_ms) -> np.ndarray:
+        """ Any mask frame `lower than or equal` the threshold ms, would be merged to the nearest mask """
+        while True:
+            starts, ends = self.get_mask_starts_ends(datamask)
+            mergeframe = self.ms2frame(merge_ms)
+            if len(starts) == 0: break
+            shortsegments = []
+            for i, (s, e) in enumerate(zip(starts, ends)):
+                dur = e - s
+                if dur <= mergeframe:
+                    shortsegments.append((i, s, e))
+            if not shortsegments: break
+            assert len(starts) > 1
+            for i, s, e in shortsegments:
+                next_start = starts[i+1] if i < len(starts) - 1 else None
+                prev_end = ends[i-1] if i > 0 else None
+                prev_gap = (s - prev_end) if prev_end is not None else float("inf")
+                next_gap = (next_start - e) if next_start is not None else float("inf")
+                if prev_gap < next_gap:
+                    datamask[prev_end:s] = True
+                elif next_gap < prev_gap:
+                    datamask[e:next_start] = True
+                elif next_gap == prev_gap:
+                    next_end = ends[i+1] if i < len(ends) - 1 else None
+                    next_dur = (next_end - next_start) if (next_start is not None and next_end is not None) else float("inf")
+                    prev_start = starts[i-1] if i > 0 else None
+                    prev_dur = (prev_end - prev_start) if (prev_start is not None and prev_end is not None) else float("inf")
+                    if next_dur < prev_dur:
+                        datamask[e:next_start] = True
+                    else:
+                        datamask[prev_end:s] = True
+                else:
+                    raise RuntimeError("Not sure why this happen")
+        return datamask
+
     def mask_merge(self, datamask: np.ndarray, merge_ms: int = ExtractorConfig.merge_ms) -> np.ndarray:
         """ Any distance `lower than or equal` the threshold ms, would be merged """
         starts, ends = self.get_mask_starts_ends(datamask)
@@ -99,8 +135,8 @@ class Extractor:
         starts, ends = self.get_mask_starts_ends(datamask)
         deleteframe = self.ms2frame(delete_ms)
         for s, e in zip(starts, ends):
-            dist = e - s
-            if dist <= deleteframe:
+            dur = e - s
+            if dur <= deleteframe:
                 datamask[s:e] = False
         return datamask
 
@@ -294,6 +330,7 @@ class DetectionResult:
         mask = self.extractor.mask_forward(mask, self.rms.valleys)
         mask = self.extractor.mask_merge(mask)
         mask = self.extractor.mask_delete(mask)
+        mask = self.extractor.mask_merge_lower_duration(mask)
         self._final_mask = self._split_final_mask(mask)
         return self._final_mask
 
