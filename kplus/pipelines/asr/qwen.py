@@ -61,7 +61,11 @@ class QwenASR(ASRMixin):
             audio_chunk_list.append((audionp[start:end], self.sr))
         logger.debug(f"Prepared {len(audio_chunk_list)} audio chunks for Qwen ASR model")
         transcribe_params, kwargs = filter_known_kwargs(self.model.transcribe, kwargs)
-        batch_result = self.model.transcribe(audio=audio_chunk_list, context=None, return_time_stamps=True, **transcribe_params)
+        batch_result = self.model.transcribe(
+            audio=audio_chunk_list,
+            context=transcribe_params.pop("context", None),
+            return_time_stamps=True,
+            **transcribe_params)
         logger.debug(f"Qwen ASR model returned {len(batch_result)} segments")
         for seg, aseg in zip(batch_result, audiosegments):
             #prg.update(1)
