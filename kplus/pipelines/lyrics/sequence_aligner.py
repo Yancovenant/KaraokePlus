@@ -127,8 +127,10 @@ class SequenceResult:
 
 class SequenceAligner:
     """ Align by Sequence """
-    @staticmethod
-    def sequence_align(ref_tokens: Tokens, hyp_tokens: Tokens) -> SequenceResult:
+    def __init__(self, raise_if_not_reliable: bool = False, **kwargs):
+        self.raise_if_not_reliable = raise_if_not_reliable
+
+    def sequence_align(self, ref_tokens: Tokens, hyp_tokens: Tokens) -> SequenceResult:
         def mwws_score(a:str, b: str) -> float:
             if a == b: return 2.0 # Match exactly
             if similarity(a, b) > 0.6: return 1.0
@@ -151,7 +153,8 @@ class SequenceAligner:
             result.plot()
         if not result.reliable:
             logger.warning(f"Lyric Alignment may be inaccurate due to error rate of more than 50%: WER={result.wer * 100:.1f}%")
-            raise LyricAlignError("Cannot continue as the lyric aligment may be inaccurate")
+            if self.raise_if_not_reliable:
+                raise LyricAlignError("Cannot continue as the lyric aligment may be inaccurate")
         return result
             
     def __call__(self, ref_tokens: Tokens, hyp_tokens: Tokens) -> tuple[Tokens, Tokens]:
