@@ -127,7 +127,7 @@ class SequenceResult:
 
 class SequenceAligner:
     """ Align by Sequence """
-    def __init__(self, raise_if_not_reliable: bool = False, **kwargs):
+    def __init__(self, raise_if_not_reliable: bool = True, **kwargs):
         self.raise_if_not_reliable = raise_if_not_reliable
 
     def sequence_align(self, ref_tokens: Tokens, hyp_tokens: Tokens) -> SequenceResult:

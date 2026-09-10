@@ -15,6 +15,7 @@ __all__ = [
     "AudioSegment",
     "TextTiming",
     "WordTiming",
+    "overlap",
 ]
 
 class AudioSegment(_TimingMixin):
@@ -94,3 +95,7 @@ class TextTiming(_HumanTime):
 @dataclass(slots=True)
 class ASRResult:
     texts: list[TextTiming]
+
+
+def overlap(a, b):
+    return not (a.end < b.start or a.start > b.end)
