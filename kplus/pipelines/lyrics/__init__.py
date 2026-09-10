@@ -20,8 +20,8 @@ __all__ = [
     "refine",
 ]
 
-def align2ref(hypothesis: ASRResult, reference: str, audiosegments: list[AudioSegment]):
-    return LyricAligner().asr2ref(hypothesis, reference, audiosegments)
+def align2ref(hypothesis: ASRResult, reference: str, audiosegments: list[AudioSegment], *, raise_if_not_reliable: bool = True, **kwargs):
+    return LyricAligner(raise_if_not_reliable=raise_if_not_reliable).asr2ref(hypothesis, reference, audiosegments)
 
 def refine(audio: AudioType, original: ASRResult, *ai_res, audiosegments: list[AudioSegment]) -> ASRResult:
     return Refiner()(audio, original, *ai_res, audiosegments=audiosegments)

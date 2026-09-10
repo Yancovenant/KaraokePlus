@@ -22,11 +22,10 @@ __all__ = [
 
 class LyricAligner:
     """ Main For Lyrics Aligner """
-    def __init__(self):
-        self.sequence_aligner = SequenceAligner()
+    def __init__(self, *, raise_if_not_reliable: bool = True):
+        self.sequence_aligner = SequenceAligner(raise_if_not_reliable=raise_if_not_reliable)
         self.audio_aligner = AudioAligner()
     
-
     def asr2ref(self,
         hypothesis: ASRResult,
         reference: str,
