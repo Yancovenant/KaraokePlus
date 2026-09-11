@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Optional
 
 from kplus.environment import env
-from kplus.pipelines.utils import Result
+from kplus.pipelines.utils import ASRResult
 from kplus.tools.config import config
 
 logger = logging.getLogger(__name__)
@@ -16,7 +16,7 @@ class Render:
     def __init__(self, with_ass: bool = True):
         self.with_ass = with_ass
         
-    def render(self, video_filepath: str | Path, inst_path: str | Path, duration: float, result: Result, output_path: str | None = None) -> Path:
+    def render(self, video_filepath: str | Path, inst_path: str | Path, duration: float, result: ASRResult, output_path: str | None = None) -> Path:
         env.rich, env.ffmpeg # noqa: B018
         import rich # type: ignore # noqa: I001
         console = rich.console.Console()
@@ -28,7 +28,7 @@ class Render:
                 "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
                 "-i", str(video_filepath), "-i", str(inst_path),]
             if self.with_ass:
-                ass_content = Result.ASS_HEADER + "\n".join(seg.ass_event for seg in result.segments)
+                ass_content = ASRResult.ASS_HEADER + "\n".join(seg.ass_event for seg in result.segments)
                 ass_path = Path(config.work_dir) / f"ass_{safe_title}.ass"
                 ass_path.write_text(ass_content, encoding="utf-8-sig")
                 scale_filter = "fps=30,scale=if(gt(iw/ih\\,16/9)\\,-1\\,1280):if(gt(iw/ih\\,16/9)\\,720\\,-1):flags=fast_bilinear,crop=1280:720"
