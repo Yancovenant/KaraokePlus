@@ -52,6 +52,16 @@ class QwenASR(ASRMixin):
                 **self.config.initial,
             }
         )
+
+    def _normalize_lang(self, lang: str) -> str:
+        from .utils import QWEN_LANGUAGES, WHISPER_LANGUAGES
+        try:
+            return WHISPER_LANGUAGES[lang].title()
+        except Exception:
+            if lang in QWEN_LANGUAGES:
+                return lang.title()
+            else:
+                raise
         
     def _transcribe(self, audionp: AudioNumpy, audiosegments: list[AudioSegment], reference: str, prg=None, **kwargs) -> list[TextTiming]:
         logger.debug(f"Running Qwen ASR model with {len(audiosegments)} segments and config: {self.sr}")
@@ -60,11 +70,15 @@ class QwenASR(ASRMixin):
             start, end = int(seg.start * self.sr), int(seg.end * self.sr)
             audio_chunk_list.append((audionp[start:end], self.sr))
         logger.debug(f"Prepared {len(audio_chunk_list)} audio chunks for Qwen ASR model")
+        lang = kwargs.pop("language", None)
+        if lang is not None:
+            lang = self._normalize_lang(lang)
         transcribe_params, kwargs = filter_known_kwargs(self.model.transcribe, kwargs)
         batch_result = self.model.transcribe(
             audio=audio_chunk_list,
             context=transcribe_params.pop("context", None),
             return_time_stamps=True,
+            language=lang,
             **transcribe_params)
         logger.debug(f"Qwen ASR model returned {len(batch_result)} segments")
         for seg, aseg in zip(batch_result, audiosegments):
