@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import typing as t
+from transformers import AutoProcessor, AutoModelForCTC
+import torchaudio.functional as F
 
 from kplus import env
 
@@ -55,6 +57,16 @@ class BaseASR:
             else None)
         )
         return modelclass(modelname, **options)
+
+class HFCTCModel:
+    """ Base Class for hf ctc model. """
+
+    @classmethod
+    def from_pretrained(cls, model_id: str, **kwargs) -> CTCMixin:
+        model = AutoModelForCTC.from_pretrained(model_id, **kwargs)
+        processor = AutoProcessor.from_pretrained(model_id, **kwargs)
+        return CTCMixin(model_id, model, processor, **kwargs)
+    
 
 def detect_language(audio: AudioType, **options) -> str:
     """ Detect language """
