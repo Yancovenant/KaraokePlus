@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 class Wav2Vec2Kwargs(ASRKwargs):
-    _defaults: t.ClassVar[dict[str, t.Any]] = {
+    _defaults = {  # noqa: RUF012
         "processor_kwargs": {
             "return_tensors": "pt",
             "padding": True,

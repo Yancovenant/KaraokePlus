@@ -1,13 +1,9 @@
-if __name__ == "__main__":
-    Wav2Vec2 = type
-    QwenASR = type
-else:
-    from kplus.pipelines.asr.hf.wav2vec2 import Wav2Vec2
-    from kplus.pipelines.asr.hf.qwen_asr import QwenASR
-
 from typing import Any, ClassVar
 
 from transformers import AutoConfig
+
+from kplus.pipelines.asr.hf.qwen_asr import QwenASR
+from kplus.pipelines.asr.hf.wav2vec2 import Wav2Vec2
 
 
 class HFModel:
