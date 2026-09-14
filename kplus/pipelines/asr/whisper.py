@@ -79,16 +79,24 @@ class WhisperASR(ASRMixin):
 
     def detect_language(self,
         audio: AudioType,
-        audiosegments: list[AudioSegment],
+        audiosegments: list[AudioSegment] | None = None,
         vad_filter: bool = False,
         vad_parameters: dict | None = None,
         language_detection_segments: int | None = None,
-        language_detection_threshold: float | None = None
+        language_detection_threshold: float | None = None,
+        *,
+        seek: float | None = None,
     ) -> str:
         """ Detect Language """
         audionp = Audio(audio, samplerate=self.sr, channels=1).numpy
         features: np.ndarray = self.model.feature_extractor(audionp, chunk_length=None)
-        safestart = audiosegments[0].start
+        if not audiosegments and not seek:
+            logger.warning("Detecting language without seeking may result in a slight missmatch detection")
+            safestart = 0.0
+        elif audiosegments:
+            safestart = audiosegments[0].start
+        elif seek:
+            safestart = seek
         duration_frames = features.shape[-1] - 1
         seek = (
             int(safestart * self.model.frames_per_second)

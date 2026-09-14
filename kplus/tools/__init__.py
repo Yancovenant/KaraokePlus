@@ -2,7 +2,7 @@
 from .config import config
 from .rich import rich, RichArgumentParser
 from .misc import *
-from .text import *
+#from .text import *
 from .path import *
 
 __all__ = [  # noqa: RUF022

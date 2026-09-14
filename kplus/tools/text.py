@@ -5,7 +5,8 @@ from functools import cached_property, lru_cache
 
 from kplus import env
 
-env.sequence_align, env.pypinyin, env.pykakasi, env.anyascii, env.jellyfish  # noqa: B018
+#env.sequence_align
+env.pypinyin, env.pykakasi, env.anyascii, env.jellyfish  # noqa: B018
 # Need to be below
 import jellyfish  # type: ignore
 from anyascii import anyascii  # type: ignore

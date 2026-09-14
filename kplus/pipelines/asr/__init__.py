@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import typing as t
-from transformers import AutoProcessor, AutoModelForCTC
+#from transformers import AutoProcessor, AutoModelForCTC
 import torchaudio.functional as F
 
 from kplus import env
@@ -77,6 +77,7 @@ def detect_language(audio: AudioType, **options) -> str:
     env.clean()
     return lang
 
+
 def transcribe(audio: AudioType, audiosegments: list[AudioSegment], reference:str, **options) -> ASRResult:
     """ Transcribe given audio file """
     transcriber = BaseASR.from_model(**options)
@@ -84,6 +85,7 @@ def transcribe(audio: AudioType, audiosegments: list[AudioSegment], reference:st
     del transcriber.model, transcriber
     env.clean()
     return result
+
 
 def align(audio: AudioType, transcriptions: ASRResult, reference: str, audiosegments: list[AudioSegment], **options):
     """ Single Align """
