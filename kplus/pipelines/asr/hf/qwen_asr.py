@@ -73,7 +73,7 @@ class QwenASRKwargs(ASRKwargs):
 
 class QwenASR(ASRMixin):
     """ Alibaba Qwen ASR Model Class. """
-    force_align_model_id_or_path: str = ""
+    force_align_model_id_or_path: str = "Qwen/Qwen3-ForcedAligner-0.6B-hf"
     
     def _load_model(self, model_name_or_path, **kwargs) -> None:
         self.model = AutoModelForMultimodalLM.from_pretrained(model_name_or_path, **kwargs).to(env.device).eval()
