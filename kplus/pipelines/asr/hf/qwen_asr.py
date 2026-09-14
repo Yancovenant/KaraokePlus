@@ -43,6 +43,16 @@ class QwenASR(ASRMixin):
         if kwargs:
             logger.warning(f"Unused kwargs in {type(self).__name__}: {kwargs}")
 
+    def inputs(
+        self,
+        audios: list[AudioInput],
+        langs: list[str | None],
+        prompts: list[str | None],
+
+    ):
+        pass
+        
+
     @torch.inference_mode()
     def _transcribe(
         self,
