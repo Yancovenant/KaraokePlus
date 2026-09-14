@@ -71,7 +71,8 @@ class QwenASR(ASRMixin):
         *,
         return_timestamps: bool = True,
     ) -> list[TextTiming]:
-        pass
+        inputs = self.inputs(audios, languages, prompts=contexts)
+        outputs = self._infer(inputs)
 
     @torch.inference_mode()
     def _align(
