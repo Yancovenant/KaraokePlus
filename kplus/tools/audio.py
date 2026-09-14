@@ -12,13 +12,14 @@ import json
 import subprocess
 import typing as t
 import wave
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from functools import cached_property
 from pathlib import Path
-from IPython.display import display, Audio as IAudio
 
 import numpy as np
 import torch
+from IPython.display import Audio as IAudio
+from IPython.display import display
 
 from .path import temp_filenames
 
@@ -30,9 +31,12 @@ __all__ = [
     "_TimingMixin",
 ]
 
+# Type Var
 AudioNumpy: t.TypeAlias = np.ndarray
 AudioTensor: t.TypeAlias = torch.Tensor
 AudioType: t.TypeAlias = str | Path | AudioNumpy | AudioTensor
+AudioInput: t.TypeAlias = AudioNumpy | AudioTensor
+IndexAudioInput: t.TypeAlias = list[tuple[int, AudioInput]]
 
 class Audio:
     """ Audio Loader and Manager """

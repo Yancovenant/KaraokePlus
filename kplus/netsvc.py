@@ -168,7 +168,8 @@ def setup_logger():
         )
         handler.setFormatter(RichLoggingFormatter(rich_format))
     if (root_logger:=logging.getLogger()).hasHandlers() and (env.is_colab or env.is_kaggle):
-        root_logger.handlers.clear()
+        # root_logger.handlers.clear()
+        pass
     root_logger.addHandler(handler)
     pseudo_config = PSEUDOCONFIG_MAPPER.get(config['log_level'], [])
     logging_configurations = DEFAULT_LOG_CONFIGURATION + pseudo_config

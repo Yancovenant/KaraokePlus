@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 
 from kplus import env
-from kplus.tools import is_file
+from kplus.tools import resolve_path
 
 from .utils import DownloadError, ErrorType
 
@@ -56,7 +56,7 @@ class Ytdlp:
     def __init__(self, cookiefile: str | None, **kwargs) -> None:
         env.yt_dlp  # noqa: B018
         if os.name != "nt": env.deno  # noqa: B018
-        self.cookiefile = is_file(cookiefile)
+        self.cookiefile = resolve_path(cookiefile)
         if self.cookiefile:
             logger.info("Using configured cookie file: %s", self.cookiefile)
         else:

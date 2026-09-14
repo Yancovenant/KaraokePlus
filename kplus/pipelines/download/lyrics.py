@@ -9,7 +9,8 @@ import requests
 from requests.exceptions import HTTPError
 
 from kplus import env
-from kplus.tools import rich, similarity, token_similarity
+from kplus.tools import rich
+from kplus.tools.text import similarity, token_similarity
 
 logger = logging.getLogger(__name__)
 

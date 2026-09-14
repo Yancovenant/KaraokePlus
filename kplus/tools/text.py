@@ -1,3 +1,5 @@
+if __name__ == "__main__":
+    import kplus.init
 import difflib
 import re
 import string
@@ -5,7 +7,6 @@ from functools import cached_property, lru_cache
 
 from kplus import env
 
-#env.sequence_align
 env.pypinyin, env.pykakasi, env.anyascii, env.jellyfish  # noqa: B018
 # Need to be below
 import jellyfish  # type: ignore
@@ -19,17 +20,19 @@ __all__ = [
     "RomajiPhonetic",
     "get_phonetic",
     "normalizekaldi",
-    "safepath",
     "similarity",
     "token_similarity"
 ]
 
+# Japanese, Chinese, and Korean commonly known as CJK characters.
+# - Japanese characters include Hiragana, Katakana, and Kanji.
+# >> Kanji are Chinese borrowed characters
+# - Korean characters include Hangul, Hanja
+# >> Hanja are Chinese borrowed characters
+
 ####################
 # Text Normalization
 ####################
-def safepath(s: str) -> str:
-    return "".join([c for c in s if c.isalpha() or c.isdigit() or c in ' _-']).strip()
-
 _PUNCTUATION_TRANSLATOR = str.maketrans('', '', string.punctuation)
 def normalizekaldi(s:str) -> str:
     s = s.translate(_PUNCTUATION_TRANSLATOR).lower().strip()
@@ -77,3 +80,6 @@ def token_similarity(left: str, right: str) -> float:
     if not left_tokens: return 0.0
     intersection = (left_tokens & right_tokens)
     return len(intersection) / len(left_tokens)
+
+if __name__ == "__main__":
+    print("-- Text Tools Test --")

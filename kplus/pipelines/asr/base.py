@@ -11,7 +11,8 @@ import copy
 from dataclasses import field, dataclass
 
 from kplus import env
-from kplus.tools import rich, get_phonetic
+from kplus.tools import rich
+from kplus.tools.text import get_phonetic
 from kplus.pipelines.utils import TextTiming, ASRResult
 
 from .utils import get_default_dtype

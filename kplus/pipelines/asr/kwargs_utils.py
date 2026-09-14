@@ -1,7 +1,7 @@
 
-from typing import TypedDict, Any, Literal
-from dataclasses import dataclass
 import copy
+from typing import Any, Literal, TypedDict
+
 
 class KwargsMixin:
     def __init__(self, **kwargs):
@@ -22,7 +22,7 @@ class ProcessorKwargs(TypedDict, total=False):
 class ASRKwargs(TypedDict, total=False):
     _defaults: dict = {}
 
-    processor_kwargs: ProcessorKwargs = {
+    processor_kwargs: ProcessorKwargs = {  # noqa: RUF012
         **ProcessorKwargs.__annotations__,
     }
 
@@ -68,13 +68,12 @@ def merge_kwargs(source: dict | ASRKwargs, kwargs: dict):
 
 if __name__ == "__main__":
     from rich.console import Console
-    from rich import inspect
     console = Console()
     console.rule("Running Tests")
 
     # Test Purpose Only
     class Wav2Vec2Kwargs(ASRKwargs, total=False):
-        _defaults = {
+        _defaults = {  # noqa: RUF012
             "processor_kwargs": {
                 "return_tensors": "pt",
                 "padding": True,

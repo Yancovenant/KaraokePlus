@@ -4,44 +4,24 @@ import tempfile
 from contextlib import contextmanager
 from pathlib import Path
 
-from .config import config
-from .text import safepath
-
 __all__ = [
-    "raise_for_permission",
+    "resolve_path",
+    "safepath",
     "search_for_path",
     "temp_filenames",
 ]
 
-def raise_for_permission(path: str | Path, check: str = "all") -> None:
-    """
-    Checks file access and raises a PermissionError if the check fails.
-    Modes available: 'read', 'write', 'execute', 'all'
-    """
-    path = Path(str(path))
-    if path.suffix:
-        path = path.parent
-    path = str(path)
-    permission_map = {
-        "read": os.R_OK,
-        "write": os.W_OK,
-        "execute": os.X_OK,
-        "all": os.R_OK | os.W_OK | os.X_OK  # Combines read, write, and execute
-    }
-    flag = permission_map.get(check.lower())
-    if flag is None:
-        raise ValueError("``check`` must be 'read', 'write', 'execute', or 'all'.")
-    if not os.access(path, flag):
-        raise PermissionError(f"Missing status: '{check}' permission denied for '{path}'.")
 
 def search_for_path(filepath: str) -> str:
     """ Return the config directory if a path exists """
+    from .config import config
     # Resolve to ( data_dir / * artist / requestedpath.stem )
     search_pattern = str(Path(config["data_dir"]).expanduser() / "*" / safepath(filepath))
     matching_files = glob.glob(search_pattern)
     if matching_files:
         return Path(matching_files[0]).parent
     return None
+
 
 @contextmanager
 def temp_filenames(count: int, delete=True):
@@ -50,9 +30,32 @@ def temp_filenames(count: int, delete=True):
     names = []
     try:
         for _ in range(count):
-            names.append(tempfile.NamedTemporaryFile(delete=False).name)
+            names.append(tempfile.NamedTemporaryFile(delete=False).name)  # noqa: SIM115
         yield names
     finally:
         if delete:
             for name in names:
                 os.unlink(name)
+
+
+def resolve_path(path: str | Path | None) -> bool | Path:
+    """ Checks if a path points to an existing file and returns its resolved Path object. """
+    if path is None:
+        return False
+    path = Path(str(path))
+    path = path.expanduser()
+    if path.is_file():
+        return path
+    else:
+        return False
+
+
+def safepath(s: str) -> str:
+    return "".join([c for c in s if c.isalpha() or c.isdigit() or c in ' _-']).strip()
+
+if __name__ == "__main__":
+    print("-- Path Test --")
+    print("1. Search For Path")
+    print("2. resolve_path")
+    print("3. safepath")
+    print(f">> Result {safepath("KaraokePlus123_@#(!@*)_!@$")}")
