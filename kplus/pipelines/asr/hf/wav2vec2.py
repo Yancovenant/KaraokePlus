@@ -6,8 +6,8 @@ import torchaudio.functional as F
 from transformers import AutoModelForCTC, AutoProcessor
 
 from kplus import env
-from kplus.pipelines.utils import AudioNumpy, TextTiming, WordTiming
-from kplus.tools.audio import AudioInput, IndexAudioInput
+from kplus.pipelines.utils import TextTiming, WordTiming
+from kplus.tools.audio import AudioInput, IndexAudioInput, AudioNumpy
 
 from ..kwargs_utils import ASRKwargs, merge_kwargs
 from ..utils import MMS_LANGS
