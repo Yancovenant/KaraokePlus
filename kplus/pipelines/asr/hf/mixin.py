@@ -216,8 +216,8 @@ class ASRMixin:
         assert len(results) == len(offsets), f"produced asr result length missmatch, {len(results)} == len{offsets}"
         for asr_text, offset in zip(results, offsets):
             for word in asr_text.words:
-                word.start = word.start + offset
-                word.end = word.end + offset
+                word.start = word.start + offset if word.start is not None else offset
+                word.end = word.end + offset if word.start is not None else offset
         return ASRResult(texts=results)
 
     @torch.inference_mode()
