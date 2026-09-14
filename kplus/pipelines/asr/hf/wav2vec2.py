@@ -88,7 +88,7 @@ class Wav2Vec2(ASRMixin):
                 logger.debug(f"All Audio Group {audio_group.shape}")
                 for i, (num_frames, word_spans) in enumerate(align_results):
                     logger.debug(f"Audio Group {audio_group[i].shape}")
-                    ratio = audio_group[i].shape[1] / num_frames / self.sr
+                    ratio = audio_group[i].shape[-1] / num_frames / self.sr
                     parse_timestamp = lambda t, r=ratio: r * t
                     assert len(word_spans) == len(result[i].words)
                     for spans, word in zip(word_spans, result[i].words):
