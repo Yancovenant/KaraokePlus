@@ -28,6 +28,43 @@ class QwenASRKwargs(ASRKwargs):
             "n_window": 50,  # should match config.n_window
             "return_tensors": "pt"
         },
+        "generation_kwargs": {
+            "max_new_tokens": 8192,
+            "num_beams": 10,
+            
+            # max_new_tokens=self.max_new_tokens,
+#             generation_config=None,                     # : GenerationConfig | None = None,
+#             logits_processor=None,                      # : LogitsProcessorList | None = None,
+#             stopping_criteria=None,                     # : StoppingCriteriaList | None = None,
+#             prefix_allowed_tokens_fn=None,              # : Callable[[int, torch.Tensor], list[int]] | None = None,
+#             synced_gpus=None,                           # : bool | None = None,
+#             assistant_model=None,                       # : Optional["PreTrainedModel"] = None,
+#             streamer=None,                              # : Optional["BaseStreamer"] = None,
+#             negative_prompt_ids=None,                   # : torch.Tensor | None = None,
+#             negative_prompt_attention_mask=None,        # : torch.Tensor | None = None,
+#             custom_generate=None,                       # : str | Callable | None = None,
+#             **kwargs,
+
+#             # conversation: list[dict[str, str]] | list[list[dict[str, str]]],
+#             # chat_template: str | None = None,
+#             # tools: list[dict] | None = None,
+#             # documents: list[dict[str, str]] | None = None,
+#             # add_generation_prompt: bool = False,
+#             # continue_final_message: bool | str = False,
+#             # return_assistant_tokens_mask: bool = False,
+#             # tokenize: bool = False,
+#             # return_tensors: str | TensorType | None = None,
+#             # return_dict: bool = False,
+#             # load_audio_from_video: bool = False,
+#             # processor_kwargs: dict | None = None,
+#             # Other Kwargs:
+#             #   trust_remote_code: None,
+#             #   cache_implementation: "paged",
+#             #   input_ids: if inputs is None,
+#             #   num_beams: int = 1,
+#             #   max_length: int,
+#             #   min_length: int,
+        },
         "tokenizer_kwargs": {
             "return_tensors": "pt",
             "padding": True,
@@ -60,7 +97,13 @@ class QwenASR(ASRMixin):
             prompt=prompts,
             processor_kwargs=self.config["processor_kwargs"]
         ).to(device=self.model.device)
-        
+
+    @torch.no_grad()
+    def _infer(self, inputs):
+        return self.model.generate(
+            **inputs,
+            **self.config["generation_kwargs"]
+        )
 
     @torch.inference_mode()
     def _transcribe(
@@ -73,6 +116,15 @@ class QwenASR(ASRMixin):
     ) -> list[TextTiming]:
         inputs = self.inputs(audios, languages, prompts=contexts)
         outputs = self._infer(inputs)
+        generated_token_ids = outputs[:, inputs["input_ids"].shape[1]:]
+        decoded = self.processor.decode(
+            outputs[:, inputs["input_ids"].shape[1]:],
+            return_format="parsed",                     # ["raw", "parsed", "transcription_only"]
+            skip_special_tokens=None,                   # True if `return_format` != `"raw"`
+        )
+        logger.debug("Decoded", decoded)
+        transcriptions = decoded["transcription"]
+        languages = decoded["language"]
 
     @torch.inference_mode()
     def _align(
