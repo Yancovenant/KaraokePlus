@@ -76,10 +76,10 @@ class QwenASR(ASRMixin):
     force_align_model_id_or_path: str = ""
     
     def _load_model(self, model_name_or_path, **kwargs) -> None:
-        self.model = AutoModelForMultimodalLM(model_name_or_path, **kwargs).to(env.device).eval()
-        self.processor = AutoProcessor(model_name_or_path, **kwargs)
-        self.force_aligner = AutoModelForTokenClassification(self.force_align_model_id_or_path, **kwargs).to(env.device).eval()
-        self.force_aligner_processor = AutoProcessor(self.force_align_model_id_or_path, **kwargs)
+        self.model = AutoModelForMultimodalLM.from_pretrained(model_name_or_path, **kwargs).to(env.device).eval()
+        self.processor = AutoProcessor.from_pretrained(model_name_or_path, **kwargs)
+        self.force_aligner = AutoModelForTokenClassification.from_pretrained(self.force_align_model_id_or_path, **kwargs).to(env.device).eval()
+        self.force_aligner_processor = AutoProcessor.from_pretrained(self.force_align_model_id_or_path, **kwargs)
         merged_kwargs, kwargs = merge_kwargs(QwenASRKwargs, kwargs)
         self.config = QwenASRKwargs(merged_kwargs)
         if kwargs:
