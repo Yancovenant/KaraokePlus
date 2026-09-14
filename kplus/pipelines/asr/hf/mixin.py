@@ -114,6 +114,7 @@ class ASRMixin:
     
     def __init__(self, model_name_or_path: str, **kwargs) -> None:
         self.sr = 16000
+        self.lid_model = None
         self._load_model(model_name_or_path, **kwargs)
 
     def _load_model(self, model_name_or_path: str, **kwargs) -> None:

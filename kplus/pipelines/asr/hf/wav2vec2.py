@@ -6,10 +6,11 @@ import torchaudio.functional as F
 from transformers import AutoModelForCTC, AutoProcessor
 
 from kplus import env
-from kplus.pipelines.utils import TextTiming, WordTiming
+from kplus.pipelines.utils import AudioNumpy, TextTiming, WordTiming
 from kplus.tools.audio import AudioInput, IndexAudioInput
 
 from ..kwargs_utils import ASRKwargs, merge_kwargs
+from ..utils import MMS_LANGS
 from .mixin import ASRMixin
 
 logger = logging.getLogger(__name__)
@@ -36,6 +37,10 @@ class Wav2Vec2(ASRMixin):
         self.config = Wav2Vec2Kwargs(merged_kwargs)
         if kwargs:
             logger.warning(f"Unused kwargs in {type(self).__name__}: {kwargs}")
+
+    def detect_language(self, audionp: AudioNumpy, *, seek: float) -> str:
+        lang = super().detect_language(audionp, seek=seek)
+        return MMS_LANGS[lang]
 
     def inputs(self, audios: list[AudioInput]):
         return self.processor(audio=audios, sampling_rate=self.sr, **self.config["processor_kwargs"]).to(device=self.model.device)
