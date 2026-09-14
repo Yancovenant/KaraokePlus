@@ -12,6 +12,7 @@ from kplus.pipelines.utils import TextTiming, WordTiming
 from kplus.tools.audio import AudioInput, AudioNumpy, IndexAudioInput
 
 from ..kwargs_utils import ASRKwargs, merge_kwargs
+from ..utils import QWEN_LANGUAGES
 from .mixin import ASRMixin
 
 logger = logging.getLogger(__name__)
@@ -85,6 +86,10 @@ class QwenASR(ASRMixin):
         if kwargs:
             logger.warning(f"Unused kwargs in {type(self).__name__}: {kwargs}")
 
+    def detect_language(self, audionp: AudioNumpy, *, seek: float) -> str:
+        lang = super().detect_language(audionp, seek=seek)
+        return QWEN_LANGUAGES.get(lang, "en")
+    
     def inputs(
         self,
         audios: list[AudioInput],
