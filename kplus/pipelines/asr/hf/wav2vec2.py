@@ -7,7 +7,7 @@ from transformers import AutoModelForCTC, AutoProcessor
 
 from kplus import env
 from kplus.pipelines.utils import TextTiming, WordTiming
-from kplus.tools.audio import AudioInput, IndexAudioInput, AudioNumpy
+from kplus.tools.audio import AudioInput, AudioNumpy, IndexAudioInput
 
 from ..kwargs_utils import ASRKwargs, merge_kwargs
 from ..utils import MMS_LANGS
