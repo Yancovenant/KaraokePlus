@@ -60,7 +60,7 @@ class Wav2Vec2(ASRMixin):
         for lang, items in audio_groups.items():
             indices = [i for i,_ in items]
             audio_group = [audio for _,audio in items]
-            self.processor.set_target_lang(lang)
+            self.processor.tokenizer.set_target_lang(lang)
             self.model.load_adapter(lang)
             inputs = self.inputs(audio_group)
             outputs = self._infer(inputs)
@@ -149,7 +149,7 @@ class Wav2Vec2(ASRMixin):
                 indices = [i for i,_ in items]
                 audio_group = [audio for _,audio in items]
                 transcript_group = [transcripts[i] for i in indices]
-                self.processor.set_target_lang(lang)
+                self.processor.tokenizer.set_target_lang(lang)
                 self.model.load_adapter(lang)
                 inputs = self.inputs(audio_group)
                 outputs = self._infer(inputs)

@@ -101,7 +101,7 @@ from collections import defaultdict
 
 import torch
 
-from kplus.pipelines import detect_language
+from kplus.pipelines.asr import BaseASR
 from kplus.pipelines.utils import ASRResult, AudioSegment, TextTiming
 from kplus.tools.audio import Audio, AudioInput, AudioNumpy, AudioType, IndexAudioInput
 
@@ -143,7 +143,9 @@ class ASRMixin:
         raise NotImplementedError()
 
     def detect_language(self, audionp: AudioNumpy, *, seek: float) -> str:
-        return detect_language(audionp, seek=seek)
+        if not self.lid_model:
+            self.lid_model = BaseASR.from_model(whisper="large-v3", extra_models=[])
+        return self.lid_model.detect_language(audionp, seek=seek)
 
     @torch.no_grad()
     def _infer(self, inputs):
@@ -186,7 +188,7 @@ class ASRMixin:
                 lang if lang is not None
                 else self.detect_language(audio_chunk, seek=aseg.start)
             )
-
+        del self.lid_model # del after detect language finish
         return audios, offsets, langs, references
 
     @torch.inference_mode()

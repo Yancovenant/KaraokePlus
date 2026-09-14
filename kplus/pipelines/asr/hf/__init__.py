@@ -1,9 +1,18 @@
+if __name__ == "__main__":
+    import pathlib
+    import sys
+    if (project_root:=pathlib.Path(".").expanduser().resolve()) not in sys.path:
+        sys.path.insert(0, str(project_root))
+    __package__ = "kplus.pipelines.asr.hf"
+    import kplus.init
+
+
 from typing import Any, ClassVar
 
 from transformers import AutoConfig
 
-from kplus.pipelines.asr.hf.qwen_asr import QwenASR
-from kplus.pipelines.asr.hf.wav2vec2 import Wav2Vec2
+from .qwen_asr import QwenASR
+from .wav2vec2 import Wav2Vec2
 
 
 class HFModel:
@@ -32,5 +41,8 @@ if __name__ == "__main__":
     from rich.console import Console
     console = Console()
     console.rule("HF Base Test")
-    model_id = "Qwen/Qwen3-ASR-1.7B-hf"
+    # model_id = "Qwen/Qwen3-ASR-1.7B-hf"
+    model_id = "facebook/mms-1b-all"
     model = HFModel.from_pretrained(model_id)
+    from rich import inspect
+    inspect(model)
