@@ -85,7 +85,7 @@ class Wav2Vec2(ASRMixin):
             if return_timestamps:
                 emissions = logits.log_softmax(dim=-1)
                 align_results = self._align(emissions=emissions, transcripts=transcriptions)
-                logger.debug(f"All Audio Group {audio_group.shape}")
+                logger.debug(f"All Audio Group {audio_group}")
                 for i, (num_frames, word_spans) in enumerate(align_results):
                     logger.debug(f"Audio Group {audio_group[i].shape}")
                     ratio = audio_group[i].shape[-1] / num_frames / self.sr
