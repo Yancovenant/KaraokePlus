@@ -217,7 +217,7 @@ class ASRMixin:
         for asr_text, offset in zip(results, offsets):
             for word in asr_text.words:
                 word.start = word.start + offset if word.start is not None else offset
-                word.end = word.end + offset if word.start is not None else offset
+                word.end = word.end + offset if word.end is not None else offset
         return ASRResult(texts=results)
 
     @torch.inference_mode()
