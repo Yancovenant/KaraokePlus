@@ -190,6 +190,7 @@ class ASRMixin:
                 else self.detect_language(audio_chunk, seek=aseg.start)
             )
         del self.lid_model # del after detect language finish
+        self.lid_model = None
         return audios, offsets, langs, references
 
     @torch.inference_mode()
