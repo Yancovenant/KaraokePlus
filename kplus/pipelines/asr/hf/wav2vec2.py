@@ -122,8 +122,7 @@ class Wav2Vec2(ASRMixin):
             for i, norm_ref in enumerate(norm_refs):
                 token_ids = self.processor.tokenizer(norm_ref, **self.config["tokenizer_kwargs"])["input_ids"].to(dtype=torch.long, device=self.model.device)
                 # Remove spaces
-                logger.debug(f"{token_ids.shape} Shape - {token_ids}")
-                token_ids = token_ids[token_ids != self.processor.tokenizer.word_delimiter_token_id]
+                token_ids = token_ids[token_ids != self.processor.tokenizer.word_delimiter_token_id].unsqueeze(0)
                 emissions = emissions_list[i].unsqueeze(0)
                 logger.debug(f"[{i}] Aligning Emissions {emissions.shape}\nTarget: {self.processor.batch_decode(token_ids)}")
                 alignments, scores = F.forced_align(emissions, token_ids, blank=self.processor.tokenizer.pad_token_id)

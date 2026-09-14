@@ -20,8 +20,13 @@ logger = logging.getLogger(__name__)
 class QwenASRKwargs(ASRKwargs):
     _defaults = {  # noqa: RUF012
         "processor_kwargs": {
-            "return_tensors": "pt",
             "padding": True,
+            "padding_side": "left",
+            "sampling_rate": 16000,
+            "truncation": False,
+            "return_attention_mask": True,
+            "n_window": 50,  # should match config.n_window
+            "return_tensors": "pt"
         },
         "tokenizer_kwargs": {
             "return_tensors": "pt",
@@ -50,7 +55,12 @@ class QwenASR(ASRMixin):
         prompts: list[str | None],
 
     ):
-        pass
+        inputs = self.processor.apply_transcription_request(
+            audio=audios,
+            language=langs,
+            prompt=prompts,
+            processor_kwargs=self.config["processor_kwargs"]
+        )
         
 
     @torch.inference_mode()
