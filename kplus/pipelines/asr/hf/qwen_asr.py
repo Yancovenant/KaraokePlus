@@ -53,14 +53,13 @@ class QwenASR(ASRMixin):
         audios: list[AudioInput],
         langs: list[str | None],
         prompts: list[str | None],
-
     ):
-        inputs = self.processor.apply_transcription_request(
+        return self.processor.apply_transcription_request(
             audio=audios,
             language=langs,
             prompt=prompts,
             processor_kwargs=self.config["processor_kwargs"]
-        )
+        ).to(device=self.model.device)
         
 
     @torch.inference_mode()

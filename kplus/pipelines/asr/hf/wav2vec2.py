@@ -132,7 +132,8 @@ class Wav2Vec2(ASRMixin):
                 token_spans = [s for s in token_spans if s.token not in (self.processor.tokenizer.word_delimiter_token_id,)]
 
                 # Flatten
-                words = norm_ref[i].split()
+                words = norm_ref.split()
+                logger.debug(f"{words}, {norm_ref}")
                 n = [len(w) for w in words]
                 assert sum(n) == len(token_spans), f"Length Missmatch: Token {len(token_spans)} | Words {sum(n)}"
                 j, word_spans = 0, []
