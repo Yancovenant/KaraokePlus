@@ -49,7 +49,7 @@ class Wav2Vec2(ASRMixin):
 
     def detect_language(self, audionp: AudioNumpy, *, seek: float) -> str:
         lang = super().detect_language(audionp, seek=seek)
-        return MMS_LANGS[lang]
+        return MMS_LANGS.get(lang) or "eng"
 
     def inputs(self, audios: list[AudioInput]):
         return self.processor(

@@ -29,7 +29,7 @@ class ASRMixin:
 
     @torch.inference_mode()
     def _transcribe(self,
-        audios: IndexAudioInput,
+        audios: list[AudioInput],
         languages: list[str | None],
         contexts: list[str | None],
         *,
@@ -42,8 +42,6 @@ class ASRMixin:
         audios: list[AudioInput] | None = None,
         transcripts: list[str] | None = None,
         languages: list[str] | None = None,
-        *,
-        emissions: torch.Tensor | None = None,
     ) -> list[tuple[int, list]]:
         raise NotImplementedError()
 
@@ -96,7 +94,6 @@ class ASRMixin:
                 lang if lang is not None
                 else self.detect_language(audio_chunk, seek=aseg.start)
             )
-        del self.lid_model # del after detect language finish
         self.lid_model = None
         return audios, offsets, langs, references
 

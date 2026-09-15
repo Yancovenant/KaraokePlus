@@ -52,7 +52,7 @@ class QwenASR(ASRMixin):
         self.model = AutoModelForMultimodalLM.from_pretrained(model_name_or_path, **self.config["common_kwargs"]).to(env.device).eval()
         self.processor = AutoProcessor.from_pretrained(model_name_or_path, **self.config["common_kwargs"])
 
-        self.force_aligner = Wav2Vec2("facebook/mms-1b-all", **self.config["common_kwargs"])
+        self.force_aligner = None # Instance later if needed.
 
         if kwargs:
             logger.warning(f"Unused kwargs in {type(self).__name__}: {kwargs}")
@@ -137,13 +137,13 @@ class QwenASR(ASRMixin):
         audios: list[AudioInput] | None = None,
         transcripts: list[str] | None = None,
         languages: list[str] | None = None,
-        *,
-        emissions: torch.Tensor | None = None,
     ) -> list[tuple[int, list]]:
+        if self.force_aligner is None:
+            self.force_aligner = Wav2Vec2("facebook/mms-1b-all", **self.config["common_kwargs"])
         new_languages = [None] * len(languages)
         for i, lang in enumerate(languages):
             lang = REVERSE_QWEN_LANGUAGES.get(lang, "en")
-            new_languages[i] = MMS_LANGS.get(lang, "en")
+            new_languages[i] = MMS_LANGS.get(lang) or "eng"
         return self.force_aligner._align(
             audios, transcripts, new_languages
         )
