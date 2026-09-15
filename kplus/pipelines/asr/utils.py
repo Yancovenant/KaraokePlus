@@ -152,7 +152,7 @@ REVERSE_QWEN_LANGUAGES: dict[str, str] = {v: k for k, v in QWEN_LANGUAGES.items(
 MMS_LANGS = {
     # From `whisper iso` to `mms ISO 693-3`
     "en": "eng",
-    "zh": "czh", # Chinese, Huizhou
+    "zh": "hak", # Chinese, Hakka
     "de": "deu",
     "es": "spa",
     "ru": "rus",
