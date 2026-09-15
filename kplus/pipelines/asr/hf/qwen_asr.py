@@ -142,6 +142,7 @@ class QwenASR(ASRMixin):
     ) -> list[tuple[int, list]]:
         new_languages = [None] * len(languages)
         for i, lang in enumerate(languages):
+            lang = list(QWEN_LANGUAGES.keys())[list(QWEN_LANGUAGES.values()).index(lang)]
             new_languages[i] = MMS_LANGS.get(lang, None)
         return self.force_aligner._align(
             audios, transcripts, new_languages
