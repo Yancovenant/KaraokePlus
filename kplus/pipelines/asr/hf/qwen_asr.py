@@ -7,7 +7,7 @@ from transformers import (
 )
 
 from kplus import env
-from kplus.pipelines.utils import ASRResult, TextTiming, WordTiming
+from kplus.pipelines.utils import TextTiming, WordTiming
 from kplus.tools.audio import AudioInput, AudioNumpy
 
 from ..utils import MMS_LANGS, QWEN_LANGUAGES, REVERSE_QWEN_LANGUAGES, get_default_dtype
