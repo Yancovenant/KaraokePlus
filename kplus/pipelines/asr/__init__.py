@@ -68,7 +68,7 @@ def detect_language(audio: AudioType, **options) -> str:
     return lang
 
 
-def transcribe(audio: AudioType, audiosegments: list[AudioSegment], reference:str, **options) -> ASRResult:
+def transcribe(audio: AudioType, audiosegments: list[AudioSegment], reference:str, *, languages: str | list[str] | None = None, **options) -> ASRResult:
     """ Transcribe given audio file. """
     model_name_or_path = options.pop("transcribe_model_name_or_path", "Qwen/Qwen3-ASR-1.7B-hf")
     return_timestamps = options.pop("transcribe_return_timestamps", True)
@@ -77,6 +77,7 @@ def transcribe(audio: AudioType, audiosegments: list[AudioSegment], reference:st
         audio=audio,
         audiosegments=audiosegments,
         contexts=reference,
+        languages=languages,
         return_timestamps=return_timestamps
     )
     try:

@@ -104,12 +104,14 @@ class ASRMixin:
         audiosegments: AudioSegment | list[AudioSegment] | None = None,
         contexts: str | list[str] | None = None,
         *,
+        languages: str | list[str] | None = None,
         return_timestamps: bool = True,
     ) -> ASRResult:
         audionp = Audio(audio, samplerate=self.sr, channels=1).numpy
         audios, offsets, langs, texts = self.prepare_data(
             audionp,
             audiosegments,
+            languages=languages,
             references=contexts,
         )
         results = self._transcribe(
