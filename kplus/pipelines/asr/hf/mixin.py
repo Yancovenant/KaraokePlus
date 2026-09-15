@@ -59,7 +59,9 @@ class ASRMixin:
             audio_langs_map = {lang: prob for lang, prob in audio_langs}
             for lang in text_langs:
                 audio_langs_map[lang.lang] = audio_langs_map.get(lang.lang, 0.0) + lang.prob
-            return max(audio_langs_map, key=audio_langs_map.get)
+            lang = max(audio_langs_map, key=audio_langs_map.get)
+            logger.debug(f"New End Detected Language: `{lang}`")
+            return lang
         else:
             return self.lid_model.detect_language(audionp, seek=seek)
 
@@ -87,7 +89,11 @@ class ASRMixin:
             audiosegments = [AudioSegment(start=0.0, end=duration)]
         audiosegments = ensure_list(audiosegments)
         languages = ensure_list(languages)
-        references = ensure_list(references)
+        if isinstance(references, str):
+            # This can be used to detect language
+            references = [references] * len(audiosegments)
+        else:
+            references = ensure_list(references)
 
         offsets, langs, audios = [], [], []
         
@@ -95,14 +101,14 @@ class ASRMixin:
         assert len(languages) == len(audiosegments), f"Given languages length missmatch {len(languages)} == {len(audiosegments)}"
         references = references + [None] * (len(audiosegments) - len(references))
         assert len(references) == len(audiosegments), f"Given references length missmatch {len(references)} == {len(audiosegments)}"
-
-        for aseg, lang in zip(audiosegments, languages):
+        
+        for aseg, lang, ref in zip(audiosegments, languages, references):
             audio_chunk = Audio.slicenp(audionp, aseg.start, aseg.end, self.sr)
             audios.append(audio_chunk)
             offsets.append(aseg.start)
             langs.append(
                 lang if lang is not None
-                else self.detect_language(audio_chunk, seek=aseg.start)
+                else self.detect_language(audio_chunk, seek=aseg.start, reference=ref)
             )
         self.lid_model = None
         return audios, offsets, langs, references
