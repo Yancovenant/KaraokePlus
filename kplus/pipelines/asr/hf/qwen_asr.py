@@ -57,8 +57,8 @@ class QwenASR(ASRMixin):
         if kwargs:
             logger.warning(f"Unused kwargs in {type(self).__name__}: {kwargs}")
 
-    def detect_language(self, audionp: AudioNumpy, *, seek: float) -> str:
-        lang = super().detect_language(audionp, seek=seek)
+    def detect_language(self, audionp: AudioNumpy, *, seek: float, reference: str) -> str:
+        lang = super().detect_language(audionp, seek=seek, reference=reference)
         return QWEN_LANGUAGES.get(lang, "English")
     
     def inputs(
