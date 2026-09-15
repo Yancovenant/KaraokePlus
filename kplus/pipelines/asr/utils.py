@@ -147,6 +147,7 @@ QWEN_LANGUAGES: dict[str, str] = {
     "tr": "Turkish",
     "vi": "Vietnamese",
 }
+REVERSE_QWEN_LANGUAGES: dict[str, str] = {v: k for k, v in QWEN_LANGUAGES.items()}
 
 MMS_LANGS = {
     # From `whisper iso` to `mms ISO 693-3`

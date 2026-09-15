@@ -10,7 +10,7 @@ from kplus import env
 from kplus.pipelines.utils import ASRResult, TextTiming, WordTiming
 from kplus.tools.audio import AudioInput, AudioNumpy
 
-from ..utils import MMS_LANGS, QWEN_LANGUAGES, get_default_dtype
+from ..utils import MMS_LANGS, QWEN_LANGUAGES, REVERSE_QWEN_LANGUAGES, get_default_dtype
 from .kwargs_utils import ASRKwargs, merge_kwargs
 from .mixin import ASRMixin
 from .wav2vec2 import Wav2Vec2
@@ -59,7 +59,7 @@ class QwenASR(ASRMixin):
 
     def detect_language(self, audionp: AudioNumpy, *, seek: float) -> str:
         lang = super().detect_language(audionp, seek=seek)
-        return QWEN_LANGUAGES.get(lang, "en")
+        return QWEN_LANGUAGES.get(lang, "English")
     
     def inputs(
         self,
@@ -142,8 +142,8 @@ class QwenASR(ASRMixin):
     ) -> list[tuple[int, list]]:
         new_languages = [None] * len(languages)
         for i, lang in enumerate(languages):
-            lang = list(QWEN_LANGUAGES.keys())[list(QWEN_LANGUAGES.values()).index(lang)]
-            new_languages[i] = MMS_LANGS.get(lang, None)
+            lang = REVERSE_QWEN_LANGUAGES.get(lang, "en")
+            new_languages[i] = MMS_LANGS.get(lang, "en")
         return self.force_aligner._align(
             audios, transcripts, new_languages
         )
