@@ -9,8 +9,8 @@ from kplus import env
 from kplus.pipelines.utils import TextTiming, WordTiming
 from kplus.tools.audio import AudioInput, AudioNumpy, IndexAudioInput
 
-from .kwargs_utils import ASRKwargs, merge_kwargs
 from ..utils import MMS_LANGS, get_default_dtype
+from .kwargs_utils import ASRKwargs, merge_kwargs
 from .mixin import ASRMixin
 
 logger = logging.getLogger(__name__)

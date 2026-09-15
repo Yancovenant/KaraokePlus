@@ -120,8 +120,15 @@ class QwenASR(ASRMixin):
                 transcripts=[res.text for res in results],
                 languages=languages
             )
-            # Needs to return list[TextTiming]
-            return [res.text for res in align_results.texts]
+            for i, (num_frames, word_spans) in enumerate(align_results):
+                logger.debug(f"Audio Group {audios[i].shape}")
+                ratio = audios[i].shape[-1] / num_frames / self.sr
+                parse_timestamp = lambda t, r=ratio: r * t
+                assert len(word_spans) == len(results[i].words)
+                for spans, word in zip(word_spans, results[i].words):
+                    word.start=parse_timestamp(spans[0].start)
+                    word.end=parse_timestamp(spans[-1].end)
+                    word.score=self.force_aligner.make_score(spans)
         return results
 
     @torch.inference_mode()
@@ -133,4 +140,7 @@ class QwenASR(ASRMixin):
         *,
         emissions: torch.Tensor | None = None,
     ) -> list[tuple[int, list]]:
-        return self.force_aligner.align(audios, transcripts, languages)
+        return self.force_aligner._align(
+            audios, transcripts, languages
+        )
+        
