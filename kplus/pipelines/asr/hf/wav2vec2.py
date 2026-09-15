@@ -179,6 +179,7 @@ class Wav2Vec2(ASRMixin):
                 group_results = _compute_alignment(emissions, transcript_group)
                 for i, global_i in enumerate(indices):
                     results[global_i] = group_results[i]
+            return results
         elif emissions is not None:
             return _compute_alignment(emissions, transcripts)
         raise ValueError("Either `audios` or `emissions` must be provided")
