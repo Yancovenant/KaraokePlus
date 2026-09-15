@@ -1,32 +1,3 @@
-
-def ensure_list(data):
-    if not isinstance(data, list):
-        return [data]
-    return data
-
-# ReferenceType: t.TypeAlias = str | list[str] | TextTiming | list[TextTiming]
-
-
-# class QwenASR(ASRMixin):
-
-
-#     @torch.inference_mode()
-#     def _transcribe(
-#         self,
-#         audios: AudioInput | list[AudioInput],
-#         langs: str | list[str],
-#     ) -> str:
-#         inputs = self.get_asr_inputs(audios, langs, prompts=None)
-#         predictions = self._infer(inputs, **kwargs)
-#         generated_ids = output_ids[:, inputs["input_ids"].shape[1]:]
-#         decoded = self.processor.decode(
-#             output_ids[:, inputs["input_ids"].shape[1]:],
-#             return_format="parsed", # ["raw", "parsed", "transcription_only"]
-#             skip_special_tokens=None, # True if `return_format` != `"raw"`
-#         )
-#         transcriptions = decoded["transcription"]
-#         language = decoded["language"]
-
 import logging
 from collections import defaultdict
 
@@ -37,6 +8,11 @@ from kplus.pipelines.utils import ASRResult, AudioSegment, TextTiming
 from kplus.tools.audio import Audio, AudioInput, AudioNumpy, AudioType, IndexAudioInput
 
 logger = logging.getLogger(__name__)
+
+def ensure_list(data):
+    if not isinstance(data, list):
+        return [data]
+    return data
 
 class ASRMixin:
     """ Base HF ASR Model Class. """

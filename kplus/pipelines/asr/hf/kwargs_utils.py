@@ -17,6 +17,7 @@ class KwargsMixin:
 class ProcessorKwargs(TypedDict, total=False):
     return_tensors: Literal["pt", "np"]
     padding: bool
+    sampling_rate: int
 
 
 class ASRKwargs(TypedDict, total=False):

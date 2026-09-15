@@ -3,17 +3,17 @@ import logging
 import torch
 from transformers import (
     AutoModelForMultimodalLM,
-    AutoModelForTokenClassification,
     AutoProcessor,
 )
 
 from kplus import env
-from kplus.pipelines.utils import TextTiming, WordTiming
-from kplus.tools.audio import AudioInput, AudioNumpy, IndexAudioInput
+from kplus.pipelines.utils import ASRResult, TextTiming, WordTiming
+from kplus.tools.audio import AudioInput, AudioNumpy
 
-from ..kwargs_utils import ASRKwargs, merge_kwargs
-from ..utils import QWEN_LANGUAGES
+from ..utils import QWEN_LANGUAGES, get_default_dtype
+from .kwargs_utils import ASRKwargs, merge_kwargs
 from .mixin import ASRMixin
+from .wav2vec2 import Wav2Vec2
 
 logger = logging.getLogger(__name__)
 
@@ -22,53 +22,21 @@ class QwenASRKwargs(ASRKwargs):
     _defaults = {  # noqa: RUF012
         "processor_kwargs": {
             "padding": True,
-            "padding_side": "left",
             "sampling_rate": 16000,
-            "truncation": False,
-            "return_attention_mask": True,
-            "n_window": 50,  # should match config.n_window
             "return_tensors": "pt"
         },
         "generation_kwargs": {
-            "max_new_tokens": 8192,
-            "num_beams": 10,
-            
-            # max_new_tokens=self.max_new_tokens,
-#             generation_config=None,                     # : GenerationConfig | None = None,
-#             logits_processor=None,                      # : LogitsProcessorList | None = None,
-#             stopping_criteria=None,                     # : StoppingCriteriaList | None = None,
-#             prefix_allowed_tokens_fn=None,              # : Callable[[int, torch.Tensor], list[int]] | None = None,
-#             synced_gpus=None,                           # : bool | None = None,
-#             assistant_model=None,                       # : Optional["PreTrainedModel"] = None,
-#             streamer=None,                              # : Optional["BaseStreamer"] = None,
-#             negative_prompt_ids=None,                   # : torch.Tensor | None = None,
-#             negative_prompt_attention_mask=None,        # : torch.Tensor | None = None,
-#             custom_generate=None,                       # : str | Callable | None = None,
-#             **kwargs,
-
-#             # conversation: list[dict[str, str]] | list[list[dict[str, str]]],
-#             # chat_template: str | None = None,
-#             # tools: list[dict] | None = None,
-#             # documents: list[dict[str, str]] | None = None,
-#             # add_generation_prompt: bool = False,
-#             # continue_final_message: bool | str = False,
-#             # return_assistant_tokens_mask: bool = False,
-#             # tokenize: bool = False,
-#             # return_tensors: str | TensorType | None = None,
-#             # return_dict: bool = False,
-#             # load_audio_from_video: bool = False,
-#             # processor_kwargs: dict | None = None,
-#             # Other Kwargs:
-#             #   trust_remote_code: None,
-#             #   cache_implementation: "paged",
-#             #   input_ids: if inputs is None,
-#             #   num_beams: int = 1,
-#             #   max_length: int,
-#             #   min_length: int,
+            "max_new_tokens": 256,
+            "num_beams": 4,
+            "do_sample": False,
         },
-        "tokenizer_kwargs": {
-            "return_tensors": "pt",
-            "padding": True,
+        "common_kwargs": {
+            "max_inference_batch_size": 20,
+            "dtype": get_default_dtype(),
+            "device_map": (
+                "cuda:" + 
+                ("1" if torch.cuda.device_count() > 1 else "0")
+            ) if env.device.type == "cuda" else env.device.type
         }
     }
 
@@ -77,12 +45,15 @@ class QwenASR(ASRMixin):
     force_align_model_id_or_path: str = "Qwen/Qwen3-ForcedAligner-0.6B-hf"
     
     def _load_model(self, model_name_or_path, **kwargs) -> None:
-        self.model = AutoModelForMultimodalLM.from_pretrained(model_name_or_path, **kwargs).to(env.device).eval()
-        self.processor = AutoProcessor.from_pretrained(model_name_or_path, **kwargs)
-        self.force_aligner = AutoModelForTokenClassification.from_pretrained(self.force_align_model_id_or_path, **kwargs).to(env.device).eval()
-        self.force_aligner_processor = AutoProcessor.from_pretrained(self.force_align_model_id_or_path, **kwargs)
         merged_kwargs, kwargs = merge_kwargs(QwenASRKwargs, kwargs)
         self.config = QwenASRKwargs(merged_kwargs)
+        self.max_batch_size = self.config["common_kwargs"].pop("max_inference_batch_size", 32)
+        
+        self.model = AutoModelForMultimodalLM.from_pretrained(model_name_or_path, **self.config["common_kwargs"]).to(env.device).eval()
+        self.processor = AutoProcessor.from_pretrained(model_name_or_path, **self.config["common_kwargs"])
+
+        self.force_aligner = Wav2Vec2("facebook/mms-1b-all", **self.config["common_kwargs"])
+
         if kwargs:
             logger.warning(f"Unused kwargs in {type(self).__name__}: {kwargs}")
 
@@ -101,7 +72,7 @@ class QwenASR(ASRMixin):
             language=langs,
             prompt=prompts,
             processor_kwargs=self.config["processor_kwargs"]
-        ).to(device=self.model.device)
+        ).to(device=self.model.device, dtype=self.model.dtype)
 
     @torch.no_grad()
     def _infer(self, inputs):
@@ -119,17 +90,37 @@ class QwenASR(ASRMixin):
         *,
         return_timestamps: bool = True,
     ) -> list[TextTiming]:
-        inputs = self.inputs(audios, languages, prompts=contexts)
-        outputs = self._infer(inputs)
-        generated_token_ids = outputs[:, inputs["input_ids"].shape[1]:]
-        decoded = self.processor.decode(
-            outputs[:, inputs["input_ids"].shape[1]:],
-            return_format="parsed",                     # ["raw", "parsed", "transcription_only"]
-            skip_special_tokens=None,                   # True if `return_format` != `"raw"`
-        )
-        logger.debug("Decoded", decoded)
-        transcriptions = decoded["transcription"]
-        languages = decoded["language"]
+        batch_size = self.max_batch_size
+        if batch_size is None or batch_size < 0:
+            batch_size = len(audios)
+        outs: list[str] = []
+        for i in range(0, len(audios), batch_size):
+            sub_audios = audios[i: i + batch_size]
+            sub_languages = languages[i: i + batch_size]
+            sub_contexts = contexts[i: i + batch_size]
+            inputs = self.inputs(sub_audios, sub_languages, prompts=sub_contexts)
+            outputs = self._infer(inputs)
+            decoded = self.processor.decode(
+                outputs[:, inputs["input_ids"].shape[1]:],
+                return_format="transcription_only",         # ["raw", "parsed", "transcription_only"]
+                skip_special_tokens=None,                   # True if `return_format` != `"raw"`
+            )
+            outs.extend(list(decoded))
+            del inputs, outputs, decoded
+        assert len(outs) == len(languages)
+        results: list[TextTiming] = []
+        for text, lang in zip(outs, languages):
+            words = []
+            for word in text.split():
+                words.append(WordTiming(start=None, end=None, score=None, word=word))
+            results.append(TextTiming(words=words, language=lang))
+        if return_timestamps:
+            return self._align(
+                audios=audios,
+                transcripts=[res.text for res in results],
+                languages=languages
+            )
+        return ASRResult(texts=results)
 
     @torch.inference_mode()
     def _align(
@@ -140,4 +131,4 @@ class QwenASR(ASRMixin):
         *,
         emissions: torch.Tensor | None = None,
     ) -> list[tuple[int, list]]:
-        pass
+        return self.force_aligner.align(audios, transcripts, languages)

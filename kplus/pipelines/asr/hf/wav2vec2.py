@@ -9,8 +9,8 @@ from kplus import env
 from kplus.pipelines.utils import TextTiming, WordTiming
 from kplus.tools.audio import AudioInput, AudioNumpy, IndexAudioInput
 
-from ..kwargs_utils import ASRKwargs, merge_kwargs
-from ..utils import MMS_LANGS
+from .kwargs_utils import ASRKwargs, merge_kwargs
+from ..utils import MMS_LANGS, get_default_dtype
 from .mixin import ASRMixin
 
 logger = logging.getLogger(__name__)
@@ -25,16 +25,25 @@ class Wav2Vec2Kwargs(ASRKwargs):
         "tokenizer_kwargs": {
             "return_tensors": "pt",
             "padding": True,
+        },
+        "common_kwargs": {
+            "dtype": get_default_dtype(),
+            "device_map": (
+                "cuda:" + 
+                ("1" if torch.cuda.device_count() > 1 else "0")
+            ) if env.device.type == "cuda" else env.device.type
         }
     }
 
 class Wav2Vec2(ASRMixin):
     """ Meta Facebook ASR Model Class. """
     def _load_model(self, model_name_or_path: str, **kwargs) -> None:
-        self.model = AutoModelForCTC.from_pretrained(model_name_or_path, **kwargs).to(env.device).eval()
-        self.processor = AutoProcessor.from_pretrained(model_name_or_path, **kwargs)
         merged_kwargs, kwargs = merge_kwargs(Wav2Vec2Kwargs, kwargs)
         self.config = Wav2Vec2Kwargs(merged_kwargs)
+
+        self.model = AutoModelForCTC.from_pretrained(model_name_or_path, **self.config["common_kwargs"]).to(env.device).eval()
+        self.processor = AutoProcessor.from_pretrained(model_name_or_path, **self.config["common_kwargs"])
+        
         if kwargs:
             logger.warning(f"Unused kwargs in {type(self).__name__}: {kwargs}")
 
