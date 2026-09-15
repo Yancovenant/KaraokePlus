@@ -10,7 +10,7 @@ from kplus import env
 from kplus.pipelines.utils import ASRResult, TextTiming, WordTiming
 from kplus.tools.audio import AudioInput, AudioNumpy
 
-from ..utils import QWEN_LANGUAGES, get_default_dtype
+from ..utils import MMS_LANGS, QWEN_LANGUAGES, get_default_dtype
 from .kwargs_utils import ASRKwargs, merge_kwargs
 from .mixin import ASRMixin
 from .wav2vec2 import Wav2Vec2
@@ -140,7 +140,10 @@ class QwenASR(ASRMixin):
         *,
         emissions: torch.Tensor | None = None,
     ) -> list[tuple[int, list]]:
+        new_languages = [None] * len(languages)
+        for i, lang in enumerate(languages):
+            new_languages[i] = MMS_LANGS.get(lang, None)
         return self.force_aligner._align(
-            audios, transcripts, languages
+            audios, transcripts, new_languages
         )
         
