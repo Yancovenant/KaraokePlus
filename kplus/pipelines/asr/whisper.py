@@ -86,7 +86,8 @@ class WhisperASR(ASRMixin):
         language_detection_threshold: float | None = None,
         *,
         seek: float | None = None,
-    ) -> str:
+        return_probs: bool = False, # If true will return `all_langs`` instead of 1
+    ) -> str | list[tuple[str, float]]:
         """ Detect Language """
         audionp = Audio(audio, samplerate=self.sr, channels=1).numpy
         features: np.ndarray = self.model.feature_extractor(audionp, chunk_length=None)
@@ -110,6 +111,8 @@ class WhisperASR(ASRMixin):
             vad_filter=vad_filter,
             vad_parameters=vad_parameters
         )
+        if return_probs:
+            return all_langs
         logger.debug(f"Detected Language: `{lang}` ({prob})")
         return lang
 

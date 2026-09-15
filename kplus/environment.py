@@ -303,7 +303,8 @@ REQUIRED_PKG = [
         "demucs", "diffq", "sequence_align", "stable-ts", "rich", "tqdm", "requests",
         "psutil", "librosa", "matplotlib", "numpy", "onnxruntime", "onnxruntime-gpu",
         "torchcrepe", "scipy", "qwen_asr", "rich", "torchvision", "plotly",
-        "plotext", "audio-separator", "plotly_resampler", "pypinyin", "anyascii", "jellyfish"]
+        "plotext", "audio-separator", "plotly_resampler", "pypinyin", "anyascii", "jellyfish",
+        "langdetect"]
 for pkg in REQUIRED_PKG:
     setattr(environment, pkg.replace("-", "_"), make_cached_pkg_wrap_methods(pkg.replace("-", "_"), environment))
 
