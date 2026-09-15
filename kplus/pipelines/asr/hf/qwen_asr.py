@@ -115,12 +115,14 @@ class QwenASR(ASRMixin):
                 words.append(WordTiming(start=None, end=None, score=None, word=word))
             results.append(TextTiming(words=words, language=lang))
         if return_timestamps:
-            return self._align(
+            align_results = self._align(
                 audios=audios,
                 transcripts=[res.text for res in results],
                 languages=languages
             )
-        return ASRResult(texts=results)
+            # Needs to return list[TextTiming]
+            return [res.text for res in align_results.texts]
+        return results
 
     @torch.inference_mode()
     def _align(
