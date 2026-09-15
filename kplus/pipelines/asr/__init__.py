@@ -1,18 +1,15 @@
 from __future__ import annotations
 
 import typing as t
-#from transformers import AutoProcessor, AutoModelForCTC
-import torchaudio.functional as F
 
-from kplus import env
-
-env.torch  # noqa: B018
 import torch
 
+from kplus import env
 from kplus.pipelines.utils import ASRResult
 from kplus.tools import filter_known_kwargs
 
-from .base import MMS_FA, ASRMixin
+from .base import MMS_FA
+from .hf import HFModel
 from .qwen import QwenASR
 from .whisper import WhisperASR
 
@@ -20,10 +17,12 @@ if t.TYPE_CHECKING:
     from kplus.pipelines.utils import AudioSegment
     from kplus.tools.audio import AudioType
 
+    from .hf.mixin import ASRMixin
+
+
 __all__ = [
     "align",
     "detect_language",
-    "multi_align",
     "transcribe",
 ]
 
@@ -35,7 +34,7 @@ class BaseASR:
         "mms_fa": MMS_FA
     }
     @classmethod
-    def from_model(cls, **options) -> ASRMixin:
+    def from_model(cls, **options):
         whisper_modelname = options.pop("whisper", None)
         qwen_modelname = options.pop("qwen", None)
         is_mms = options.pop("mms_fa", None)
@@ -58,18 +57,9 @@ class BaseASR:
         )
         return modelclass(modelname, **options)
 
-class HFCTCModel:
-    """ Base Class for hf ctc model. """
-
-    @classmethod
-    def from_pretrained(cls, model_id: str, **kwargs) -> CTCMixin:
-        model = AutoModelForCTC.from_pretrained(model_id, **kwargs)
-        processor = AutoProcessor.from_pretrained(model_id, **kwargs)
-        return CTCMixin(model_id, model, processor, **kwargs)
-    
 
 def detect_language(audio: AudioType, **options) -> str:
-    """ Detect language """
+    """ Detect language. """
     transcriber: WhisperASR = BaseASR.from_model(whisper="large-v3", extra_models=[])
     detection_params, options = filter_known_kwargs(transcriber.detect_language, options)
     lang = transcriber.detect_language(audio, **detection_params)
@@ -79,27 +69,38 @@ def detect_language(audio: AudioType, **options) -> str:
 
 
 def transcribe(audio: AudioType, audiosegments: list[AudioSegment], reference:str, **options) -> ASRResult:
-    """ Transcribe given audio file """
-    transcriber = BaseASR.from_model(**options)
-    result = transcriber.transcribe(audio, audiosegments, reference, **options)
-    del transcriber.model, transcriber
+    """ Transcribe given audio file. """
+    model_name_or_path = options.pop("transcribe_model_name_or_path", "Qwen/Qwen3-ASR-1.7B-hf")
+    return_timestamps = options.pop("transcribe_return_timestamps", True)
+    transcriber: ASRMixin = HFModel.from_pretrained(model_name_or_path, **options)
+    result = transcriber.transcribe(
+        audio=audio,
+        audiosegments=audiosegments,
+        contexts=reference,
+        return_timestamps=return_timestamps
+    )
+    try:
+        del transcriber.model, transcriber.processor, transcriber
+    except:  # noqa: E722, S110
+        pass
     env.clean()
     return result
 
 
-def align(audio: AudioType, transcriptions: ASRResult, reference: str, audiosegments: list[AudioSegment], **options):
+def align(audio: AudioType, transcriptions: ASRResult, audiosegments: list[AudioSegment], **options):
     """ Single Align """
     with torch.inference_mode():
-        aligner = BaseASR.from_model(**options)
-        result = aligner.align(audio, transcriptions, reference, audiosegments, **options)
-    del aligner.model, aligner
+        model_name_or_path = options.pop("align_model_name_or_path", "facebook/mms-1b-all")
+        aligner: ASRMixin = HFModel.from_pretrained(model_name_or_path, **options)
+        result = aligner.align(
+            audio=audio,
+            audiosegments=audiosegments,
+            hypothesis=transcriptions.texts,
+            languages=None,
+        )
+    try:
+        del aligner.model, aligner.processor, aligner
+    except:  # noqa: E722, S110
+            pass
     env.clean()
     return result
-
-def multi_align(audio: AudioType, transcriptions: ASRResult, reference: str, audiosegments: list[AudioSegment], **options):
-    """ Multiple Model Alignment """
-    for name in ("whisper", "qwen", "mms_fa"): options.pop(name, None)
-    whisper_align = align(audio, transcriptions, reference, audiosegments, whisper="large-v3", extra_models=[], **options)
-    qwen_align = align(audio, transcriptions, reference, audiosegments, qwen="Qwen/Qwen3-ASR-1.7B", **options)
-    mms_align = align(audio, transcriptions, reference, audiosegments, mms_fa=True, **options)
-    return whisper_align, qwen_align, mms_align
