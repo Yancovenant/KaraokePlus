@@ -52,7 +52,11 @@ class Wav2Vec2(ASRMixin):
         return MMS_LANGS[lang]
 
     def inputs(self, audios: list[AudioInput]):
-        return self.processor(audio=audios, sampling_rate=self.sr, **self.config["processor_kwargs"]).to(device=self.model.device)
+        return self.processor(
+            audio=audios,
+            sampling_rate=self.sr,
+            **self.config["processor_kwargs"]
+        ).to(device=self.model.device, dtype=self.model.dtype)
 
     @torch.no_grad()
     def _infer(self, inputs) -> t.Any:
