@@ -54,6 +54,7 @@ class Tokens:
                 line_idx=i, language=None,
             ) for i, line in enumerate(lines)
             for word in line.split()
+            if normalizekaldi(word).strip()
         ]
         return cls(tokens=tokens, lines=lines)
 
