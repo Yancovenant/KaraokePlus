@@ -116,7 +116,20 @@ class Wav2Vec2(ASRMixin):
             ratio = len(audio_lists[i]) / num_frames / self.sr
             # MMS FA Uses 20ms, todo find a better way to get it. since the stride ratio is not correct yet
             parse_timestamp = lambda t: t * 0.02
-            assert len(word_spans) == len(result[i].words)
+            assert len(word_spans) == len(result[i].words), (
+                f"WordSpan Length: {len(word_spans)}\n"
+                f"Actual Words Length: {len(result[i].words)}\n"
+                f"WordSpan: {[
+                    ''.join(
+                        self.processor.decode(span.token)
+                    )
+                    for spans in word_spans
+                    for span in spans
+                ]}\n"
+                f"Actual Words: {[
+                    w.word for w in result[i].words
+                ]}\n"
+            )
             for spans, word in zip(word_spans, result[i].words):
                 word.start=parse_timestamp(spans[0].start)
                 word.end=parse_timestamp(spans[-1].end)

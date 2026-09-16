@@ -132,7 +132,7 @@ class ASRResult:
         "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
     )
 
-    def populate_ass(self):
+    def populate_ass(self) -> ASRResult:
         prev_end = 0.0
         n_segments = len(self.texts)
         for i, current in enumerate(self.texts):
