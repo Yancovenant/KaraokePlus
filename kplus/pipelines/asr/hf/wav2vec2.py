@@ -127,10 +127,8 @@ class Wav2Vec2(ASRMixin):
         *,
         emissions: torch.Tensor | list[torch.Tensor] | None = None,
     ) -> list[tuple[int, list]]:
-        emissions = ensure_list(emissions)
-        def _compute_alignment(emissions_list: list[torch.Tensor], refs: list[str]) -> list:
-            emissions_list = ensure_list(emissions_list)
-            assert len(emissions_list) == len(refs), f"Emission and ref length missmatch, {len(emissions_list)} == {len(refs)}"
+        def _compute_alignment(emissions_list: torch.Tensor, refs: list[str]) -> list:
+            assert emissions_list.size(0) == len(refs), f"Emission and ref length missmatch, {len(emissions_list)} == {len(refs)}"
             norm_func = str.lower if "mms" in self.model.name_or_path else str.upper
             norm_refs = [norm_func(ref) for ref in refs]
             # `torchaudio.functional` alignment support batch == 1 only.
