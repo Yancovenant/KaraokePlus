@@ -4,8 +4,8 @@ from collections import defaultdict
 import torch
 
 from kplus import env
-from kplus.pipelines.utils import ASRResult, AudioSegment, TextTiming
 from kplus.pipelines.asr.utils import ensure_list
+from kplus.pipelines.utils import ASRResult, AudioSegment, TextTiming
 from kplus.tools.audio import Audio, AudioInput, AudioNumpy, AudioType, IndexAudioInput
 
 logger = logging.getLogger(__name__)
@@ -86,11 +86,9 @@ class ASRMixin:
             audiosegments = [AudioSegment(start=0.0, end=duration)]
         audiosegments = ensure_list(audiosegments)
         languages = ensure_list(languages)
-        if isinstance(references, str):
-            # This can be used to detect language
-            references = [references] * len(audiosegments)
-        else:
-            references = ensure_list(references)
+        # This can be used to detect language
+        lang_ref = references if isinstance(references, str) else None
+        references = ensure_list(references)
 
         offsets, langs, audios = [], [], []
         
@@ -104,8 +102,8 @@ class ASRMixin:
             audios.append(audio_chunk)
             offsets.append(aseg.start)
             langs.append(
-                lang if lang is not None
-                else self.detect_language(audio_chunk, seek=aseg.start, reference=ref)
+                lang if (lang is not None or lang != "auto")
+                else self.detect_language(audio_chunk, seek=aseg.start, reference=ref or lang_ref)
             )
         self.lid_model = None
         return audios, offsets, langs, references
