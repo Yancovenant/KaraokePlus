@@ -151,7 +151,7 @@ class Wav2Vec2(ASRMixin):
                 for l in n:
                     word_spans.append(token_spans[j:j+l])
                     j+=l
-                num_frames = emissions.size(1)
+                num_frames = local_emissions.size(1)
                 results.append((num_frames, word_spans)) # word_spans == list[TokenSpan(start, end, token, score)]
             # Returning list[list[tuple[int, TokenSpan]]]
             # since we can't calculate its timestamp without enough data
