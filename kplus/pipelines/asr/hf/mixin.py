@@ -102,7 +102,7 @@ class ASRMixin:
             audios.append(audio_chunk)
             offsets.append(aseg.start)
             langs.append(
-                lang if (lang is not None or lang != "auto")
+                lang if lang not in (None, "auto")
                 else self.detect_language(audio_chunk, seek=aseg.start, reference=ref or lang_ref)
             )
         self.lid_model = None
