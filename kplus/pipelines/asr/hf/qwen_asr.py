@@ -81,6 +81,14 @@ class QwenASR(ASRMixin):
             **self.config["generation_kwargs"]
         )
 
+    def populate_timestamp(
+        self,
+        audio_lists: list[AudioInput],
+        align_results: list[tuple[int, list]],
+        result: list[TextTiming]
+    ) -> list[TextTiming]:
+        return self.force_aligner.populate_timestamp(audio_lists, align_results, result)
+
     @torch.inference_mode()
     def _transcribe(
         self,
@@ -120,15 +128,7 @@ class QwenASR(ASRMixin):
                 transcripts=[res.text for res in results],
                 languages=languages
             )
-            for i, (num_frames, word_spans) in enumerate(align_results):
-                logger.debug(f"Audio Group {audios[i].shape}")
-                ratio = audios[i].shape[-1] / num_frames / self.sr
-                parse_timestamp = lambda t, r=ratio: r * t
-                assert len(word_spans) == len(results[i].words)
-                for spans, word in zip(word_spans, results[i].words):
-                    word.start=parse_timestamp(spans[0].start)
-                    word.end=parse_timestamp(spans[-1].end)
-                    word.score=self.force_aligner.make_score(spans)
+            results = self.force_aligner.populate_timestamp(audios, align_results, results)
         return results
 
     @torch.inference_mode()

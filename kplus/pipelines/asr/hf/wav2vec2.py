@@ -98,22 +98,30 @@ class Wav2Vec2(ASRMixin):
             if return_timestamps:
                 emissions = logits.log_softmax(dim=-1)
                 align_results = self._align(emissions=emissions, transcripts=transcriptions)
-                logger.debug(f"All Audio Group {audio_group}")
-                for i, (num_frames, word_spans) in enumerate(align_results):
-                    logger.debug(f"Audio Group {audio_group[i].shape}")
-                    ratio = audio_group[i].shape[-1] / num_frames / self.sr
-                    parse_timestamp = lambda t, r=ratio: r * t
-                    assert len(word_spans) == len(result[i].words)
-                    for spans, word in zip(word_spans, result[i].words):
-                        word.start=parse_timestamp(spans[0].start)
-                        word.end=parse_timestamp(spans[-1].end)
-                        word.score=self.make_score(spans)
+                result = self.populate_timestamp(audio_group, align_results, result)
             assert len(result) == len(indices)
             for i, res in zip(indices, result):
                 asr_results[i] = res
         logger.debug(asr_results)
         assert len(asr_results) == len(languages), f"transcript result length missmatch {len(asr_results)} == {len(languages)}"
         return asr_results
+
+    def populate_timestamp(
+        self,
+        audio_lists: list[AudioInput],
+        align_results: list[tuple[int, list]],
+        result: list[TextTiming]
+    ) -> list[TextTiming]:
+        for i, (num_frames, word_spans) in enumerate(align_results):
+            ratio = len(audio_lists[i]) / num_frames / self.sr
+            # MMS FA Uses 20ms, todo find a better way to get it. since the stride ratio is not correct yet
+            parse_timestamp = lambda t: t * 0.02
+            assert len(word_spans) == len(result[i].words)
+            for spans, word in zip(word_spans, result[i].words):
+                word.start=parse_timestamp(spans[0].start)
+                word.end=parse_timestamp(spans[-1].end)
+                word.score=self.make_score(spans)
+        return result
 
     def make_score(self, spans) -> float:
         return sum(s.score * len(s) for s in spans) / sum(len(s) for s in spans)

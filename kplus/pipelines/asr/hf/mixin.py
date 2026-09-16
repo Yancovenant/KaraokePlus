@@ -66,6 +66,14 @@ class ASRMixin:
     def _infer(self, inputs):
         raise NotImplementedError()
 
+    def populate_timestamp(
+        self,
+        audio_lists: list[AudioInput],
+        align_results: list[tuple[int, list]],
+        result: list[TextTiming]
+    ) -> list[TextTiming]:
+        raise NotImplementedError()
+
     ## Helper
     def group_by_language(self, audios: list[AudioInput], languages: list[str | None]) -> dict[str | None, IndexAudioInput]:
         groups = defaultdict(list)
@@ -162,19 +170,14 @@ class ASRMixin:
             languages=langs,
         )
         assert len(results) == len(offsets), f"produced asr result length missmatch, {len(results)} == len{offsets}"
-        for i, ((num_frames, word_spans), offset, lang) in enumerate(zip(results, offsets, langs)):
-            audio = audios[i]
-            ratio = audio.shape[-1] / num_frames / self.sr
-            parse_timestamp = lambda t, r=ratio: r * t
-            assert len(word_spans) == len(hypothesis[i].words)
-            for spans, word in zip(word_spans, hypothesis[i].words):
-                word.start=parse_timestamp(spans[0].start) + offset
-                word.end=parse_timestamp(spans[-1].end) + offset
-                word.score=self.make_score(spans)
+        hypothesis = self.populate_timestamp(audios, results, results)
+        for i, (offset, lang) in enumerate(zip(offsets, langs)):
+            for word in hypothesis[i].words:
+                word.start=word.start + offset
+                word.end=word.end + offset
             if (ori_lang:=hypothesis[i].language) != lang:
                 logger.warning(f"Alignment result Language is different: ori {ori_lang} != {lang}")
 
-                
         return ASRResult(texts=hypothesis)
 
 
