@@ -170,7 +170,7 @@ class ASRMixin:
             languages=langs,
         )
         assert len(results) == len(offsets), f"produced asr result length missmatch, {len(results)} == len{offsets}"
-        hypothesis = self.populate_timestamp(audios, results, results)
+        hypothesis = self.populate_timestamp(audios, results, hypothesis)
         for i, (offset, lang) in enumerate(zip(offsets, langs)):
             for word in hypothesis[i].words:
                 word.start=word.start + offset
