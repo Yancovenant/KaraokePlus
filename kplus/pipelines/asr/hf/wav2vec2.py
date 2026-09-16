@@ -135,16 +135,12 @@ class Wav2Vec2(ASRMixin):
             assert len(norm_refs) == emissions_list.size(0) # Size 0 is [batch]
             results = []
             for i, norm_ref in enumerate(norm_refs):
-                token_ids = self.processor.tokenizer(norm_ref, **self.config["tokenizer_kwargs"])["input_ids"].to(dtype=torch.long, device=self.model.device)
-                # Remove spaces
-                token_ids = token_ids[token_ids != self.processor.tokenizer.word_delimiter_token_id].unsqueeze(0)
+                token_ids = self.processor.tokenizer(norm_ref.replace(" ", ""), **self.config["tokenizer_kwargs"])["input_ids"].to(dtype=torch.long, device=self.model.device)
                 emissions = emissions_list[i].unsqueeze(0)
                 logger.debug(f"[{i}] Aligning Emissions {emissions.shape}\nTarget: {self.processor.batch_decode(token_ids)}")
                 alignments, scores = F.forced_align(emissions, token_ids, blank=self.processor.tokenizer.pad_token_id)
                 scores = scores.exp()
                 token_spans = F.merge_tokens(alignments[0], scores[0], blank=self.processor.tokenizer.pad_token_id)
-                # Remove spaces
-                token_spans = [s for s in token_spans if s.token not in (self.processor.tokenizer.word_delimiter_token_id,)]
 
                 # Flatten
                 words = norm_ref.split()
