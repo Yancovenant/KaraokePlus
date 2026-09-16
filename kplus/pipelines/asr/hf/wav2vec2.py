@@ -172,6 +172,7 @@ class Wav2Vec2(ASRMixin):
                 outputs = self._infer(inputs)
                 logits = outputs.logits
                 emissions = logits.log_softmax(dim=-1)
+                logger.debug(f"Alignment aligning, {lang} of audio length, {len(transcript_group)}")
                 group_results = _compute_alignment(emissions, transcript_group)
                 for i, global_i in enumerate(indices):
                     results[global_i] = group_results[i]
