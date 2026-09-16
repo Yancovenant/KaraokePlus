@@ -164,7 +164,7 @@ class ASRMixin:
         assert len(results) == len(offsets), f"produced asr result length missmatch, {len(results)} == len{offsets}"
         for i, ((num_frames, word_spans), offset, lang) in enumerate(zip(results, offsets, langs)):
             audio = audios[i]
-            ratio = audio.size(1) / num_frames / self.sr
+            ratio = audio.shape[-1] / num_frames / self.sr
             parse_timestamp = lambda t, r=ratio: r * t
             assert len(word_spans) == len(hypothesis[i].words)
             for spans, word in zip(word_spans, hypothesis[i].words):
