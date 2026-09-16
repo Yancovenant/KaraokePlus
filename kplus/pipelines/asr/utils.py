@@ -2,6 +2,7 @@ import torch
 
 __all__ = [
     "get_default_dtype",
+    "ensure_list",
 ]
 
 def get_default_dtype() -> torch.dtype:
@@ -10,6 +11,11 @@ def get_default_dtype() -> torch.dtype:
             return torch.bfloat16
         return torch.float16
     return torch.float32
+
+def ensure_list(data):
+    if not isinstance(data, list):
+        return [data]
+    return data
 
 
 WHISPER_LANGUAGES = {

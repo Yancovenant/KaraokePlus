@@ -5,14 +5,11 @@ import torch
 
 from kplus import env
 from kplus.pipelines.utils import ASRResult, AudioSegment, TextTiming
+from kplus.pipelines.asr.utils import ensure_list
 from kplus.tools.audio import Audio, AudioInput, AudioNumpy, AudioType, IndexAudioInput
 
 logger = logging.getLogger(__name__)
 
-def ensure_list(data):
-    if not isinstance(data, list):
-        return [data]
-    return data
 
 class ASRMixin:
     """ Base HF ASR Model Class. """

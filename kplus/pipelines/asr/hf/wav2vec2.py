@@ -9,7 +9,7 @@ from kplus import env
 from kplus.pipelines.utils import TextTiming, WordTiming
 from kplus.tools.audio import AudioInput, AudioNumpy, IndexAudioInput
 
-from ..utils import MMS_LANGS, get_default_dtype
+from ..utils import MMS_LANGS, ensure_list, get_default_dtype
 from .kwargs_utils import ASRKwargs, merge_kwargs
 from .mixin import ASRMixin
 
@@ -125,9 +125,11 @@ class Wav2Vec2(ASRMixin):
         transcripts: list[str] | None = None,
         languages: list[str] | None = None,
         *,
-        emissions: torch.Tensor | None = None,
+        emissions: torch.Tensor | list[torch.Tensor] | None = None,
     ) -> list[tuple[int, list]]:
-        def _compute_alignment(emissions_list: torch.Tensor, refs: list[str]) -> list:
+        emissions = ensure_list(emissions)
+        def _compute_alignment(emissions_list: list[torch.Tensor], refs: list[str]) -> list:
+            emissions_list = ensure_list(emissions_list)
             assert len(emissions_list) == len(refs), f"Emission and ref length missmatch, {len(emissions_list)} == {len(refs)}"
             norm_func = str.lower if "mms" in self.model.name_or_path else str.upper
             norm_refs = [norm_func(ref) for ref in refs]
@@ -136,9 +138,9 @@ class Wav2Vec2(ASRMixin):
             results = []
             for i, norm_ref in enumerate(norm_refs):
                 token_ids = self.processor.tokenizer(norm_ref.replace(" ", ""), **self.config["tokenizer_kwargs"])["input_ids"].to(dtype=torch.long, device=self.model.device)
-                emissions = emissions_list[i].unsqueeze(0)
-                logger.debug(f"[{i}] Aligning Emissions {emissions.shape}\nTarget: {self.processor.batch_decode(token_ids)}")
-                alignments, scores = F.forced_align(emissions, token_ids, blank=self.processor.tokenizer.pad_token_id)
+                local_emissions = emissions_list[i].unsqueeze(0)
+                logger.debug(f"[{i}] Aligning Emissions {local_emissions.shape}\nTarget: {self.processor.batch_decode(token_ids)}")
+                alignments, scores = F.forced_align(local_emissions, token_ids, blank=self.processor.tokenizer.pad_token_id)
                 scores = scores.exp()
                 token_spans = F.merge_tokens(alignments[0], scores[0], blank=self.processor.tokenizer.pad_token_id)
 
