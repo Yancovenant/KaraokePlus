@@ -135,7 +135,7 @@ class ASRResult:
 
     def populate_ass(self) -> ASRResult:
         n_segments = len(self.texts)
-        
+
         # Text Gap
         gaps = []
         for i in range(n_segments - 1):
@@ -177,7 +177,7 @@ class ASRResult:
             total_word_dur = 0
             for j, word in enumerate(text.words):
                 dur_cs = max(0.0, round(word.duration * 100))
-                tokens = f"{{\\kf{dur_cs}}}{word.word.strip()}"
+                tokens = f"{{\\kf{dur_cs}}}{word.word.strip()} "
                 if j == 0:
                     prev_gap = word.start - padded_start
                 else:
