@@ -156,12 +156,12 @@ class ASRResult:
             if i == n_segments - 1:
                 pad_end = 1.0 # just add 1.0s
             else:
-                pad_end = sliced_gaps[i][0]
+                pad_end = min(sliced_gaps[i][0], 1.0)
             padded_end = round(text.end + pad_end, 2)
             if i == 0:
                 pad_start = 0.8
             else:
-                pad_start = sliced_gaps[i-1][1]
+                pad_start = min(sliced_gaps[i-1][1], 0.8)
             padded_start = max(0.0, round(text.start - pad_start, 2))
 
             # Effect
