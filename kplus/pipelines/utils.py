@@ -134,55 +134,77 @@ class ASRResult:
     )
 
     def populate_ass(self) -> ASRResult:
-        prev_end = 0.0
         n_segments = len(self.texts)
-        for i, current in enumerate(self.texts):
-            if not current.words: continue
-            # Pad calculation
-            pad_start = max(0.0, current.start - 0.8, prev_end)
-            if i < n_segments - 1:
-                after_start = self.texts[i+1].start
-                gap2next = max(0.0, after_start - current.end)
-                pad_end = current.end + min(gap2next * 0.7, 1.5) # max 1.5s
-            else: # Last segment just do add 1s
-                pad_end = current.end + 1.0
-            prev_end = pad_end
+        
+        # Text Gap
+        gaps = []
+        for i in range(n_segments - 1):
+            next_start = float(round(self.texts[i+1].start, 2))
+            current_end = float(round(self.texts[i].end, 2))
+            gap = round(next_start - current_end, 2)
+            gaps.append(gap)
+        assert len(gaps) == n_segments - 1
+
+        # Populating Gaps
+        sliced_gaps = []
+        for gap in gaps:
+            start_gap = round(gap * 0.3, 2)
+            end_gap = round(gap - start_gap, 2)
+            sliced_gaps.append((start_gap, end_gap))
+        
+        for i, text in enumerate(self.texts):
+            if i == n_segments - 1:
+                pad_end = 1.0 # just add 1.0s
+            else:
+                pad_end = sliced_gaps[i][0]
+            padded_end = round(text.end + pad_end, 2)
+            if i == 0:
+                pad_start = 0.8
+            else:
+                pad_start = sliced_gaps[i-1][1]
+            padded_start = max(0.0, round(text.start - pad_start, 2))
+
             # Effect
-            fade_in_ms = max(0, min(300, int((current.start - pad_start) * 1000)))
-            fade_out_ms = max(0, min(300, int((pad_end - current.end) * 1000)))
-            is_cjk = bool(RE_CJK.search(current.text))
+            fade_in_ms = max(0, min(300, int((text.start - padded_start) * 1000))) # 300ms max to show text before highlighting
+            fade_out_ms = max(0, min(300, int((padded_end - text.end) * 1000))) # 300ms max to hide text before next word
+
+            # TODO: Find better way
+            is_cjk = bool(RE_CJK.search(text.text))
             style = "CJK_Duet" if is_cjk else "Lat_Duet"
-            # Word Token
+            
+            # Karaoke Content
             k_tokens = []
-            for w_idx, word in enumerate(current.words):
-                if w_idx < len(current.words) - 1:
-                    gap2nextword = max(0.0, current.words[w_idx + 1].start - word.end)
-                else: # Last word
-                    gap2nextword = max(0.0, pad_end - word.end)
-                if w_idx == 0:
-                    prev_word_ts = pad_start
+            total_word_dur = 0
+            for j, word in enumerate(text.words):
+                dur_cs = max(0.0, round(word.duration * 100))
+                tokens = f"{{\\kf{dur_cs}}}{word.word.strip()}"
+                if j == 0:
+                    prev_gap = word.start - padded_start
                 else:
-                    prev_word_ts = current.words[w_idx - 1].end
-                wait_end_sec = word.end + min(gap2nextword * 0.7, 0.6)
-                wait_start_sec = max(word.start - 0.3, prev_word_ts)
-                gap_start_sec = max(0.0, word.start - wait_start_sec)
-                gap_end_sec = max(0.0, wait_end_sec - word.end)
-                dur_start_cs = max(0, round(gap_start_sec * 100))
-                dur_end_cs = max(0, round(gap_end_sec * 100))
-                dur_sec = max(0.0, word.end - word.start)
-                dur_cs = max(0, round(dur_sec * 100))
-                k_tokens.append(
-                    f"{{\\kf{dur_start_cs}}}"
-                    f"{{\\kf{dur_cs}}}{word.word.strip()}"
-                    f"{{\\kf{dur_end_cs}}} "
-                )
+                    prev_gap = word.start - text.words[j-1].end
+
+                dur_start_cs = max(0.0, round(prev_gap * 100))
+                tokens = f"{{\\kf{dur_start_cs}}}" + tokens
+                total_dur = dur_cs + dur_start_cs
+
+                if j == len(text.words) - 1:
+                    next_gap = padded_end - word.end
+                    dur_end_cs = max(0.0, round(next_gap * 100))
+                    tokens = tokens + f"{{\\kf{dur_end_cs}}} "
+                    total_dur += dur_end_cs
+                
+                k_tokens.append(tokens)
+                total_word_dur += total_dur
+            assert total_word_dur == round((padded_end - padded_start) * 100)
+
             karaoke_content = "".join(k_tokens)
-            current.ass_event = (
-                f"Dialogue: 0,{sec2ass(pad_start)},{sec2ass(pad_end)},"
+            text.ass_event = (
+                f"Dialogue: 0,{sec2ass(padded_start)},{sec2ass(padded_end)},"
                 f"{style},,0,0,0,,"
                 f"{{\\fad({fade_in_ms},{fade_out_ms})}}"
                 f"{{\\an2}}{karaoke_content}"
             )
+
         return self
 
 
