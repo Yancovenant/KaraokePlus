@@ -190,7 +190,7 @@ class ASRResult:
                 if j == len(text.words) - 1:
                     next_gap = padded_end - word.end
                     dur_end_cs = max(0.0, round(next_gap * 100))
-                    tokens = tokens + f"{{\\kf{dur_end_cs}}} "
+                    tokens = tokens + f"{{\\kf{dur_end_cs}}}"
                     total_dur += dur_end_cs
                 
                 k_tokens.append(tokens)
