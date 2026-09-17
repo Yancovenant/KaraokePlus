@@ -46,6 +46,7 @@ class Tokens:
     
     @classmethod
     def from_reference(cls, reference: str) -> Tokens:
+        reference = normalizekaldi(reference)
         lines = [line.strip() for line in reference.split("\n") if line.strip() and not line.startswith('[')]
         tokens = [ # List of WordTiming [(Word),(Word),(Word)]
             Token(

@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 from kplus.tools import rich
 from kplus.tools.audio import Audio, _HumanTime, _TimingMixin
-from kplus.tools.text import RomajiPhonetic, get_phonetic
+from kplus.tools.text import RomajiPhonetic, get_phonetic, normalizekaldi
 
 if t.TYPE_CHECKING:
     from kplus.tools.audio import AudioNumpy
@@ -100,6 +100,7 @@ class ASRResult:
     texts: list[TextTiming]
 
     def to_line_idx(self, reference: str) -> ASRResult:
+        reference = normalizekaldi(reference)
         lines = [line.strip() for line in reference.split("\n") if line.strip() and not line.startswith('[')]
         clusters, i = [], 0
         n = [len(line.split()) for line in lines]
