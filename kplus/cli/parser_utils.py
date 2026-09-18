@@ -1,5 +1,9 @@
+from __future__ import annotations
 
-from kplus.tools import RichArgumentParser
+import typing as t
+
+if t.TYPE_CHECKING:
+    from kplus.tools.rich_helper import RichArgumentParser
 
 
 class Options:

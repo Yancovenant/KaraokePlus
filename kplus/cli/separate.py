@@ -1,7 +1,7 @@
 import logging
 import sys
 
-from kplus.pipelines import VisualizeWaveform, ensure_file, separate_song, transcribe
+from kplus.pipelines import ensure_file, separate_song, transcribe
 from kplus.tools import config, rich
 
 from .command import Command

@@ -1,30 +1,19 @@
 import logging
-import subprocess
 import sys
-from pathlib import Path
-from types import SimpleNamespace
 from typing import TYPE_CHECKING
 
-from kplus.environment import env
+from kplus import env
 from kplus.pipelines import (
-    AAD,
-    AlignerAny,
-    ReferenceAligner,
-    SeparatorMixin,
-    TimestampRefiner,
-    Transcriber,
-    get_track_file,
     align2ref,
 )
-from kplus.pipelines.utils import AudioLoader
 from kplus.tools.config import config
 from kplus.tools.render import Render
 
 from .command import Command
+from .parser_utils import KaraokeOptions
 
 if TYPE_CHECKING:
-    from kplus.pipelines.aad import AudioSegment
-    from kplus.pipelines.transcriber import Result
+    from kplus.pipelines.utils import ASRResult, AudioSegment
 
 logger = logging.getLogger(__name__)
 

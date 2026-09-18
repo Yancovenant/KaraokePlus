@@ -1,5 +1,3 @@
-if __name__ == "__main__":
-    import kplus.init
 import difflib
 import re
 import string
@@ -82,4 +80,7 @@ def token_similarity(left: str, right: str) -> float:
     return len(intersection) / len(left_tokens)
 
 if __name__ == "__main__":
+    from . import rich
     print("-- Text Tools Test --")
+    print("1. Get Phonetic")
+    print(f"{rich.inspect(get_phonetic("Hello"))}")

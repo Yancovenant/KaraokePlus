@@ -10,7 +10,6 @@ from requests.exceptions import HTTPError
 
 from kplus import env
 from kplus.tools import rich
-from kplus.tools.text import similarity, token_similarity
 
 logger = logging.getLogger(__name__)
 
@@ -94,6 +93,7 @@ class LyricsCandidate:
         return 0.0
 
     def make_score(self, title: str, artist: str, duration: float) -> None:
+        from kplus.tools.text import similarity, token_similarity  # Lazy import
         self.title_score = similarity(title, self.title)
         self.artist_score = similarity(artist, self.artist)
         self.duration_score = self._duration_score(duration, self.duration)

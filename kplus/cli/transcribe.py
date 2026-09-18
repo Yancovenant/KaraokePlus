@@ -1,6 +1,9 @@
 import logging
 import sys
 
+#from kplus.pipelines import AAD, Transcriber, get_track_file
+#from kplus.pipelines.aligner import ReferenceAligner
+from kplus import config
 from kplus.pipelines import (
     align2ref,
     detect_audio_activity,
@@ -8,10 +11,6 @@ from kplus.pipelines import (
     separate_song,
     transcribe,
 )
-
-#from kplus.pipelines import AAD, Transcriber, get_track_file
-#from kplus.pipelines.aligner import ReferenceAligner
-from kplus.tools import RichArgumentParser, config
 
 from .command import Command
 from .parser_utils import TranscribeOptions

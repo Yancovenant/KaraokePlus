@@ -1,6 +1,9 @@
 # Security
 cookies.txt
 
+#log
+*.log
+
 #pkl
 *.pkl
 

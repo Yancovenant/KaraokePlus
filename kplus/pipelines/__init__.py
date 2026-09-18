@@ -4,19 +4,29 @@ from pathlib import Path
 
 from .asr import *
 from .audio import detect_audio_activity
-from .download import DownloadResult, download_song
+from .download import *
 from .lyrics import *
 from .separate import separate_song
 
 logger = logging.getLogger(__name__)
 
-__all__ = [
+__all__ = [  # noqa: RUF022
+    # Input
+    "ensure_file",
+    # Download
+    "download_song",
+    "extract_info",
+    "extract_lyrics",
+    "DownloadResult",
+    # Audio
+    "detect_audio_activity",
+
+    
     "align",
     "align2ref",
-    "detect_audio_activity",
+    
     "detect_language",
-    "download_song",
-    "ensure_file",
+
     "multi_align",
     "refine",
     "separate_song",
@@ -66,3 +76,4 @@ def ensure_file(inputpath: str | Path, *, no_lyrics: bool = False, **kwargs) -> 
         lyrics=lyrics,
         filepath=str(path),
     )
+

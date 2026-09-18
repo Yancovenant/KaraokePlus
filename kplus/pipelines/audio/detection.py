@@ -3,10 +3,8 @@ from __future__ import annotations  # noqa: I001
 import logging
 import typing as t
 
-from functools import cached_property
 from dataclasses import dataclass
 
-import kplus.init  # noqa: F401
 from kplus import env
 from kplus.tools import rich
 from kplus.tools.audio import Audio as KAudio, AudioNumpy, AudioType

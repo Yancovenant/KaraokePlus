@@ -1,5 +1,3 @@
-
-
 logo1 = """
  _,_  _, __,  _,  _, _,_ __,
  |_/ /_\ |_) /_\ / \ |_/ |_ 
@@ -77,3 +75,8 @@ all_logos = [
     logo1, logo2, logo3, logo4, logo6,
     logo7, logo8, logo9, logo10
 ]
+
+if __name__ == "__main__":
+    print("Test Ansii Logo")
+    for logo in all_logos:
+        print(logo)

@@ -4,9 +4,9 @@ import sys
 from inspect import cleandoc
 from pathlib import Path
 
-import kplus.init  # intialize
-from kplus.tools.config import config
-from kplus.tools.rich import RichArgumentParser, RichHelpFormatter
+import kplus
+from kplus import config
+from kplus.tools.rich_helper import RichArgumentParser, RichHelpFormatter
 
 COMMAND_NAME_RE = re.compile(r'^[a-z][a-z0-9_]*$', re.I)
 PROG_NAME = Path(sys.argv[0]).name

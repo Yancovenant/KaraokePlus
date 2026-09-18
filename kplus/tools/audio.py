@@ -1,11 +1,5 @@
 from __future__ import annotations
 
-# Should be imported only when needed to not make loading slower
-from kplus import env
-
-# Must be at the top
-env.ffmpeg, env.torch, env.numpy  # noqa: B018
-
 import base64
 import io
 import json
@@ -16,27 +10,34 @@ from dataclasses import dataclass
 from functools import cached_property
 from pathlib import Path
 
-import numpy as np
-import torch
 from IPython.display import Audio as IAudio
 from IPython.display import display
 
+# Should be imported only when needed to not make loading slower
+from kplus import env
+
 from .path import temp_filenames
+
+# Must be at the top
+env.ffmpeg, env.torch, env.numpy  # noqa: B018
+import numpy as np
+import torch
 
 __all__ = [
     "Audio",
     "AudioNumpy",
     "AudioTensor",
     "AudioType",
+    "_HumanTime",
     "_TimingMixin",
 ]
 
 # Type Var
-AudioNumpy: t.TypeAlias = np.ndarray
-AudioTensor: t.TypeAlias = torch.Tensor
-AudioType: t.TypeAlias = str | Path | AudioNumpy | AudioTensor
-AudioInput: t.TypeAlias = AudioNumpy | AudioTensor
-IndexAudioInput: t.TypeAlias = list[tuple[int, AudioInput]]
+AudioNumpy:         t.TypeAlias = np.ndarray
+AudioTensor:        t.TypeAlias = torch.Tensor
+AudioInput:         t.TypeAlias = AudioNumpy | AudioTensor
+AudioType:          t.TypeAlias = str | Path | AudioInput
+IndexAudioInput:    t.TypeAlias = list[tuple[int, AudioInput]]
 
 class Audio:
     """ Audio Loader and Manager """
@@ -233,4 +234,3 @@ class _TimingMixin(_HumanTime):
         if self.start is None or self.end is None: return 0.0
         return float(round(self.end - self.start, 2))
 
-    

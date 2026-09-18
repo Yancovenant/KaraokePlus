@@ -4,7 +4,7 @@ RELEASE_LEVELS_DISPLAY = {ALPHA: 'a', BETA: 'b',
                           RELEASE_CANDIDATE: 'rc', FINAL: ''}
                           
 # version_info format: (MAJOR, MINOR, MICRO, RELEASE_LEVEL, SERIAL)
-version_info = (3, 0, 1, BETA, 0, '')
+version_info = (4, 0, 1, BETA, 0, '')
 series = serie = major_version = '.'.join(str(s) for s in version_info[:2])
 
 MIN_PY_VERSION = (3, 12)
@@ -19,7 +19,7 @@ it will automatically fetch and process all the necessary including lyrics, sepa
 aligning the lyrics to the audio, and returning a full makeover karaoke video."""
     
     classifiers = """Development Status :: 4 - Beta
-License :: OSI Approved :: MIT License
+License :: OSI Approved :: Apache License 2.0
 
 Programming Language :: Python
 Operating System :: OS Independent
@@ -32,5 +32,10 @@ Topic :: Multimedia :: Sound/Audio :: Mixers
     url = 'https://www.iantirta.com'
     author = 'iantirta.com'
     author_email = 'ian@iantirta.com'
-    license = 'MIT'
+    license = 'Apache License 2.0'
+
+if __name__ == "__main__":
+    print("==== Release Test ====")
+    print(Release.author)
+    print(MIN_PY_VERSION)
     
