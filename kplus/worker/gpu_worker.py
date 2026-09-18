@@ -10,7 +10,7 @@ class GPUWorker:
 
 class KaggleWorker(GPUWorker):
     def __init__(self, api_token: str):
-        env.kaggle
+        env.kaggle  # noqa: B018
         os.environ["KAGGLE_API_TOKEN"] = api_token
         from kaggle import api
         self.api = api
