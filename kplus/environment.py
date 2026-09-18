@@ -350,6 +350,8 @@ REQUIRED_PKG: dict[str, str] = {
     "rich": "",
     "requests": "",
     "tqdm": "", # For error combining with rich
+    # Worker
+    "kaggle": "",
 }
 
 def wrap_pkg(pkg_name: str, version: str):

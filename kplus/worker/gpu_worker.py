@@ -1,6 +1,8 @@
 import os
 from pathlib import Path
 
+from kplus import env
+
 
 class GPUWorker:
     def __init__(self):
@@ -8,6 +10,7 @@ class GPUWorker:
 
 class KaggleWorker(GPUWorker):
     def __init__(self, api_token: str):
+        env.kaggle
         os.environ["KAGGLE_API_TOKEN"] = api_token
         from kaggle import api
         self.api = api
