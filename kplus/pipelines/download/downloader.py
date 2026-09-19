@@ -170,11 +170,14 @@ class Downloader:
 
 if __name__ == "__main__":
     print("Download Test")
+    
     url = "https://www.youtube.com/watch?v=nXOfv4-tT9o&list=RDnXOfv4-tT9o&start_radio=1"
     downloader = Downloader()
+
     print("1. Extract Info")
     info = downloader._extract_info(url)
-    raw_info = downloader.downloader.extract_info(url)
-    from pprint import pprint
     print(info)
-    pprint(raw_info)
+
+    print("2. Extract Info Thumbnail")
+    with_thumbnail = downloader._extract_info(url, return_thumbnail=True)
+    print(with_thumbnail)
