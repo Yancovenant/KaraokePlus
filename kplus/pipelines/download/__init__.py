@@ -22,9 +22,10 @@ def download_song(
     )
 
 def extract_info(url: str, **kwargs) -> tuple[str, str, float]:
+    return_thumbnail = kwargs.pop("return_thumbnail", False)
     return (
         Downloader(**kwargs)
-        ._extract_info(url)
+        ._extract_info(url, return_thumbnail=return_thumbnail)
     )
 
 def extract_lyrics(title: str, artist: str, duration: float, **kwargs) -> str:

@@ -47,7 +47,7 @@ class KaggleWorker(GPUWorker):
 if __name__ == "__main__":
     from kplus.tools import rich
     print("=== Kaggle Worker Test ===")
-    worker = KaggleWorker(api_token="KGAT_f0254f4f2f54aee972cbc2b638a4ff89")
+    worker = KaggleWorker(api_token="KGAT_f0254f4f2f54aee972cbc2b638a4ff89") # this already exposed, need to rotate
     # rich.inspect(worker.api, methods=True)
     # print(worker.api._authenticate_with_access_token())
     print(worker.api.print_config_values())

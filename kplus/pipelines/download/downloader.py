@@ -50,12 +50,27 @@ class Downloader:
         self.downloader = Ytdlp(cookiefile, **kwargs)
         self.lyrics_api = Lrclib(self.session, **kwargs)
 
-    def _extract_info(self, url: str) -> tuple[str, str, str]:
+    def _extract_info(
+        self,
+        url: str,
+        *,
+        return_thumbnail: bool = False
+    ) -> tuple[str, str, str]:
+        """
+            :param bool return_thumbnail: if True, it would also return the thumbnail url
+        """
         info = self.downloader.extract_info(url)
         title = info.get("title", "Unknown")
         artist = info.get("artist", info.get("uploader", "Unknown"))
         duration = float(info.get("duration", 0))
-        return title, artist, duration
+        data = (title, artist, duration)
+        if return_thumbnail:
+            thumbnail = info.get(
+                "thumbnail",
+                f"https://img.youtube.com/vi/{info.get("id", "")}/hqdefault.jpg"
+            )
+            data = data + (thumbnail,)
+        return data
 
     def _download(self, url: str, outtmpl: str, prg) -> str:
         # with rich.make_progress(is_download=True) as prg:
@@ -152,4 +167,14 @@ class Downloader:
         elif failure_type == ErrorType.NETWORK:
             return failure_type, min(30, delay)
         return failure_type, self.max_attempts
-    
+
+if __name__ == "__main__":
+    print("Download Test")
+    url = "https://www.youtube.com/watch?v=nXOfv4-tT9o&list=RDnXOfv4-tT9o&start_radio=1"
+    downloader = Downloader()
+    print("1. Extract Info")
+    info = downloader._extract_info(url)
+    raw_info = downloader.downloader.extract_info(url)
+    from pprint import pprint
+    print(info)
+    pprint(raw_info)
