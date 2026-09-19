@@ -1,14 +1,17 @@
-import logging
-from collections import defaultdict
+from __future__ import annotations
 
-import torch
+import logging
+import typing as t
+from collections import defaultdict
 
 from kplus import env
 from kplus.pipelines.asr.utils import ensure_list
 from kplus.pipelines.utils import ASRResult, AudioSegment, TextTiming
-from kplus.tools.audio import Audio, AudioInput, AudioNumpy, AudioType, IndexAudioInput
 
 logger = logging.getLogger(__name__)
+
+if t.TYPE_CHECKING:
+    from kplus.tools.audio import AudioInput, AudioNumpy, AudioType, IndexAudioInput
 
 
 class ASRMixin:
@@ -24,7 +27,6 @@ class ASRMixin:
     def _load_model(self, model_name_or_path: str, **kwargs) -> None:
         raise NotImplementedError()
 
-    @torch.inference_mode()
     def _transcribe(self,
         audios: list[AudioInput],
         languages: list[str | None],
@@ -34,7 +36,6 @@ class ASRMixin:
     ) -> list[TextTiming]:
         raise NotImplementedError()
 
-    @torch.inference_mode()
     def _align(self,
         audios: list[AudioInput] | None = None,
         transcripts: list[str] | None = None,
@@ -62,7 +63,6 @@ class ASRMixin:
         else:
             return self.lid_model.detect_language(audionp, seek=seek)
 
-    @torch.no_grad()
     def _infer(self, inputs):
         raise NotImplementedError()
 
@@ -89,6 +89,8 @@ class ASRMixin:
         references: str | list[str] | None = None,
     ) -> tuple[list[AudioInput], list, list, list]:
         """ Return type:: """
+        from kplus.tools.audio import Audio
+
         if not audiosegments:
             duration = len(audionp) / self.sr
             audiosegments = [AudioSegment(start=0.0, end=duration)]
@@ -116,7 +118,6 @@ class ASRMixin:
         self.lid_model = None
         return audios, offsets, langs, references
 
-    @torch.inference_mode()
     def transcribe(
         self,
         audio: AudioType,
@@ -126,6 +127,10 @@ class ASRMixin:
         languages: str | list[str] | None = None,
         return_timestamps: bool = True,
     ) -> ASRResult:
+        import torch
+
+        from kplus.tools.audio import Audio
+
         audionp = Audio(audio, samplerate=self.sr, channels=1).numpy
         audios, offsets, langs, texts = self.prepare_data(
             audionp,
@@ -133,12 +138,13 @@ class ASRMixin:
             languages=languages,
             references=contexts,
         )
-        results = self._transcribe(
-            audios,
-            langs,
-            texts,
-            return_timestamps=return_timestamps,
-        )
+        with torch.inference_mode():
+            results = self._transcribe(
+                audios,
+                langs,
+                texts,
+                return_timestamps=return_timestamps,
+            )
         assert len(results) == len(offsets), f"produced asr result length missmatch, {len(results)} == len{offsets}"
         for asr_text, offset in zip(results, offsets):
             for word in asr_text.words:
@@ -146,7 +152,6 @@ class ASRMixin:
                 word.end = word.end + offset if word.end is not None else offset
         return ASRResult(texts=results)
 
-    @torch.inference_mode()
     def align(
         self,
         audio: AudioType,
@@ -154,6 +159,9 @@ class ASRMixin:
         hypothesis: list[TextTiming],
         languages: str | list[str] | None = None,
     ) -> ASRResult:
+        import torch
+
+        from kplus.tools.audio import Audio
         # In essence alignment require:
         # - audio, transcript
         # - optional: languages?
@@ -164,11 +172,12 @@ class ASRMixin:
             languages,
             references=[text.latin for text in hypothesis]
         )
-        results = self._align(
-            audios=audios,
-            transcripts=texts,
-            languages=langs,
-        )
+        with torch.inference_mode():
+            results = self._align(
+                audios=audios,
+                transcripts=texts,
+                languages=langs,
+            )
         assert len(results) == len(offsets), f"produced asr result length missmatch, {len(results)} == len{offsets}"
         hypothesis = self.populate_timestamp(audios, results, hypothesis)
         for i, (offset, lang) in enumerate(zip(offsets, langs)):
@@ -179,5 +188,3 @@ class ASRMixin:
                 logger.warning(f"Alignment result Language is different: ori {ori_lang} != {lang}")
 
         return ASRResult(texts=hypothesis)
-
-

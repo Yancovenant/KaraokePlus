@@ -5,16 +5,15 @@ import typing as t
 from dataclasses import dataclass, field
 
 from kplus import env
-from kplus.pipelines.utils import ASRResult, TextTiming, WordTiming
-from kplus.tools import filter_known_kwargs, rich
-from kplus.tools.audio import Audio
+from kplus.pipelines.utils import TextTiming, WordTiming
+from kplus.tools import filter_known_kwargs
 
 from .base import ASRConfig, ASRMixin
 
 if t.TYPE_CHECKING:
     import numpy as np
 
-    from kplus.pipelines.utils import AudioSegment
+    from kplus.pipelines.utils import ASRResult, AudioSegment
     from kplus.tools.audio import AudioNumpy, AudioType
 
 logger = logging.getLogger(__name__)
@@ -89,6 +88,8 @@ class WhisperASR(ASRMixin):
         return_probs: bool = False, # If true will return `all_langs`` instead of 1
     ) -> str | list[tuple[str, float]]:
         """ Detect Language """
+        from kplus.tools.audio import Audio
+
         audionp = Audio(audio, samplerate=self.sr, channels=1).numpy
         features: np.ndarray = self.model.feature_extractor(audionp, chunk_length=None)
         if not audiosegments and not seek:
@@ -173,6 +174,7 @@ class WhisperASR(ASRMixin):
         def progress_callback(seek: float, total: float):
             prg.update(task, completed=seek, total=total)
         duration = len(audionp) / self.sr
+        from kplus.tools.audio import Audio
         for hyp, seg in zip(transcriptions.texts, audiosegments):
             if not (seg.end < hyp.start or seg.start > hyp.end):
                 safe_start = max(0, max(min(hyp.start, seg.start), hyp.start - 1.0) - 0.5)

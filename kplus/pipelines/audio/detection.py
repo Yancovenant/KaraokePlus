@@ -1,23 +1,22 @@
-from __future__ import annotations  # noqa: I001
+from __future__ import annotations
 
 import logging
 import typing as t
-
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from kplus import env
-from kplus.tools import rich
-from kplus.tools.audio import Audio as KAudio, AudioNumpy, AudioType
-
-from kplus.pipelines.utils import AudioSegment
 from kplus.pipelines.audio.plotter import AudioPlotter
+from kplus.pipelines.utils import AudioSegment
 
 # Need to be below
+env.numpy  # noqa: B018
 import numpy as np
-from IPython.display import display, Audio as IAudio
-
 
 logger = logging.getLogger(__name__)
+
+if t.TYPE_CHECKING:
+    from kplus.tools.audio import AudioNumpy, AudioType
+
 
 #@dataclass(slots=True)
 class ExtractorConfig:
@@ -42,10 +41,15 @@ class ExtractorConfig:
 
 class Extractor:
     """ Helper class to hold all computation of waveform signal """
+
     def __init__(self, precision_ms: int, **kwargs):
         self.precision_ms = precision_ms
         if env.verbose:
-            self.plotter = AudioPlotter(shared_xaxes=True, vertical_spacing=0.05, **kwargs)
+            self.plotter = AudioPlotter(
+                shared_xaxes=True,
+                vertical_spacing=0.05,
+                **kwargs
+            )
 
     @property
     def scipy(self):
@@ -63,8 +67,15 @@ class Extractor:
     def peaks(self, data: np.ndarray, prominence: float) -> np.ndarray:
         return self.scipy.signal.find_peaks(data, prominence=prominence)[0]
 
-    def mask_forward(self, datamask: np.ndarray, to: np.ndarray, max_distance_ms: int = ExtractorConfig.max_forward_distance_ms) -> np.ndarray:
-        edges = np.where((datamask[:-1] == True) & (datamask[1:] == False))[0]
+    def mask_forward(
+        self,
+        datamask: np.ndarray,
+        to: np.ndarray,
+        max_distance_ms: int = ExtractorConfig.max_forward_distance_ms
+    ) -> np.ndarray:
+        edges = np.where((
+            datamask[:-1] == True) & (datamask[1:] == False
+        ))[0]
         maxframesize = int(max_distance_ms / self.precision_ms)
         for e in edges:
             maxdist = e + maxframesize
@@ -83,18 +94,27 @@ class Extractor:
         ends   = np.where(diffs == -1)[0] 
         return starts, ends
     
-    def mask_merge_lower_duration(self, datamask: np.ndarray, merge_ms: int = ExtractorConfig.merge_lower_ms) -> np.ndarray:
+    def mask_merge_lower_duration(
+        self,
+        datamask: np.ndarray,
+        merge_ms: int = ExtractorConfig.merge_lower_ms
+    ) -> np.ndarray:
         """ Any mask frame `lower than or equal` the threshold ms, would be merged to the nearest mask """
+
         while True:
             starts, ends = self.get_mask_starts_ends(datamask)
             mergeframe = self.ms2frame(merge_ms)
-            if len(starts) == 0: break
+            if len(starts) == 0:
+                break
+
             shortsegments = []
             for i, (s, e) in enumerate(zip(starts, ends)):
                 dur = e - s
                 if dur <= mergeframe:
                     shortsegments.append((i, s, e))
-            if not shortsegments: break
+            if not shortsegments:
+                break
+
             assert len(starts) > 1
             for i, s, e in shortsegments:
                 next_start = starts[i+1] if i < len(starts) - 1 else None
@@ -151,16 +171,25 @@ class Feature:
     
     data: np.ndarray
     
-    _times: np.ndarray | ... = ...
-    _smoothed: np.ndarray | ... = ...
-    _valleys: np.ndarray | ... = ...
-    _threshold: np.float32 | ... = ...
-    _mask: np.ndarray | ... = ...
+    _times: np.ndarray | None = field(init=False, default=...)
+    _smoothed: np.ndarray | None = field(init=False, default=...)
+    _valleys: np.ndarray | None = field(init=False, default=...)
+    _threshold: np.float32 | None = field(init=False, default=...)
+    _mask: np.ndarray | None = field(init=False, default=...)
 
     @property
     def times(self) -> np.ndarray:
-        if self._times is not ...: return self._times
-        self._times = self.extractor.librosa.times_like(self.data, sr=self.sr, hop_length=self.hoplength)
+        if self._times is not ...:
+            return self._times
+
+        self._times = (
+            self.extractor.librosa
+            .times_like(
+                self.data,
+                sr=self.sr,
+                hop_length=self.hoplength
+            )
+        )
         return self._times
 
     @times.setter
@@ -169,8 +198,12 @@ class Feature:
 
     @property
     def smoothed(self) -> np.ndarray:
-        if self._smoothed is not ...: return self._smoothed
-        self._smoothed = self.extractor.smooth_ms(self.data, ExtractorConfig.smooth_distance_ms)
+        if self._smoothed is not ...:
+            return self._smoothed
+        self._smoothed = self.extractor.smooth_ms(
+            self.data,
+            ExtractorConfig.smooth_distance_ms
+        )
         return self._smoothed
 
     def valley_times(self, safe_start: float = 0.0) -> np.ndarray:
@@ -179,7 +212,8 @@ class Feature:
     @property
     def valleys(self) -> np.ndarray:
         """ Local minima of the feature signal """
-        if self._valleys is not ...: return self._valleys
+        if self._valleys is not ...:
+            return self._valleys
         # Normalized
         _max = np.max(np.abs(self.smoothed))
         norm = (self.smoothed / _max) if _max > 0 else self.smoothed
@@ -189,7 +223,8 @@ class Feature:
 
     @property
     def threshold(self) -> np.float32:
-        if self._threshold is not ...: return self._threshold
+        if self._threshold is not ...:
+            return self._threshold
         noise_floor = np.percentile(self.smoothed, ExtractorConfig.floor_percentile)
         self._threshold = noise_floor + (np.std(self.smoothed) * ExtractorConfig.std_multiplier)
         return self._threshold
@@ -206,7 +241,8 @@ class Feature:
         
     @property
     def mask(self) -> np.ndarray:
-        if self._mask is not ...: return self._mask
+        if self._mask is not ...:
+            return self._mask
         self._mask = (self.smoothed > self.threshold)
         return self._mask
 
@@ -249,13 +285,15 @@ class Flux(Feature):
 class Mel(Feature):
     """ Log Mel Spectogram """
     _name = "Mel"
-    S: np.ndarray | ...  =  ... # can't be positional
 
-    _S_dB: np.ndarray | ... = ...
+    S: np.ndarray | None  = field(init=False, default=...) # can't be positional
+
+    _S_dB: np.ndarray | None = field(init=False, default=...)
 
     @property
     def S_dB(self) -> np.ndarray:
-        if self._S_dB is not ...: return self._S_dB
+        if self._S_dB is not ...:
+            return self._S_dB
         self._S_dB = self.extractor.librosa.power_to_db(self.S, ref=np.max)
         return self._S_dB
 
@@ -307,9 +345,9 @@ class DetectionResult:
     flux: Flux
     mel: Mel
 
-    _times: np.ndarray | ... = ...
-    _final_mask: np.ndarray | ... = ...
-    _segments: list[AudioSegment] | ... = ...
+    _times: np.ndarray | None = field(init=False, default=...)
+    _final_mask: np.ndarray | None = field(init=False, default=...)
+    _segments: list[AudioSegment] | None = field(init=False, default=...)
 
     def mask_times(self, safe_start: float = 0.0) -> tuple[float, float]:
         scipy = self.extractor.scipy
@@ -323,7 +361,8 @@ class DetectionResult:
     
     @property
     def final_mask(self) -> np.ndarray:
-        if self._final_mask is not ...: return self._final_mask
+        if self._final_mask is not ...:
+            return self._final_mask
         mask = self.rms.mask | self.mel.mask
         mask = self.extractor.mask_forward(mask, self.rms.valleys)
         mask = self.extractor.mask_merge(mask)
@@ -394,7 +433,8 @@ class DetectionResult:
     
     @property
     def times(self) -> np.ndarray:
-        if self._times is not ...: return self._times
+        if self._times is not ...:
+            return self._times
         assert np.allclose(self.mel.times, self.rms.times) and np.allclose(self.flux.times, self.rms.times)
         self._times = self.rms.times
         return self._times
@@ -405,7 +445,8 @@ class DetectionResult:
 
     @property
     def segments(self) -> list[AudioSegment]:
-        if self._segments is not ...: return self._segments
+        if self._segments is not ...:
+            return self._segments
         starts, ends = self.extractor.get_mask_starts_ends(self.final_mask)
         audiosegments = []
         for s, e in zip(starts, ends):
@@ -426,16 +467,10 @@ class DetectionResult:
             name="Final Mask",
             fill="tozeroy", line=dict(shape="hv"),
         )
-        audio_uri = KAudio.np2base64(self.audio, self.sr)
+        from kplus.tools.audio import Audio
+        audio_uri = Audio.np2base64(self.audio, self.sr)
         plotter.update_titles(["Mel", "RMS", "Flux", "Final Mask"])
         plotter.show(audio_uri=audio_uri, segments=self.segments)
-        return
-        for seg in self.segments:
-            chunk = KAudio.slicenp(self.audio, seg.start, seg.end, self.sr)
-            rich.print(f"[{seg.start}-{seg.end}] ({seg.duration:.3f})")
-            if chunk.shape[0] > 0: display(IAudio(chunk, rate=self.sr))
-            else: rich.print("~No Audio~")
-            del chunk
 
 
 class AudioExtractor:
@@ -457,9 +492,10 @@ class AudioExtractor:
         return hoplength, framelength
 
     def _preprocess_audio(self, audio: AudioType, sr: int) -> AudioNumpy:
+        from kplus.tools.audio import Audio, AudioNumpy
         audionp = audio
         if not isinstance(audio, AudioNumpy):
-            audionp = KAudio(audio, samplerate=sr, channels=1).numpy
+            audionp = Audio(audio, samplerate=sr, channels=1).numpy
         assert isinstance(audionp, AudioNumpy)
         if self.use_filter:
             sos = self.extractor.scipy.signal.butter(10, [200, 5000], btype='bandpass', fs=sr, output='sos')

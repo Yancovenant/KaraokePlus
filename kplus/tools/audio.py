@@ -6,7 +6,6 @@ import json
 import subprocess
 import typing as t
 import wave
-from dataclasses import dataclass
 from functools import cached_property
 from pathlib import Path
 
@@ -21,15 +20,15 @@ from .path import temp_filenames
 # Must be at the top
 env.ffmpeg, env.torch, env.numpy  # noqa: B018
 import numpy as np
-import torch
+
+if t.TYPE_CHECKING:
+    import torch
 
 __all__ = [
     "Audio",
     "AudioNumpy",
     "AudioTensor",
     "AudioType",
-    "_HumanTime",
-    "_TimingMixin",
 ]
 
 # Type Var
@@ -89,6 +88,8 @@ class Audio:
         samplerate=None,
         channels=None
     ) -> AudioTensor:
+        import torch
+
         streams = np.array(range(len(self)))[streams]
         single = not isinstance(streams, np.ndarray)
         if single: streams = [streams]
@@ -165,6 +166,8 @@ class Audio:
         channels: int | None = None,
         **kwargs
     ) -> None:
+        import torch
+
         if isinstance(audio, (str, Path)):
             self.audiopath = str(Path(str(audio)).expanduser().resolve())
             streams = kwargs.pop("streams", 0)
@@ -205,32 +208,4 @@ class Audio:
             raise ValueError('The audio file has less channels than requested but is not mono.')
         return wav
 
-
-@dataclass(slots=True)
-class _HumanTime:
-    """ Helper Mixin for rendering human readable timing """
-    @staticmethod
-    def s2hms(s: float | None) -> str:
-        if s is None:
-            return "--:--.--"
-        m, s = divmod(s, 60)
-        return f"{int(m):02d}:{s:05.2f}"
-
-    @property
-    def starth(self) -> str:
-        return self.s2hms(self.start)
-    
-    @property
-    def endh(self) -> str:
-        return self.s2hms(self.end)
-
-@dataclass(slots=True)
-class _TimingMixin(_HumanTime):
-    start: float
-    end: float
-
-    @property
-    def duration(self) -> float:
-        if self.start is None or self.end is None: return 0.0
-        return float(round(self.end - self.start, 2))
 

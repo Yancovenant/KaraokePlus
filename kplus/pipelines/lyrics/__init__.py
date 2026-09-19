@@ -3,9 +3,10 @@ from __future__ import annotations
 from kplus.pipelines.utils import ASRResult, AudioSegment
 
 from .aligner import LyricAligner
-
+from .utils import LyricAlignError
 
 __all__ = [
+    "LyricAlignError",
     "align2ref",
 ]
 

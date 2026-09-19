@@ -4,7 +4,7 @@ RELEASE_LEVELS_DISPLAY = {ALPHA: 'a', BETA: 'b',
                           RELEASE_CANDIDATE: 'rc', FINAL: ''}
                           
 # version_info format: (MAJOR, MINOR, MICRO, RELEASE_LEVEL, SERIAL)
-version_info = (4, 0, 1, BETA, 0, '')
+version_info = (4, 1, 1, BETA, 0, '')
 series = serie = major_version = '.'.join(str(s) for s in version_info[:2])
 
 MIN_PY_VERSION = (3, 12)

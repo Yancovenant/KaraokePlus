@@ -2,22 +2,55 @@ from __future__ import annotations
 
 import re
 import typing as t
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from kplus.tools import rich
-from kplus.tools.audio import Audio, _HumanTime, _TimingMixin
-from kplus.tools.text import RomajiPhonetic, get_phonetic, normalizekaldi
 
 if t.TYPE_CHECKING:
     from kplus.tools.audio import AudioNumpy
+    from kplus.tools.text import RomajiPhonetic
 
 __all__ = [
     "ASRResult",
     "AudioSegment",
     "TextTiming",
     "WordTiming",
+    "_HumanTime",
+    "_TimingMixin",
     "overlap",
 ]
+
+
+@dataclass(slots=True)
+class _HumanTime:
+    """ Helper Mixin for rendering human readable timing """
+
+    @staticmethod
+    def s2hms(s: float | None) -> str:
+        if s is None:
+            return "--:--.--"
+        m, s = divmod(s, 60)
+        return f"{int(m):02d}:{s:05.2f}"
+
+    @property
+    def starth(self) -> str:
+        return self.s2hms(self.start)
+    
+    @property
+    def endh(self) -> str:
+        return self.s2hms(self.end)
+
+
+@dataclass(slots=True)
+class _TimingMixin(_HumanTime):
+    start: float
+    end: float
+
+    @property
+    def duration(self) -> float:
+        if self.start is None or self.end is None: return 0.0
+        return float(round(self.end - self.start, 2))
+
 
 class AudioSegment(_TimingMixin):
     """ Responsible to hold audio segment """
@@ -29,16 +62,20 @@ class AudioSegment(_TimingMixin):
             return False
         return self.start == other.start and self.end == other.end
 
+
 @dataclass(slots=True)
 class WordTiming(_TimingMixin):
     word: str
     score: float
 
-    _phone: RomajiPhonetic | ... = ...
+    _phone: RomajiPhonetic | None = field(init=False, default=...)
     
     @property
     def phone(self) -> RomajiPhonetic:
-        if self._phone is not ...: return self._phone
+        if self._phone is not ...:
+            return self._phone
+        from kplus.tools.text import get_phonetic
+
         self._phone = get_phonetic(self.word)
         return self._phone
         
@@ -54,18 +91,20 @@ class TextTiming(_HumanTime):
     language: str | None = None
     ass_event: str | None = None
 
-    _text: str | ... = ...
-    _latin: str | ... = ...
+    _text: str | None = field(init=False, default=...)
+    _latin: str | None = field(init=False, default=...)
     
     @property
     def text(self) -> str:
-        if self._text is not ...: return self._text
+        if self._text is not ...:
+            return self._text
         self._text = " ".join([w.word for w in self.words])
         return self._text
 
     @property
     def latin(self) -> str:
-        if self._latin is not ...: return self._latin
+        if self._latin is not ...:
+            return self._latin
         self._latin = " ".join([w.latin for w in self.words])
         return self._latin
 
@@ -84,6 +123,8 @@ class TextTiming(_HumanTime):
 
     # I never use this
     def display_audio(self, audio: AudioNumpy, sr: int, *, offset: float = 0.0) -> None:
+        from kplus.tools.audio import Audio
+
         for w in self.words:
             rich.print(f"[{w.starth}-{w.endh}] ({w.duration:.3f}) - {w.word}")
             if w.start is None or w.end is None: continue
@@ -100,17 +141,33 @@ class ASRResult:
     texts: list[TextTiming]
 
     def to_line_idx(self, reference: str) -> ASRResult:
+        from kplus.tools.text import normalizekaldi
         reference = normalizekaldi(reference)
-        lines = [line.strip() for line in reference.split("\n") if line.strip() and not line.startswith('[')]
+        lines = [
+            line.strip()
+            for line in reference.split("\n")
+            if line.strip() and
+            not line.startswith('[')
+        ]
         clusters, i = [], 0
-        n = [len(line.split()) for line in lines]
-        words = [w for text in self.texts for w in text.words]
+        n = [
+            len(line.split())
+            for line in lines
+        ]
+        words = [
+            w
+            for text in self.texts
+            for w in text.words
+        ]
         assert len(words) == sum(n)
         for l in n:
             clusters.append(words[i: i + l])
             i += l
         assert len(clusters) == len(lines)
-        new_group_texts = [TextTiming(words=cluster) for cluster in clusters]
+        new_group_texts = [
+            TextTiming(words=cluster)
+            for cluster in clusters
+        ]
         self.texts = new_group_texts
         return self
 

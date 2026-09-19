@@ -2,6 +2,8 @@
 import copy
 from typing import Any, Literal, TypedDict
 
+from ..utils import get_default_dtype, get_default_device_map
+
 
 class KwargsMixin:
     def __init__(self, **kwargs):
@@ -26,6 +28,19 @@ class ASRKwargs(TypedDict, total=False):
     processor_kwargs: ProcessorKwargs = {  # noqa: RUF012
         **ProcessorKwargs.__annotations__,
     }
+
+
+class LazyDefaultDict(dict):
+    def __getitem__(self, key):
+        val = super().__getitem__(key)
+        # If the key is called and matches our function reference, run it now
+        if val == "lazy_load":
+            if key == "dtype":
+                return get_default_dtype()
+            elif key == "device_map":
+                return get_default_device_map
+            raise RuntimeError(f"`{key}` lazy_load isn't supported yet")
+        return val
 
 
 def merge_kwargs(source: dict | ASRKwargs, kwargs: dict):

@@ -12,12 +12,13 @@ from kplus.tools import filter_known_kwargs, rich, safepath
 from .base import SeparationResult, SeparatorMixin
 
 if t.TYPE_CHECKING:
-    from kplus.tools.audio import AudioTensor
     from demucs.apply import (
         BagOfModels as DemucsBagOfModels,  # type: ignore
     )
     from demucs.apply import Model as DemucsModel
     from demucs.apply import TensorChunk
+
+    from kplus.tools.audio import AudioTensor
 
 logger = logging.getLogger(__name__)
 
@@ -26,9 +27,7 @@ class DemucsSeparator(SeparatorMixin):
     def bootstrapt(self, modelname: str, **options):
         logger.info("Chosen Separator Class: (Demucs)")
         env.torch, env.diffq, env.demucs  # noqa: B018
-        from demucs.pretrained import (
-            get_model as _get_model_demucs  # type: ignore
-        )
+        from demucs.pretrained import get_model as _get_model_demucs  # type: ignore
         self.overlap = options.pop("overlap", 0.75)
         self.segment = options.pop("segment", 30)
         self.shifts = options.pop("shifts", 1)
@@ -125,15 +124,14 @@ class DemucsSeparator(SeparatorMixin):
         """ Demucs ``apply_model`` implementation
         """
         import torch  # type: ignore
-        from demucs.apply import (
-            BagOfModels as DemucsBagOfModels  # type: ignore
-        )
+        from demucs.apply import BagOfModels as DemucsBagOfModels  # type: ignore
         from demucs.apply import TensorChunk, tensor_chunk
         from demucs.htdemucs import HTDemucs  # type: ignore
         from demucs.utils import (  # type: ignore
             DummyPoolExecutor,
             center_trim,
         )
+
         from kplus.tools.audio import AudioTensor
 
         if pool is None:

@@ -1,24 +1,21 @@
-from __future__ import annotations  # noqa: I001
+from __future__ import annotations
 
-from kplus.tools.audio import Audio, AudioType, AudioNumpy
-# Need to be below
-import torch
-import typing as t
-import logging
-import difflib
 import copy
-
-from dataclasses import field, dataclass
+import difflib
+import logging
+import typing as t
+from dataclasses import dataclass, field
 
 from kplus import env
+from kplus.pipelines.utils import ASRResult, AudioSegment, TextTiming
 from kplus.tools import rich
-from kplus.tools.text import get_phonetic
-from kplus.pipelines.utils import TextTiming, ASRResult
 
-from .utils import get_default_dtype
+from .utils import get_default_dtype, get_default_device_map
 
 if t.TYPE_CHECKING:
-    from kplus.pipelines.utils import AudioSegment
+    import torch
+
+    from kplus.tools.audio import AudioNumpy, AudioType
 
 logger = logging.getLogger(__name__)
 
@@ -26,15 +23,13 @@ logger = logging.getLogger(__name__)
 @dataclass(slots=True)
 class ASRConfig:
     dtype: torch.dtype = field(default_factory=get_default_dtype)
-    device_map: str = (
-        "cuda:" + 
-        ("1" if torch.cuda.device_count() > 1 else "0")
-    ) if env.device.type == "cuda" else env.device.type
-    
+    device_map: str = field(default_factory=get_default_device_map)
+
 
 class ASRMixin:
     """ ASR Mixin """
     def __init__(self, **options):
+        import torch
         if "dtype" in options:
             dtype = options.pop("dtype").lower()
             if dtype != "auto":
@@ -44,10 +39,24 @@ class ASRMixin:
                     raise ValueError("dtype not recognize %s", dtype)
         self.sr = 16000 # Used for all model
 
-    def _transcribe(self, audio: AudioNumpy, audiosegments: list[AudioSegment], reference: str, prg=None, **kwargs) -> list[TextTiming]:
+    def _transcribe(
+        self,
+        audio: AudioNumpy,
+        audiosegments: list[AudioSegment],
+        reference: str,
+        prg=None,
+        **kwargs
+    ) -> list[TextTiming]:
         raise NotImplementedError()
 
-    def transcribe(self, audio: AudioType, audiosegments: list[AudioSegment], reference: str, **kwargs) -> ASRResult:
+    def transcribe(
+        self,
+        audio: AudioType,
+        audiosegments: list[AudioSegment],
+        reference: str,
+        **kwargs
+    ) -> ASRResult:
+        from kplus.tools.audio import Audio
         audionp = Audio(audio, samplerate=self.sr, channels=1).numpy
         if not audiosegments:
             duration = len(audionp) / self.sr
@@ -63,6 +72,8 @@ class ASRMixin:
         return ASRResult(texts=results)
 
     def _fix_duplicate(self, new_res, ori: TextTiming):
+        from kplus.tools.text import get_phonetic
+
         new_words = [get_phonetic(w.word.strip()).latin for w in new_res.words]
         ori_words = [get_phonetic(w.word.strip()).latin for w in ori.words]
         patched = []
@@ -78,10 +89,26 @@ class ASRMixin:
         new_res.words = patched
         return new_res
 
-    def _align(self, audionp: AudioNumpy, transcriptions: ASRResult, reference: str, audiosegments: list[AudioSegment], prg=None, **kwargs) -> list[TextTiming]:
-            raise NotImplementedError()
+    def _align(
+        self,
+        audionp: AudioNumpy,
+        transcriptions: ASRResult,
+        reference: str,
+        audiosegments: list[AudioSegment],
+        prg=None,
+        **kwargs
+    ) -> list[TextTiming]:
+        raise NotImplementedError()
     
-    def align(self, audio: AudioType, transcriptions: ASRResult, reference: str, audiosegments: list[AudioSegment], **kwargs) -> list[TextTiming]:
+    def align(
+        self,
+        audio: AudioType,
+        transcriptions: ASRResult,
+        reference: str,
+        audiosegments: list[AudioSegment],
+        **kwargs
+    ) -> list[TextTiming]:
+        from kplus.tools.audio import Audio
         audionp = Audio(audio, samplerate=self.sr, channels=1).numpy
         assert len(audiosegments) > 0
         try:
@@ -109,13 +136,20 @@ class MMS_FA(ASRMixin):
         self.aligner = bundle.get_aligner()
 
     def _tokenize(self, text: str) -> list:
+        from kplus.tools.text import get_phonetic
         tokens = []
         for chunk in text.split():
             if not chunk.strip(): continue
-            tokens.append({"original": chunk, "token": get_phonetic(chunk).latin})
+            tokens.append({
+                "original": chunk,
+                "token": get_phonetic(chunk).latin
+            })
         return tokens
 
     def _align(self, audionp: AudioNumpy, transcriptions: ASRResult, reference: str, audiosegments: list[AudioSegment], prg=None, **kwargs) -> list[TextTiming]:
+        import torch
+
+        from kplus.tools.audio import Audio
         results = []
         task = prg.add_task(description="Aligning...", total=None)
         def progress_callback(seek: float, total: float):

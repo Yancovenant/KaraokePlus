@@ -1,15 +1,4 @@
-if __name__ == "__main__":
-    import pathlib
-    import sys
-    if (project_root:=pathlib.Path(".").expanduser().resolve()) not in sys.path:
-        sys.path.insert(0, str(project_root))
-    __package__ = "kplus.pipelines.asr.hf"
-    import kplus.init
-
-
 from typing import Any, ClassVar
-
-from transformers import AutoConfig
 
 from .qwen_asr import QwenASR
 from .wav2vec2 import Wav2Vec2
@@ -20,12 +9,14 @@ class HFModel:
         "wav2vec2": Wav2Vec2,
         "qwen3_asr": QwenASR,
     }
+
     @classmethod
     def from_pretrained(
         cls,
         pretrained_model_name_or_path: str,
         **kwargs,
     ):
+        from transformers import AutoConfig
         config = AutoConfig.from_pretrained(pretrained_model_name_or_path, **kwargs)
         model_type = config.model_type
         if (model_class := cls._MODEL_MAPPING.get(model_type)) is None:

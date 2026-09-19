@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import logging
 import typing as t
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 
 from kplus import env
 from kplus.pipelines.utils import ASRResult, TextTiming, WordTiming
 from kplus.tools import filter_known_kwargs
-from kplus.tools.audio import Audio
+# from kplus.tools.audio import Audio
 
 from .base import ASRConfig, ASRMixin
 

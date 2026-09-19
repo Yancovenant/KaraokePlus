@@ -1,16 +1,30 @@
-import torch
+from __future__ import annotations
+
+import typing as t
+
+if t.TYPE_CHECKING:
+    import torch
 
 __all__ = [
-    "get_default_dtype",
     "ensure_list",
+    "get_default_dtype",
 ]
 
+
 def get_default_dtype() -> torch.dtype:
+    import torch
     if torch.cuda.is_available():
         if torch.cuda.is_bf16_supported() and torch.cuda.get_device_capability()[0] >= 8:
             return torch.bfloat16
         return torch.float16
     return torch.float32
+
+def get_default_device_map() -> str:
+    from kplus import env
+    return (
+        "cuda:" + 
+        ("1" if env.device_count > 1 else "0")
+    ) if env.device.type == "cuda" else env.device.type
 
 def ensure_list(data):
     if not isinstance(data, list):

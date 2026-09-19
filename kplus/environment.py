@@ -115,6 +115,10 @@ class EnvironmentManager:
         return self.torch.device("cuda" if self.torch.cuda.is_available() else "cpu")
 
     @cached_property
+    def device_count(self):
+        return self.torch.cuda.device_count()
+
+    @cached_property
     def fonts(self):
         # required font, fonts-noto-cjk, montserrat bold
         if os.name != "nt":

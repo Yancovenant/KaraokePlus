@@ -4,6 +4,9 @@ cookies.txt
 #log
 *.log
 
+#prof
+*.prof
+
 #pkl
 *.pkl
 
