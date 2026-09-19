@@ -24,7 +24,11 @@ class SeparatorMixin:
     def separate(self) -> SeparationResult:
         raise NotImplementedError()
 
-    def make_outdir(self, inputpath: str, external_id: int | None = None) -> None:
+    def make_outdir(
+        self,
+        inputpath: str,
+        external_id: int | None = None
+    ) -> None:
         outdir = search_for_path(Path(str(inputpath)).stem)
         if not outdir:
             outdir = (

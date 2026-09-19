@@ -84,4 +84,3 @@ class KaraokeOptions(TranscribeOptions):
     @classmethod
     def add_options(cls, parser: RichArgumentParser, **kwargs):
         super().add_options(parser, **kwargs)
-        

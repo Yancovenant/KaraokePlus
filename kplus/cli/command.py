@@ -13,12 +13,14 @@ PROG_NAME = Path(sys.argv[0]).name
 commands = {}
 """All loaded commands"""
 
+
 class Command:
     name = None
     description = None
     epilog = None
     usage = None
     _parser = None
+
     def __init_subclass__(cls):
         cls.name = cls.name or cls.__name__.lower()
         module = cls.__module__.rpartition('.')[2]
@@ -26,7 +28,8 @@ class Command:
             raise ValueError(
                 f"Command name {cls.name!r} "
                 f"must match {COMMAND_NAME_RE.pattern!r}")
-        if module != '__main__' and cls.name != module: # Temporary bypass for single script
+        if module != '__main__' and cls.name != module:
+            # Temporary bypass for single script
             raise ValueError(
                 f"Command name {cls.name!r} "
                 f"must match Module name {module!r}")
@@ -39,11 +42,14 @@ class Command:
     @property
     def parser(self):
         if not self._parser:
-            if True: # Using Rich Handler
+            if True:
+                # Using Rich Handler
                 self._parser = RichArgumentParser(
                     formatter_class=RichHelpFormatter,
                     prog=self.prog,
-                    description=cleandoc(self.description or self.__doc__ or ""),
+                    description=cleandoc(
+                        self.description or self.__doc__ or ""
+                    ),
                     parents=[config.parser],
                     usage=cleandoc(self.usage) if self.usage else None,
                     epilog=cleandoc(self.epilog or ""),
@@ -53,7 +59,9 @@ class Command:
                     formatter_class=argparse.RawDescriptionHelpFormatter,
                     prog=self.prog,
                     parents=[config.parser],
-                    description=cleandoc(self.description or self.__doc__ or ""),
+                    description=cleandoc(
+                        self.description or self.__doc__ or ""
+                    ),
                     epilog=cleandoc(self.epilog or ""),
                 )
         return self._parser
@@ -62,12 +70,16 @@ class Command:
     def is_valid_name(cls, name):
         return re.match(COMMAND_NAME_RE, name)
 
+
 def load_internal_commands():
     """ Load ``commands`` from ``kplus.cli.__path__`` """
+
     for p in kplus.cli.__path__:
         for m in Path(p).iterdir():
-            if m.suffix != ".py": continue
+            if m.suffix != ".py":
+                continue
             __import__(f"kplus.cli.{m.stem}")
+
 
 def find_command(name: str) -> Command | None:
     """ Get command by name. """
@@ -75,11 +87,11 @@ def find_command(name: str) -> Command | None:
     # built-in commands
     if command := commands.get(name):
         return command
-    
-    #with contextlib.suppress(ImportError):
+
+    # with contextlib.suppress(ImportError):
     __import__(f'kplus.cli.{name}')
     return commands[name]
-    
+
     return commands.get(name)
 
 

@@ -6,7 +6,6 @@ from sequence_align.pairwise import needleman_wunsch_with_scores as nwws
 
 from kplus import env
 from kplus.tools import rich
-from kplus.tools.text import similarity
 
 from .utils import LyricAlignError, Tokens
 
@@ -15,6 +14,7 @@ logger = logging.getLogger(__name__)
 __all__ = [
     "SequenceAligner",
 ]
+
 
 class OP(StrEnum):
     """ Class Operator to hold operation type """
@@ -49,12 +49,24 @@ class SequenceResult:
 
     @property
     def errors(self) -> int:
-        return self.substitutions + self.deletations + self.insertions
+        return (
+            self.substitutions +
+            self.deletations +
+            self.insertions
+        )
 
     @property
     def wer(self) -> float:
-        denominator = self.matches + self.substitutions + self.deletations
-        return self.errors / denominator if denominator else 0.0
+        denominator = (
+            self.matches +
+            self.substitutions +
+            self.deletations
+        )
+        return (
+            self.errors / denominator
+            if denominator
+            else 0.0
+        )
 
     @property
     def reliable(self) -> bool:
@@ -62,17 +74,53 @@ class SequenceResult:
 
     def plot(self, chars_per_line: int = 80) -> None:
         """ Plot using rich module """
-        stats_table = rich.Table.grid(rich.Column("Metric", style="b cyan"), rich.Column("Value", ratio=1, justify="right"), padding=(0, 2))
-        stats_table.add_row("Matches (M)", rich.Text(str(self.matches), style="green"))
-        stats_table.add_row("Substitutions (S)", rich.Text(str(self.substitutions), style="yellow"))
-        stats_table.add_row("Deletions (D", rich.Text(str(self.deletations), style="red"))
-        stats_table.add_row("Insertions (I)", rich.Text(str(self.insertions), style="magenta"))
-        stats_table.add_row("─" * 17, "─" * 10)
-        stats_table.add_row("Total Errors", rich.Text(str(self.errors), style="b red"))
-        status_color = "green" if self.reliable else "red"
-        stats_table.add_row("WER", rich.Text(f"{self.wer:.2%}", style=status_color))
-        stats_table.add_row("Reliable", rich.Text(f"{'Yes' if self.reliable else 'No'}", style=status_color))
-        rich.print(rich.Panel(stats_table, title=rich.Text("Sequence Stats", style="b color(4)"), border_style="color(4)"))
+
+        stats_table = rich.Table.grid(
+            rich.Column("Metric", style="b cyan"),
+            rich.Column("Value", ratio=1, justify="right"),
+            padding=(0, 2)
+        )
+        stats_table.add_row(
+            "Matches (M)",
+            rich.Text(str(self.matches), style="green")
+        )
+        stats_table.add_row(
+            "Substitutions (S)",
+            rich.Text(str(self.substitutions), style="yellow")
+        )
+        stats_table.add_row(
+            "Deletions (D)",
+            rich.Text(str(self.deletations), style="red")
+        )
+        stats_table.add_row(
+            "Insertions (I)",
+            rich.Text(str(self.insertions), style="magenta")
+        )
+        stats_table.add_row(
+            "─" * 17, "─" * 10
+        )
+        stats_table.add_row(
+            "Total Errors",
+            rich.Text(str(self.errors), style="b red")
+        )
+
+        status_color = (
+            "green" if self.reliable
+            else "red"
+        )
+        stats_table.add_row(
+            "WER",
+            rich.Text(f"{self.wer:.2%}", style=status_color)
+        )
+        stats_table.add_row(
+            "Reliable",
+            rich.Text(f"{'Yes' if self.reliable else 'No'}", style=status_color)
+        )
+        rich.print(rich.Panel(
+            stats_table,
+            title=rich.Text("Sequence Stats", style="b color(4)"),
+            border_style="color(4)"
+        ))
         rich.print()
 
         rich.console.rule("Alignment Breakdown", style="b blue")
@@ -130,16 +178,36 @@ class SequenceAligner:
     def __init__(self, raise_if_not_reliable: bool = True, **kwargs):
         self.raise_if_not_reliable = raise_if_not_reliable
 
-    def sequence_align(self, ref_tokens: Tokens, hyp_tokens: Tokens) -> SequenceResult:
+    def sequence_align(
+        self,
+        ref_tokens: Tokens,
+        hyp_tokens: Tokens
+    ) -> SequenceResult:
+        from kplus.tools.text import similarity
+
         def mwws_score(a:str, b: str) -> float:
-            if a == b: return 2.0 # Match exactly
-            if similarity(a, b) > 0.6: return 1.0
+            if a == b:
+                return 2.0 # Match exactly
+            if similarity(a, b) > 0.6:
+                return 1.0
             return -3.0
-        refs, hyps = nwws(ref_tokens.cleans, hyp_tokens.cleans, gap="-", score_fn=mwws_score, indel_score=-1)
+        
+        refs, hyps = nwws(
+            ref_tokens.cleans, hyp_tokens.cleans,
+            gap="-", score_fn=mwws_score,
+            indel_score=-1
+        )
+        
         stats = {OP.M: 0, OP.S: 0, OP.D: 0, OP.I: 0}
         map, ref_idx, hyp_idx = [], 0, 0
+        
         for ref, hyp in zip(refs, hyps):
-            op = (OP.I if ref == "-" else (OP.D if hyp == "-" else (OP.M if ref == hyp else OP.S)))
+            op = (
+                OP.I if ref == "-"
+                else OP.D if hyp == "-"
+                else OP.M if ref == hyp
+                else OP.S
+            )
             stats[op] += 1
             map.append({
                 "ref_idx": None if op == OP.I else ref_idx,
@@ -148,23 +216,45 @@ class SequenceAligner:
             })
             ref_idx += (op != OP.I)
             hyp_idx += (op != OP.D)
-        result = SequenceResult(operations=map, stats=stats, ref_tokens=ref_tokens, hyp_tokens=hyp_tokens)
+
+        result = SequenceResult(
+            operations=map,
+            stats=stats,
+            ref_tokens=ref_tokens,
+            hyp_tokens=hyp_tokens
+        )
+
         if env.verbose:
             result.plot()
+
         if not result.reliable:
-            logger.warning(f"Lyric Alignment may be inaccurate due to error rate of more than 50%: WER={result.wer * 100:.1f}%")
+            logger.warning(
+                "Lyric Alignment may be inaccurate "
+                "due to error rate of more than 50%: "
+                f"WER={result.wer * 100:.1f}%"
+            )
             if self.raise_if_not_reliable:
-                raise LyricAlignError("Cannot continue as the lyric aligment may be inaccurate")
+                raise LyricAlignError(
+                    "Cannot continue as the lyric aligment "
+                    "may be inaccurate."
+                )
         return result
             
     def __call__(self, ref_tokens: Tokens, hyp_tokens: Tokens) -> tuple[Tokens, Tokens]:
-        alignment = self.sequence_align(ref_tokens, hyp_tokens)
+        alignment = self.sequence_align(
+            ref_tokens, hyp_tokens
+        )
+
         for op in alignment.operations:
             if op["op"] in (OP.M, OP.S):
-                ref, hyp = ref_tokens[op["ref_idx"]], hyp_tokens[op["hyp_idx"]]
+                ref, hyp = (
+                    ref_tokens[op["ref_idx"]],
+                    hyp_tokens[op["hyp_idx"]]
+                )
                 ref.start = float(round(hyp.start, 2))
                 ref.end = float(round(hyp.end, 2))
                 ref.score = float(round(hyp.score, 3))
                 ref.language = str(hyp.language)
+
         return ref_tokens, hyp_tokens
     

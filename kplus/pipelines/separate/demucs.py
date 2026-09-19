@@ -8,11 +8,11 @@ from pathlib import Path
 
 from kplus import env
 from kplus.tools import filter_known_kwargs, rich, safepath
-from kplus.tools.audio import Audio, AudioTensor
 
 from .base import SeparationResult, SeparatorMixin
 
 if t.TYPE_CHECKING:
+    from kplus.tools.audio import AudioTensor
     from demucs.apply import (
         BagOfModels as DemucsBagOfModels,  # type: ignore
     )
@@ -21,23 +21,34 @@ if t.TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+
 class DemucsSeparator(SeparatorMixin):
     def bootstrapt(self, modelname: str, **options):
         logger.info("Chosen Separator Class: (Demucs)")
         env.torch, env.diffq, env.demucs  # noqa: B018
-        from demucs.pretrained import get_model as _get_model_demucs  # type: ignore
+        from demucs.pretrained import (
+            get_model as _get_model_demucs  # type: ignore
+        )
         self.overlap = options.pop("overlap", 0.75)
         self.segment = options.pop("segment", 30)
         self.shifts = options.pop("shifts", 1)
         self.num_workers = options.pop("num_workers", 0)
-        demucs_params, options = filter_known_kwargs(_get_model_demucs, options)
+        demucs_params, options = filter_known_kwargs(
+            _get_model_demucs,
+            options
+        )
         with rich.make_progress(is_download=False) as prg:
             prg.add_task("Loading Demucs Model...", total=None)
             # Load to cpu first, apply cuda on processing
             self.model = _get_model_demucs(modelname, **demucs_params)
         self.sr = self.model.samplerate
         self.ac = self.model.audio_channels
-        table = rich.Table.grid(rich.Column(), rich.Column(ratio=1), expand=True, padding=(0, 0))
+        table = rich.Table.grid(
+            rich.Column(),
+            rich.Column(ratio=1),
+            expand=True,
+            padding=(0, 0)
+        )
         table.add_row("Model", ": " + modelname)
         table.add_row("Segment", ": " + str(self.segment))
         table.add_row("Overlap", ": " + str(self.overlap))
@@ -45,9 +56,17 @@ class DemucsSeparator(SeparatorMixin):
         table.add_row("SampleRate", ": " + str(self.sr))
         table.add_row("AudioChannels", ": " + str(self.ac))
         table.add_row("NumWorkers", ": " + str(self.num_workers))
-        logger.debug(rich.Panel(table, title="Demucs Configuration", padding=1))
+        logger.debug(rich.Panel(
+            table,
+            title="Demucs Configuration",
+            padding=1
+        ))
 
-    def _preprocess(self, inputpath: str) -> tuple[AudioTensor, AudioTensor, AudioTensor]:
+    def _preprocess(
+        self,
+        inputpath: str
+    ) -> tuple[AudioTensor, AudioTensor, AudioTensor]:
+        from kplus.tools.audio import Audio
         audio = Audio(inputpath, samplerate=self.sr, channels=self.ac)
         wav = audio.tensor
         ref = wav.mean(0)
@@ -55,7 +74,13 @@ class DemucsSeparator(SeparatorMixin):
         std = ref.std() + 1e-8
         return wav, mean, std
 
-    def _post_process(self, inputpath: str, vocals: AudioTensor, instruments: AudioTensor, outdir: str) -> tuple[str, str]:
+    def _post_process(
+        self,
+        inputpath: str,
+        vocals: AudioTensor,
+        instruments: AudioTensor,
+        outdir: str
+    ) -> tuple[str, str]:
         from demucs.audio import save_audio  # type: ignore
         save_kwargs = {
             'samplerate': self.sr,
@@ -67,14 +92,23 @@ class DemucsSeparator(SeparatorMixin):
         }
         outfilename = safepath(inputpath)
         outdir = Path(outdir)
-        inst_path = str(outdir / f"[S={self.shifts}|O={self.overlap}|SZ={self.segment}]_inst_{outfilename}.wav")
-        vocs_path = str(outdir / f"[S={self.shifts}|O={self.overlap}|SZ={self.segment}]_vocs_{outfilename}.wav")
+        base_name = (
+            f"[S={self.shifts}"
+            f"|O={self.overlap}"
+            f"|SZ={self.segment}]"
+        )
+        inst_path = str(
+            outdir / f"{base_name}_inst_{outfilename}.wav"
+        )
+        vocs_path = str(
+            outdir / f"{base_name}_vocs_{outfilename}.wav"
+        )
         save_audio(instruments, str(inst_path), **save_kwargs)
         save_audio(vocals, str(vocs_path), **save_kwargs)
         return inst_path, vocs_path
 
-
-    def _apply_model(self,
+    def _apply_model(
+        self,
         model: DemucsBagOfModels | DemucsModel,
         mix: AudioTensor | TensorChunk,
         shifts: int = 1,
@@ -91,13 +125,16 @@ class DemucsSeparator(SeparatorMixin):
         """ Demucs ``apply_model`` implementation
         """
         import torch  # type: ignore
-        from demucs.apply import BagOfModels as DemucsBagOfModels  # type: ignore
+        from demucs.apply import (
+            BagOfModels as DemucsBagOfModels  # type: ignore
+        )
         from demucs.apply import TensorChunk, tensor_chunk
         from demucs.htdemucs import HTDemucs  # type: ignore
         from demucs.utils import (  # type: ignore
             DummyPoolExecutor,
             center_trim,
         )
+        from kplus.tools.audio import AudioTensor
 
         if pool is None:
             if num_workers > 0 and env.device.type == 'cpu':
@@ -120,13 +157,18 @@ class DemucsSeparator(SeparatorMixin):
 
         if isinstance(model, DemucsBagOfModels):
             # Special treatment for bag of model.
-            # We explicitely apply multiple times `apply_model` so that the random shifts
+            # We explicitely apply multiple times
+            # `apply_model` so that the random shifts
             # are different for each model.
             estimates: float | AudioTensor = 0.
             totals = [0.] * len(model.sources)
             total_models = len(model.models)
-            for i, (sub_model, model_weights) in enumerate(zip(model.models, model.weights)):
-                original_model_device = next(iter(sub_model.parameters())).device
+            for i, (sub_model, model_weights) in enumerate(zip(
+                model.models, model.weights
+            )):
+                original_model_device = next(iter(
+                    sub_model.parameters()
+                )).device
                 sub_model.to(env.device).eval()
                 kwargs['model_idx'] = f"{i + 1}/{total_models}"
                 res = self._apply_model(sub_model, mix, **kwargs)
@@ -142,7 +184,9 @@ class DemucsSeparator(SeparatorMixin):
                 estimates[:, k, :, :] /= totals[k]
             return estimates
         model.to(env.device).eval()
-        assert transition_power >= 1, "transition_power < 1 leads to weird behavior."
+        assert transition_power >= 1, (
+            "transition_power < 1 leads to weird behavior."
+        )
         batch, channels, length = mix.shape
         if shifts:
             kwargs['shifts'] = 0
@@ -153,7 +197,9 @@ class DemucsSeparator(SeparatorMixin):
             out = 0.
             for _ in range(shifts):
                 offset = random.randint(0, max_shift)
-                shifted = TensorChunk(padded_mix, offset, length + max_shift - offset)
+                shifted = TensorChunk(
+                    padded_mix, offset, length + max_shift - offset
+                )
                 res = self._apply_model(model, shifted, **kwargs)
                 shifted_out = res
                 out += shifted_out[..., max_shift - offset:]
@@ -162,7 +208,10 @@ class DemucsSeparator(SeparatorMixin):
             return out
         elif split:
             kwargs['split'] = False
-            out = torch.zeros(batch, len(model.sources), channels, length, device=mix.device)
+            out = torch.zeros(
+                batch, len(model.sources),
+                channels, length, device=mix.device
+            )
             sum_weight = torch.zeros(length, device=mix.device)
             if segment is None:
                 segment = model.segment
@@ -171,13 +220,25 @@ class DemucsSeparator(SeparatorMixin):
             stride = int((1 - overlap) * segment_length)
             offsets = range(0, length, stride)
             scale = float(format(stride / model.samplerate, ".2f"))
-            # We start from a triangle shaped weight, with maximal weight in the middle
-            # of the segment. Then we normalize and take to the power `transition_power`.
-            # Large values of transition power will lead to sharper transitions.
-            weight = torch.cat([torch.arange(1, segment_length // 2 + 1, device=env.device),
-                            torch.arange(segment_length - segment_length // 2, 0, -1, device=env.device)])
+            # We start from a triangle shaped weight,
+            # with maximal weight in the middle
+            # of the segment. Then we normalize and
+            # take to the power `transition_power`.
+            # Large values of transition power
+            # will lead to sharper transitions.
+            weight = torch.cat([
+                torch.arange(
+                    1, segment_length // 2 + 1,
+                    device=env.device
+                ),
+                torch.arange(
+                    segment_length - segment_length // 2, 0, -1,
+                    device=env.device
+                )
+            ])
             assert len(weight) == segment_length
-            # If the overlap < 50%, this will translate to linear transition when
+            # If the overlap < 50%,
+            # this will translate to linear transition when
             # transition_power is 1.
             weight = (weight / weight.max())**transition_power
             futures = []
@@ -188,25 +249,27 @@ class DemucsSeparator(SeparatorMixin):
             task = None
             if progress and prg:
                 total_seconds = len(futures) * scale
-                desc_text = f"Model {model_idx}.." if model_idx else 'Separating..'
+                desc_text = (
+                    f"Model {model_idx}.." if
+                    model_idx else
+                    'Separating..'
+                )
                 task = prg.add_task(description=desc_text, total=total_seconds)
-                # futures = rich.track(futures, description=f"Model {model_idx}.." if model_idx else 'Separating..')
-                #from tqdm import tqdm
-                #desc_text = f"   ↳ Model {model_idx}" if model_idx else "   ↳ Processing"
-                #futures = tqdm(futures, unit_scale=scale,
-                #                ncols=120, unit='seconds',
-                #                desc=desc_text, dynamic_ncols=True, position=0)
             for future, offset in futures:
                 try:
                     chunk_out = future.result()
                 except BaseException:
-                    logger.warning("Keyboard Int, closing all separating process")
+                    logger.warning(
+                        "Keyboard Int, closing all separating process"
+                    )
                     pool.shutdown(wait=True, cancel_futures=True)
                     raise
                 chunk_length = chunk_out.shape[-1]
                 out[..., offset:offset + segment_length] += (
                     weight[:chunk_length] * chunk_out).to(mix.device)
-                sum_weight[offset:offset + segment_length] += weight[:chunk_length].to(mix.device)
+                sum_weight[offset:offset + segment_length] += (
+                    weight[:chunk_length].to(mix.device)
+                )
                 if task and prg:
                     prg.update(task, advance=scale)
             assert sum_weight.min() > 0
@@ -228,9 +291,13 @@ class DemucsSeparator(SeparatorMixin):
                 out = model(padded_mix)
             assert isinstance(out, AudioTensor)
             return center_trim(out, length)
-            
 
-    def _process(self, mix: AudioTensor, mean: AudioTensor, std: AudioTensor) -> tuple[AudioTensor, AudioTensor]:
+    def _process(
+        self,
+        mix: AudioTensor,
+        mean: AudioTensor,
+        std: AudioTensor
+    ) -> tuple[AudioTensor, AudioTensor]:
         with rich.make_progress(is_download=False) as prg:
             prg.add_task("Separating...", total=None)
             out = self._apply_model(
@@ -245,11 +312,20 @@ class DemucsSeparator(SeparatorMixin):
         instruments = mix - vocals
         del res
         return vocals, instruments
-    
-    def separate(self, inputpath: str, external_id: int | None = None) -> SeparationResult:
+
+    def separate(
+        self,
+        inputpath: str,
+        external_id: int | None = None
+    ) -> SeparationResult:
         outdir = self.make_outdir(inputpath, external_id)
         wav, mean, std = self._preprocess(inputpath)
         vocals, instruments = self._process(wav, mean, std)
-        inst_path, vocs_path = self._post_process(inputpath, vocals, instruments, outdir)
-        return SeparationResult(sr=self.sr, inst_path=inst_path, vocs_path=vocs_path)
-    
+        inst_path, vocs_path = self._post_process(
+            inputpath, vocals, instruments, outdir
+        )
+        return SeparationResult(
+            sr=self.sr,
+            inst_path=inst_path,
+            vocs_path=vocs_path
+        )
