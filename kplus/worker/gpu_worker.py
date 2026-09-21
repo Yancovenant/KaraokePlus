@@ -8,6 +8,7 @@ class GPUWorker:
     def __init__(self):
         pass
 
+
 class KaggleWorker(GPUWorker):
     def __init__(self, api_token: str):
         env.kaggle  # noqa: B018
@@ -37,12 +38,46 @@ class KaggleWorker(GPUWorker):
             "types": quotas_per_type
         }
 
-    def run(self):
-        return self.api.kernels_push(
-            folder=str(Path(__file__).resolve().parent / "kaggle"),
+    def run(self, folder: str):
+        """ Run kaggle kernel instance and push the notebook.
+        
+            :param str folder: the folder path containing
+                               both .ipynb and kernel-metadata.json.
+        """
+        if not folder:
+            raise RuntimeError("folder containing metadata and notebook need to be specified")
+        result = self.api.kernels_push(
+            folder=folder,
             timeout=None,
             acc=""
         )
+        if result is None:
+            raise RuntimeError("Kaggle push error, no definite data, see previous output.")
+        elif not result.error:
+            if result.invalidTags:
+                raise RuntimeError(
+                    "The following are not valid tags and could not be added "
+                    "to the kernel: " + str(result.invalidTags)
+                )
+            if result.invalidDatasetSources:
+                raise RuntimeError(
+                    "The following are not valid dataset sources and could not "
+                    "be added to the kernel: " + str(result.invalidDatasetSources)
+                )
+            if result.invalidCompetitionSources:
+                raise RuntimeError(
+                    "The following are not valid competition sources and could "
+                    "not be added to the kernel: " + str(result.invalidCompetitionSources)
+                )
+            if result.invalidKernelSources:
+                raise RuntimeError(
+                    "The following are not valid kernel sources and could not "
+                    "be added to the kernel: " + str(result.invalidKernelSources)
+                )
+            return result
+        else:
+            raise RuntimeError(f"Kaggle push error: {result.error}")
+
 
 if __name__ == "__main__":
     from kplus.tools import rich

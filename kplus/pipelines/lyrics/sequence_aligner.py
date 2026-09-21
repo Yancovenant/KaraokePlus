@@ -2,8 +2,6 @@ import logging
 from dataclasses import dataclass
 from enum import StrEnum
 
-from sequence_align.pairwise import needleman_wunsch_with_scores as nwws
-
 from kplus import env
 from kplus.tools import rich
 
@@ -183,7 +181,9 @@ class SequenceAligner:
         ref_tokens: Tokens,
         hyp_tokens: Tokens
     ) -> SequenceResult:
+        env.sequence_align
         from kplus.tools.text import similarity
+        from sequence_align.pairwise import needleman_wunsch_with_scores as nwws
 
         def mwws_score(a:str, b: str) -> float:
             if a == b:
