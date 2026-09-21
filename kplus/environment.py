@@ -151,7 +151,7 @@ class EnvironmentManager:
         
         def _try_install():
             name = install_name.replace("_", "-")
-            name_version = f"{name}{version}"
+            name_version = f"'{name}{version}'"
             cmd = [
                 sys.executable, "-m", "pip",
                 "install", name_version,
@@ -202,7 +202,7 @@ class EnvironmentManager:
                 logger.debug(f"Import error for `{import_name}` trying to install...")
                 continue
             except Exception as err:  # noqa: BLE001
-                logger.warning(f"Download Attempt `{fn.__name__} failed for `{install_name}`: {err}")
+                logger.warning(f"Download Attempt `{fn.__name__}` failed for `{install_name}`: {err}")
         raise ImportError(f"Connot continue as {import_name} could not be installed or imported.")
 
     def resolve_apt(self, apt_name: str, windows_name: str):
