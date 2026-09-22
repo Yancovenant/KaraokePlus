@@ -3,6 +3,7 @@ from __future__ import annotations
 import gc
 import hashlib
 import importlib
+import importlib.metadata
 import logging
 import os
 import platform
@@ -16,6 +17,8 @@ import uuid
 import warnings
 from functools import cached_property, partial, wraps
 from pathlib import Path
+
+from packaging.specifiers import SpecifierSet
 
 import kplus
 from kplus.ansii_logo import all_logos
@@ -149,9 +152,6 @@ class EnvironmentManager:
         def _try_import():
             if version.strip():
                 # Version should be : <=x.x.x
-                import importlib.metadata  # noqa: I001
-                from packaging.specifiers import SpecifierSet
-
                 pkg_version = importlib.metadata.version(pkg_name)
                 spec = SpecifierSet(version.strip())
 
