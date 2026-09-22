@@ -151,7 +151,7 @@ class EnvironmentManager:
         
         def _try_install():
             name = install_name.replace("_", "-")
-            name_version = f"'{name}{version}'"
+            name_version = f"{name}{version}"
             cmd = [
                 sys.executable, "-m", "pip",
                 "install", name_version,
