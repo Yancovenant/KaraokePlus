@@ -25,4 +25,8 @@ setup(
     package_dir={'%s' % lib_name: 'kplus'},
     include_package_data=True,
     python_requires='>=' + ".".join(map(str, MIN_PY_VERSION)),
+    install_requires=[
+        "transformers >= 5.17.0",
+        "numpy <= 2.2"
+    ]
 )
