@@ -185,6 +185,10 @@ class EnvironmentManager:
                         continue
                     if len(lines) >= max_lines:
                         lines.pop(0)
+                    
+                    lines.append(line)
+                    last_line = line
+
                     install_text = rich.Text("\n".join(lines))
                     live.update(
                         rich.Panel(
