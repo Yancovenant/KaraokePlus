@@ -331,7 +331,12 @@ class EnvironmentManager:
         # Tqdm with rich error
         self.tqdm  # noqa: B018
         import tqdm
-        tqdm.tqdm = partial(tqdm.tqdm, file=sys.stdout, disable=True)
+        
+        class HideTqdm(tqdm.tqdm):
+            def __init__(self, *args, disable=True, file=sys.stdout, **kwargs):
+                super().__init__(*args, disable=disable, file=file, **kwargs)
+            
+        tqdm.tqdm = HideTqdm
 
         self.print_banner()
 
