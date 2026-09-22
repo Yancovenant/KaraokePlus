@@ -1,5 +1,7 @@
 from typing import Any, ClassVar
 
+from kplus import env
+
 from .qwen_asr import QwenASR
 from .wav2vec2 import Wav2Vec2
 
@@ -16,6 +18,7 @@ class HFModel:
         pretrained_model_name_or_path: str,
         **kwargs,
     ):
+        env.transformers  # noqa: B018
         from transformers import AutoConfig
         config = AutoConfig.from_pretrained(pretrained_model_name_or_path, **kwargs)
         model_type = config.model_type

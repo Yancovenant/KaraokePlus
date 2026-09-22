@@ -20,9 +20,7 @@ from .path import temp_filenames
 # Must be at the top
 env.ffmpeg, env.torch, env.numpy  # noqa: B018
 import numpy as np
-
-if t.TYPE_CHECKING:
-    import torch
+import torch
 
 __all__ = [
     "Audio",
