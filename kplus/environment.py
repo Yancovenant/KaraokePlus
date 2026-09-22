@@ -147,6 +147,19 @@ class EnvironmentManager:
             import_name = "stable_whisper"
         
         def _try_import():
+            if version.strip():
+                # Version should be : <=x.x.x
+                import importlib.metadata  # noqa: I001
+                from packaging.specifiers import SpecifierSet
+
+                pkg_version = importlib.metadata.version(pkg_name)
+                spec = SpecifierSet(version.strip())
+
+                if pkg_version in spec:
+                    pass  # Version is satisfied!
+                else:
+                    raise ImportError(f"Found {pkg_name} {pkg_version}, but requires {version}")
+                
             return importlib.import_module(import_name)
         
         def _try_install():
