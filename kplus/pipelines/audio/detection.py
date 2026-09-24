@@ -286,7 +286,7 @@ class Mel(Feature):
     """ Log Mel Spectogram """
     _name = "Mel"
 
-    S: np.ndarray | None  = field(init=False, default=...) # can't be positional
+    S: np.ndarray
 
     _S_dB: np.ndarray | None = field(init=False, default=...)
 
